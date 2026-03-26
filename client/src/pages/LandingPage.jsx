@@ -228,3 +228,61 @@ function LandingPage() {
 }
 
 export default LandingPage;
+
+// import { useNavigate } from "react-router-dom";
+
+// function LandingPage() {
+//   const navigate = useNavigate();
+
+//   return (
+//     <div style={{
+//       minHeight: "100vh",
+//       background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+//       display: "flex",
+//       alignItems: "center",
+//       justifyContent: "center",
+//       fontFamily: "Arial, sans-serif"
+//     }}>
+//       <div style={{
+//         textAlign: "center",
+//         color: "white",
+//         padding: "40px"
+//       }}>
+//         <h1 style={{
+//           fontSize: "48px",
+//           margin: "0 0 16px",
+//           fontWeight: "bold"
+//         }}>
+//           Smart Disaster Relief System
+//         </h1>
+//         <p style={{
+//           fontSize: "20px",
+//           margin: "0 0 40px",
+//           opacity: 0.9
+//         }}>
+//           Resource Allocation and Tracking Platform
+//         </p>
+//         <button
+//           onClick={() => navigate("/login")}
+//           style={{
+//             background: "white",
+//             color: "#667eea",
+//             border: "none",
+//             padding: "16px 32px",
+//             fontSize: "16px",
+//             fontWeight: "600",
+//             borderRadius: "8px",
+//             cursor: "pointer",
+//             transition: "transform 0.2s ease"
+//           }}
+//           onMouseOver={(e) => e.target.style.transform = "scale(1.05)"}
+//           onMouseOut={(e) => e.target.style.transform = "scale(1)"}
+//         >
+//           Enter System
+//         </button>
+//       </div>
+//     </div>
+//   );
+// }
+
+// export default LandingPage;

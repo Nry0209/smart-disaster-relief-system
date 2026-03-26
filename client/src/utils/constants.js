@@ -47,8 +47,13 @@ export const SIDEBAR_ITEMS = [
   },
   {
     label: "Distribution Tracking",
-    path: "/tracking",
+    path: "/distribution-tracking",
     roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.DMC],
+  },
+  {
+    label: "User Management",
+    path: "/users",
+    roles: [ROLES.ADMIN, ROLES.INVENTORY],
   },
   {
     label: "Predictive Estimation",
@@ -56,19 +61,9 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.ADMIN, ROLES.DMC, ROLES.INVENTORY, ROLES.ALLOCATION],
   },
   {
-    label: "Partner Directory",
-    path: "/partners",
-    roles: [ROLES.ADMIN, ROLES.DMC, ROLES.INVENTORY, ROLES.CHARITY],
-  },
-  {
     label: "Reports",
     path: "/reports",
     roles: [ROLES.ADMIN, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
-  },
-  {
-    label: "User Management",
-    path: "/users",
-    roles: [ROLES.ADMIN],
   },
   {
     label: "Audit Logs",
