@@ -7,6 +7,7 @@ import UserManagement from "./pages/UserManagement";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
 import InventoryPage from "./pages/InventoryPage";
+import DonationVerificationPage from "./pages/DonationVerificationPage";
 import "./App.css";
 
 function App() {
@@ -22,6 +23,11 @@ function App() {
       <Route path="/inventory" element={
         <DashboardLayout>
           <InventoryPage />
+        </DashboardLayout>
+      } />
+      <Route path="/donations/verify" element={
+        <DashboardLayout>
+          <DonationVerificationPage />
         </DashboardLayout>
       } />
       <Route path="/distribution-tracking" element={
