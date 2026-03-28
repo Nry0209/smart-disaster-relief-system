@@ -8,6 +8,8 @@ import DashboardLayout from "./components/layout/DashboardLayout";
 
 import InventoryPage from "./pages/InventoryPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
+import NGODonationPage from "./pages/NGODonationPage";
+import ResourceRequestPage from "./pages/ResourceRequestPage";
 import "./App.css";
 
 function App() {
@@ -15,6 +17,7 @@ function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/ngo-donate" element={<NGODonationPage />} />
       <Route path="/dashboard" element={
         <DashboardLayout>
           <DashboardPage />
@@ -23,6 +26,11 @@ function App() {
       <Route path="/inventory" element={
         <DashboardLayout>
           <InventoryPage />
+        </DashboardLayout>
+      } />
+      <Route path="/resource-requests" element={
+        <DashboardLayout>
+          <ResourceRequestPage />
         </DashboardLayout>
       } />
       <Route path="/donations/verify" element={
