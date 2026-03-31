@@ -12053,6 +12053,10 @@
   font-size: 14px;
 
   min-width: 120px;
+  color: #000000;
+  appearance: auto;
+  -webkit-appearance: auto;
+  -moz-appearance: auto;
 
 }
 
