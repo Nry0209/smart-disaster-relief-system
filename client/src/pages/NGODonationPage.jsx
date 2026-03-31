@@ -13,11 +13,11 @@ const NGODonationPage = () => {
     state: "",
     country: "",
     donationItems: [
-      { category: "water", itemName: "", quantity: "", description: "" },
-      { category: "food", itemName: "", quantity: "", description: "" },
-      { category: "medical", itemName: "", quantity: "", description: "" },
-      { category: "shelter", itemName: "", quantity: "", description: "" },
-      { category: "clothing", itemName: "", quantity: "", description: "" }
+      { category: "water", itemName: "", quantity: "" },
+      { category: "food", itemName: "", quantity: "" },
+      { category: "medical", itemName: "", quantity: "" },
+      { category: "shelter", itemName: "", quantity: "" },
+      { category: "clothing", itemName: "", quantity: "" }
     ],
     expectedDeliveryDate: "",
     specialInstructions: "",
@@ -81,9 +81,10 @@ const NGODonationPage = () => {
       newErrors.donationItems = "Please add at least one donation item";
     }
     
-    if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = "You must agree to the terms and conditions";
-    }
+    // Optional terms agreement for testing
+    // if (!formData.agreeToTerms) {
+    //   newErrors.agreeToTerms = "You must agree to the terms and conditions";
+    // }
     
     return newErrors;
   };
@@ -132,11 +133,11 @@ const NGODonationPage = () => {
       state: "",
       country: "",
       donationItems: [
-        { category: "water", itemName: "", quantity: "", description: "" },
-        { category: "food", itemName: "", quantity: "", description: "" },
-        { category: "medical", itemName: "", quantity: "", description: "" },
-        { category: "shelter", itemName: "", quantity: "", description: "" },
-        { category: "clothing", itemName: "", quantity: "", description: "" }
+        { category: "water", itemName: "", quantity: "" },
+        { category: "food", itemName: "", quantity: "" },
+        { category: "medical", itemName: "", quantity: "" },
+        { category: "shelter", itemName: "", quantity: "" },
+        { category: "clothing", itemName: "", quantity: "" }
       ],
       expectedDeliveryDate: "",
       specialInstructions: "",
@@ -387,21 +388,13 @@ const NGODonationPage = () => {
                       <div className="form-group">
                         <label>Quantity *</label>
                         <input
-                          type="text"
+                          type="number"
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-                          placeholder="e.g., 100, 500"
+                          placeholder="0"
+                          required
                         />
                       </div>
-                    </div>
-                    <div className="form-group">
-                      <label>Description</label>
-                      <textarea
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, "description", e.target.value)}
-                        placeholder="Size, condition, expiry dates, etc."
-                        rows={2}
-                      />
                     </div>
                   </div>
                 </div>
