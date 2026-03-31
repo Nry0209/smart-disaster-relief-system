@@ -10,6 +10,8 @@ import InventoryPage from "./pages/InventoryPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
 import NGODonationPage from "./pages/NGODonationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
+import AllocationPage from "./pages/AllocationPage";
+import DisasterEventPage from "./pages/DisasterEventPage";
 import "./App.css";
 
 function App() {
@@ -46,6 +48,16 @@ function App() {
       <Route path="/users" element={
         <DashboardLayout>
           <UserManagement />
+        </DashboardLayout>
+      } />
+      <Route path="/allocations" element={
+        <DashboardLayout>
+          <AllocationPage />
+        </DashboardLayout>
+      } />
+      <Route path="/disaster-events" element={
+        <DashboardLayout>
+          <DisasterEventPage />
         </DashboardLayout>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
