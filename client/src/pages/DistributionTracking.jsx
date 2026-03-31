@@ -315,29 +315,6 @@ suitable for download and import into spreadsheet applications.
                   </div>
                 </div>
 
-                {/* Status Progress */}
-                <div className="status-progress">
-                 <div className="progress-steps">
-                    {statusOptions.map((option, index) => {
-                      const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
-                      const isActive = index <= currentIndex;
-                      return (
-                        <div 
-                          key={option.value}
-                          className={`progress-step ${isActive ? 'active' : ''}`}
-                          style={{ 
-                            backgroundColor: isActive ? getStatusColor(record.status) : '#e5e7eb'
-                          }}
-                        >
-                         <div className="step-dot"></div>
-                          <span className="step-label">{option.label}</span>
-                        </div>
-                      );
-                    })}
-
-                  </div>
-                </div>
-
                 {/* Action Buttons */}
                 <div className="record-actions">
                   <div className="status-actions">
@@ -395,6 +372,9 @@ suitable for download and import into spreadsheet applications.
                         </button>
                       </>
                     )}
+                  </div>
+                  
+                  <div className="action-buttons secondary">
                     <button 
                       className="btn-edit"
                       onClick={() => handleEditRecord(record)}

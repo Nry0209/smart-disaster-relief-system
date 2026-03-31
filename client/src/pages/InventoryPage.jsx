@@ -79,10 +79,10 @@ export default function InventoryPage() {
       {/* STATS */}
       <div className="inventory-stats">
         {[
-          { icon: <Package   size={24} color="#2563eb"/>, bg:"#eff6ff", lbl:"Total Items",   val: totalItems  },
-          { icon: <AlertTriangle size={24} color="#dc2626"/>, bg:"#fef2f2", lbl:"Low Stock",     val: lowCount   },
-          { icon: <Warehouse size={24} color="#16a34a"/>, bg:"#f0fdf4", lbl:"Warehouses",    val: 5           },
-          { icon: <RefreshCw size={24} color="#7c3aed"/>, bg:"#f5f3ff", lbl:"Recent Updates",val: log.length  },
+          { icon: <Package   size={16} color="#2563eb"/>, bg:"#eff6ff", lbl:"Total Items",   val: totalItems  },
+          { icon: <AlertTriangle size={16} color="#dc2626"/>, bg:"#fef2f2", lbl:"Low Stock",     val: lowCount   },
+          { icon: <Warehouse size={16} color="#16a34a"/>, bg:"#f0fdf4", lbl:"Warehouses",    val: 5           },
+          { icon: <RefreshCw size={16} color="#7c3aed"/>, bg:"#f5f3ff", lbl:"Recent Updates",val: log.length  },
         ].map(s => (
           <div className="stat-card" key={s.lbl}>
             <div className="stat-icon" style={{ background: s.bg }}>{s.icon}</div>
@@ -98,7 +98,7 @@ export default function InventoryPage() {
       <div className="inventory-actions">
         <div className="filter-controls">
           <div className="search-input">
-            <Search size={18}/>
+            <Search size={14}/>
             <input
               placeholder="Search inventory items..."
               value={search}
