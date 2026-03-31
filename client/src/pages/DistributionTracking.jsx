@@ -6,6 +6,7 @@ const DistributionTracking = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
 
   // Mock data - in real app, this would come from API
   useEffect(() => {
@@ -20,6 +21,7 @@ const DistributionTracking = () => {
         createdAt: '2024-03-25T09:00:00',
         updatedAt: '2024-03-25T09:00:00'
       },
+
       {
         id: 2,
         allocationRef: 'ALLOC-2024-002',
@@ -30,6 +32,7 @@ const DistributionTracking = () => {
         createdAt: '2024-03-24T14:30:00',
         updatedAt: '2024-03-25T08:15:00'
       },
+
       {
         id: 3,
         allocationRef: 'ALLOC-2024-003',
@@ -40,6 +43,7 @@ const DistributionTracking = () => {
         createdAt: '2024-03-23T11:00:00',
         updatedAt: '2024-03-25T16:45:00'
       }
+
     ];
     setDispatchRecords(mockData);
   }, []);
@@ -51,6 +55,7 @@ const DistributionTracking = () => {
     { value: 'delivered', label: 'Delivered', color: '#10b981' },
     { value: 'confirmed', label: 'Confirmed Delivered', color: '#059669' }
   ];
+
 
   const getStatusColor = (status) => {
     const statusOption = statusOptions.find(option => option.value === status);
@@ -75,6 +80,7 @@ const DistributionTracking = () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+
     setDispatchRecords([...dispatchRecords, record]);
     setShowCreateForm(false);
   };
@@ -103,9 +109,132 @@ const DistributionTracking = () => {
       record.id === updatedRecord.id 
         ? { ...updatedRecord, updatedAt: new Date().toISOString() }
         : record
+
     ));
+
     setShowCreateForm(false);
     setEditingRecord(null);
+
+  };
+
+  // View Functions for Distribution Tracking
+  const viewDispatchSummary = (record) => {
+    const content = `
+DISPATCH SUMMARY
+================
+Allocation Reference: ${record.allocationRef}
+Dispatch Date: ${new Date(record.dispatchDate).toLocaleDateString()}
+Transport Details: ${record.transportDetails}
+Current Location: ${record.currentLocation}
+Status: ${record.status}
+Created: ${new Date(record.createdAt).toLocaleString()}
+Last Updated: ${new Date(record.updatedAt).toLocaleString()}
+
+This summary provides an overview of the dispatch record including
+current status, location, and transport information.
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'dispatch-summary',
+      content: content,
+      title: `Dispatch Summary - ${record.allocationRef}`
+    });
+  };
+
+  const viewDispatchReport = (record) => {
+    const content = `
+DISPATCH REPORT
+===============
+Allocation Reference: ${record.allocationRef}
+Dispatch Date: ${new Date(record.dispatchDate).toLocaleDateString()}
+Transport Details: ${record.transportDetails}
+Current Location: ${record.currentLocation}
+Status: ${record.status}
+Created: ${new Date(record.createdAt).toLocaleString()}
+Last Updated: ${new Date(record.updatedAt).toLocaleString()}
+
+REPORT DETAILS:
+- Initial dispatch preparation completed
+- Transport vehicle assigned and loaded
+- Driver information verified
+- Current tracking status: ${record.status}
+- Estimated delivery timeline: Based on current location
+
+This report contains detailed information about the dispatch operation,
+including transport logistics and current tracking status.
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'dispatch-report',
+      content: content,
+      title: `Dispatch Report - ${record.allocationRef}`
+    });
+  };
+
+  const viewDeliveryConfirmation = (record) => {
+    const content = `
+DELIVERY CONFIRMATION
+=====================
+Allocation Reference: ${record.allocationRef}
+Dispatch Date: ${new Date(record.dispatchDate).toLocaleDateString()}
+Transport Details: ${record.transportDetails}
+Current Location: ${record.currentLocation}
+Status: ${record.status}
+Created: ${new Date(record.createdAt).toLocaleString()}
+Last Updated: ${new Date(record.updatedAt).toLocaleString()}
+
+DELIVERY DETAILS:
+${record.status === 'delivered' ? 
+  '✓ Delivery completed successfully' : 
+  '○ Delivery in progress or pending'}
+
+${record.status === 'delivered' ? 
+  `Confirmation: Goods have been delivered to the intended destination.
+Delivery Date: ${new Date(record.updatedAt).toLocaleDateString()}
+Recipient: Disaster Management Authority
+Status: Confirmed and Received` : 
+  'Confirmation: Delivery pending completion. Track status for updates.'}
+
+This confirmation document verifies the delivery status and provides
+official confirmation of receipt when delivery is completed.
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'delivery-confirmation',
+      content: content,
+      title: `Delivery Confirmation - ${record.allocationRef}`
+    });
+  };
+
+  const viewExportSummary = (record) => {
+    const content = `
+EXPORT SUMMARY - CSV DATA
+==========================
+Allocation Reference,${record.allocationRef}
+Dispatch Date,${new Date(record.dispatchDate).toLocaleDateString()}
+Transport Details,"${record.transportDetails}"
+Current Location,${record.currentLocation}
+Status,${record.status}
+Created,${new Date(record.createdAt).toLocaleString()}
+Last Updated,${new Date(record.updatedAt).toLocaleString()}
+
+CSV FORMAT:
+allocationRef,dispatchDate,transportDetails,currentLocation,status,createdAt,updatedAt
+"${record.allocationRef}","${new Date(record.dispatchDate).toLocaleDateString()}","${record.transportDetails}","${record.currentLocation}","${record.status}","${new Date(record.createdAt).toLocaleString()}","${new Date(record.updatedAt).toLocaleString()}"
+
+This export summary provides CSV-formatted data for the dispatch record,
+suitable for download and import into spreadsheet applications.
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'export-summary',
+      content: content,
+      title: `Export Summary - ${record.allocationRef}`
+    });
   };
 
   return (
@@ -113,8 +242,7 @@ const DistributionTracking = () => {
       <div className="tracking-header">
         <h1>Distribution Tracking</h1>
         <p>Manage and monitor relief supply dispatch records</p>
-        
-        <div className="tracking-actions">
+          <div className="tracking-actions">
           <div className="filter-controls">
             <label htmlFor="status-filter">Filter by Status:</label>
             <select 
@@ -122,6 +250,7 @@ const DistributionTracking = () => {
               value={filterStatus} 
               onChange={(e) => setFilterStatus(e.target.value)}
               className="filter-select"
+
             >
               <option value="all">All Records</option>
               {statusOptions.map(option => (
@@ -131,7 +260,6 @@ const DistributionTracking = () => {
               ))}
             </select>
           </div>
-          
           <button 
             className="btn-primary"
             onClick={() => {
@@ -140,6 +268,7 @@ const DistributionTracking = () => {
             }}
           >
             + Create Dispatch Record
+
           </button>
         </div>
       </div>
@@ -163,12 +292,13 @@ const DistributionTracking = () => {
                     {getStatusLabel(record.status)}
                   </span>
                 </div>
-                
+
                 <div className="record-details">
                   <div className="detail-row">
                     <span className="label">Dispatch Date:</span>
                     <span className="value">{new Date(record.dispatchDate).toLocaleDateString()}</span>
                   </div>
+
                   <div className="detail-row">
                     <span className="label">Transport:</span>
                     <span className="value">{record.transportDetails}</span>
@@ -187,7 +317,7 @@ const DistributionTracking = () => {
 
                 {/* Status Progress */}
                 <div className="status-progress">
-                  <div className="progress-steps">
+                 <div className="progress-steps">
                     {statusOptions.map((option, index) => {
                       const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
                       const isActive = index <= currentIndex;
@@ -199,11 +329,12 @@ const DistributionTracking = () => {
                             backgroundColor: isActive ? getStatusColor(record.status) : '#e5e7eb'
                           }}
                         >
-                          <div className="step-dot"></div>
+                         <div className="step-dot"></div>
                           <span className="step-label">{option.label}</span>
                         </div>
                       );
                     })}
+
                   </div>
                 </div>
 
@@ -216,7 +347,7 @@ const DistributionTracking = () => {
                         onChange={(e) => {
                           if (e.target.value) {
                             handleUpdateStatus(record.id, e.target.value);
-                            e.target.value = '';
+                           e.target.value = '';
                           }
                         }}
                         defaultValue=""
@@ -224,6 +355,7 @@ const DistributionTracking = () => {
                         <option value="" disabled>Update Status</option>
                         {statusOptions
                           .filter(option => {
+
                             const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
                             const optionIndex = statusOptions.findIndex(opt => opt.value === option.value);
                             return optionIndex > currentIndex && optionIndex <= currentIndex + 1;
@@ -236,8 +368,33 @@ const DistributionTracking = () => {
                       </select>
                     )}
                   </div>
-                  
+
                   <div className="action-buttons">
+                    <button 
+                      className="btn-view"
+                      onClick={() => viewDispatchReport(record)}
+                      title="View dispatch report"
+                    >
+                      📄 Dispatch
+                    </button>
+                    {record.status === 'delivered' && (
+                      <>
+                        <button 
+                          className="btn-view"
+                          onClick={() => viewDeliveryConfirmation(record)}
+                          title="View delivery confirmation"
+                        >
+                          ✅ Delivery
+                        </button>
+                        <button 
+                          className="btn-view"
+                          onClick={() => viewExportSummary(record)}
+                          title="View CSV export data"
+                        >
+                          📊 Export Summary
+                        </button>
+                      </>
+                    )}
                     <button 
                       className="btn-edit"
                       onClick={() => handleEditRecord(record)}
@@ -268,6 +425,51 @@ const DistributionTracking = () => {
             setEditingRecord(null);
           }}
         />
+      )}
+      {/* View Modal */}
+      {viewModal.show && (
+        <div className="modal-overlay view-modal">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>{viewModal.title}</h2>
+              <button 
+                className="modal-close"
+                onClick={() => setViewModal({ show: false, type: null, content: null, title: null })}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="document-content">
+                {viewModal.content}
+              </div>
+            </div>
+            <div className="modal-footer">
+              {viewModal.type === 'export-summary' && (
+                <button 
+                  className="btn-primary"
+                  onClick={() => {
+                    const blob = new Blob([viewModal.content], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${viewModal.title.replace(/\s+/g, '_')}.csv`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download CSV
+                </button>
+              )}
+              <button 
+                className="btn-secondary"
+                onClick={() => setViewModal({ show: false, type: null, content: null, title: null })}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -304,8 +506,7 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
         <div className="modal-header">
           <h2>{record ? 'Edit Dispatch Record' : 'Create Dispatch Record'}</h2>
           <button className="close-btn" onClick={onCancel}>×</button>
-        </div>
-        
+       </div>
         <form onSubmit={handleSubmit} className="dispatch-form">
           <div className="form-group">
             <label htmlFor="allocationRef">Allocation Reference *</label>
@@ -319,7 +520,6 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
               placeholder="e.g., ALLOC-2024-001"
             />
           </div>
-
           <div className="form-group">
             <label htmlFor="dispatchDate">Dispatch Date *</label>
             <input
@@ -331,7 +531,6 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
               required
             />
           </div>
-
           <div className="form-group">
             <label htmlFor="transportDetails">Transport Details *</label>
             <textarea
@@ -342,9 +541,8 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
               required
               placeholder="e.g., Vehicle #123 - Driver: John Silva"
               rows="3"
-            />
+           />
           </div>
-
           <div className="form-group">
             <label htmlFor="currentLocation">Current Location</label>
             <input
@@ -356,7 +554,6 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
               placeholder="e.g., Colombo Warehouse"
             />
           </div>
-
           <div className="form-actions">
             <button type="button" className="btn-secondary" onClick={onCancel}>
               Cancel
@@ -372,3 +569,4 @@ const DispatchRecordForm = ({ record, onSave, onCancel }) => {
 };
 
 export default DistributionTracking;
+

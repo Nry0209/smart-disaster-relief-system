@@ -11,6 +11,7 @@ const UserManagement = () => {
   const [editingPartner, setEditingPartner] = useState(null);
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
 
   // Mock data - in real app, this would come from API
   useEffect(() => {
@@ -74,7 +75,10 @@ const UserManagement = () => {
         createdAt: '2024-01-10T08:00:00Z',
         lastContact: '2024-03-25T15:30:00Z',
         profilePicture: '/assets/profiles/partners/partner_1.jpg',
-        partnershipDate: '2024-01-10'
+        partnershipDate: '2024-01-10',
+        organizationProfile: '/assets/documents/partners/organization-profiles/red_cross_profile.pdf',
+        registrationCertificate: '/assets/documents/partners/registration-certificates/red_cross_cert.pdf',
+        verificationDocument: '/assets/documents/partners/verification-documents/red_cross_verification.pdf'
       },
       {
         id: 2,
@@ -88,7 +92,10 @@ const UserManagement = () => {
         createdAt: '2024-02-15T10:00:00Z',
         lastContact: '2024-03-24T11:20:00Z',
         profilePicture: '/assets/profiles/partners/partner_2.jpg',
-        partnershipDate: '2024-02-15'
+        partnershipDate: '2024-02-15',
+        organizationProfile: '/assets/documents/partners/organization-profiles/gfi_profile.pdf',
+        registrationCertificate: '/assets/documents/partners/registration-certificates/gfi_cert.pdf',
+        verificationDocument: '/assets/documents/partners/verification-documents/gfi_verification.pdf'
       },
       {
         id: 3,
@@ -102,7 +109,10 @@ const UserManagement = () => {
         createdAt: '2024-01-25T14:30:00Z',
         lastContact: '2024-03-18T09:45:00Z',
         profilePicture: '/assets/profiles/partners/partner_3.jpg',
-        partnershipDate: '2024-01-25'
+        partnershipDate: '2024-01-25',
+        organizationProfile: '/assets/documents/partners/organization-profiles/mai_profile.pdf',
+        registrationCertificate: '/assets/documents/partners/registration-certificates/mai_cert.pdf',
+        verificationDocument: '/assets/documents/partners/verification-documents/mai_verification.pdf'
       },
       {
         id: 4,
@@ -116,7 +126,10 @@ const UserManagement = () => {
         createdAt: '2024-03-05T16:00:00Z',
         lastContact: '2024-03-26T13:15:00Z',
         profilePicture: '/assets/profiles/partners/partner_4.jpg',
-        partnershipDate: '2024-03-05'
+        partnershipDate: '2024-03-05',
+        organizationProfile: '/assets/documents/partners/organization-profiles/sba_profile.pdf',
+        registrationCertificate: '/assets/documents/partners/registration-certificates/sba_cert.pdf',
+        verificationDocument: '/assets/documents/partners/verification-documents/sba_verification.pdf'
       }
     ];
 
@@ -227,6 +240,95 @@ const UserManagement = () => {
         ? { ...partner, status: partner.status === 'active' ? 'inactive' : 'active' }
         : partner
     ));
+  };
+
+  // View Functions for Partner Documents
+  const viewPartnerDocument = (partner, documentType) => {
+    let content = '';
+    let title = '';
+
+    switch (documentType) {
+      case 'organizationProfile':
+        content = `
+ORGANIZATION PROFILE DOCUMENT
+=============================
+Partner Name: ${partner.name}
+Contact Person: ${partner.contactPerson}
+Email: ${partner.email}
+Phone: ${partner.phone}
+Address: ${partner.address}
+Specialization: ${partner.specialization}
+Status: ${partner.status}
+Partnership Date: ${partner.partnershipDate}
+
+Document Type: Organization Profile
+File Path: ${partner.organizationProfile || 'Not uploaded'}
+Uploaded: ${partner.organizationProfile ? 'Yes' : 'No'}
+
+This document contains detailed information about the NGO organization,
+including their mission, capabilities, and operational areas.
+        `.trim();
+        title = `Organization Profile - ${partner.name}`;
+        break;
+        
+      case 'registrationCertificate':
+        content = `
+REGISTRATION CERTIFICATE
+========================
+Partner Name: ${partner.name}
+Contact Person: ${partner.contactPerson}
+Email: ${partner.email}
+Phone: ${partner.phone}
+Address: ${partner.address}
+Specialization: ${partner.specialization}
+Status: ${partner.status}
+Registration Date: ${partner.partnershipDate}
+
+Document Type: Registration Certificate
+File Path: ${partner.registrationCertificate || 'Not uploaded'}
+Uploaded: ${partner.registrationCertificate ? 'Yes' : 'No'}
+
+This is the official registration certificate issued by the relevant
+government authority, confirming the legal status of the organization.
+        `.trim();
+        title = `Registration Certificate - ${partner.name}`;
+        break;
+        
+      case 'verificationDocument':
+        content = `
+VERIFICATION / APPROVAL DOCUMENT
+=================================
+Partner Name: ${partner.name}
+Contact Person: ${partner.contactPerson}
+Email: ${partner.email}
+Phone: ${partner.phone}
+Address: ${partner.address}
+Specialization: ${partner.specialization}
+Status: ${partner.status}
+Verification Date: ${partner.partnershipDate}
+
+Document Type: Verification / Approval Document
+File Path: ${partner.verificationDocument || 'Not uploaded'}
+Uploaded: ${partner.verificationDocument ? 'Yes' : 'No'}
+
+This document contains verification and approval details from
+disaster management authorities, confirming the organization's
+eligibility for partnership in relief operations.
+        `.trim();
+        title = `Verification Document - ${partner.name}`;
+        break;
+        
+      default:
+        content = 'Document not found';
+        title = 'Document View';
+    }
+
+    setViewModal({
+      show: true,
+      type: 'partner-document',
+      content: content,
+      title: title
+    });
   };
 
   const UserForm = ({ user, onSubmit, onCancel }) => {
@@ -386,7 +488,10 @@ const UserManagement = () => {
       specialization: partner?.specialization || 'Emergency Relief',
       status: partner?.status || 'active',
       profilePicture: partner?.profilePicture || null,
-      partnershipDate: partner?.partnershipDate || new Date().toISOString().split('T')[0]
+      partnershipDate: partner?.partnershipDate || new Date().toISOString().split('T')[0],
+      organizationProfile: partner?.organizationProfile || null,
+      registrationCertificate: partner?.registrationCertificate || null,
+      verificationDocument: partner?.verificationDocument || null
     });
 
     const formatDateForDisplay = (dateString) => {
@@ -408,6 +513,48 @@ const UserManagement = () => {
         };
         reader.readAsDataURL(file);
       }
+    };
+
+    const handleDocumentUpload = (documentType) => (e) => {
+      const file = e.target.files[0];
+      if (file && file.type === 'application/pdf') {
+        // Generate unique filename
+        const timestamp = new Date().getTime();
+        const fileName = `${documentType}_${timestamp}.pdf`;
+        
+        // Determine folder path based on document type
+        let folderPath;
+        switch (documentType) {
+          case 'organizationProfile':
+            folderPath = '/assets/documents/partners/organization-profiles/';
+            break;
+          case 'registrationCertificate':
+            folderPath = '/assets/documents/partners/registration-certificates/';
+            break;
+          case 'verificationDocument':
+            folderPath = '/assets/documents/partners/verification-documents/';
+            break;
+          default:
+            folderPath = '/assets/documents/partners/';
+        }
+        
+        // Store file path instead of base64
+        const filePath = folderPath + fileName;
+        setFormData({...formData, [documentType]: filePath});
+        
+        // In a real application, you would upload the file to server here
+        // For now, we'll just store the path
+        console.log('Document would be saved to:', filePath);
+      }
+    };
+
+    const getDocumentName = (filePath) => {
+      if (!filePath) return '';
+      return filePath.split('/').pop();
+    };
+
+    const removeDocument = (documentType) => {
+      setFormData({...formData, [documentType]: null});
     };
 
     const handleSubmit = (e) => {
@@ -537,6 +684,135 @@ const UserManagement = () => {
                 <option value="inactive">Inactive</option>
               </select>
             </div>
+
+            {/* Document Upload Fields */}
+            <div className="form-group">
+              <label>Organization Profile Document</label>
+              <div className="document-upload-container">
+                {formData.organizationProfile ? (
+                  <div className="document-preview">
+                    <span className="document-icon">📄</span>
+                    <span className="document-name">{formData.organizationProfile.split('/').pop()}</span>
+                    <div className="document-actions">
+                      <button 
+                        type="button" 
+                        className="btn-primary"
+                        onClick={() => viewPartnerDocument(formData, 'organizationProfile')}
+                        title="View organization profile document"
+                      >
+                        View Document
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-remove-document"
+                        onClick={() => setFormData({...formData, organizationProfile: null})}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="document-upload-area">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleDocumentUpload('organizationProfile')}
+                      className="document-input"
+                      id="org-profile"
+                    />
+                    <label htmlFor="org-profile" className="document-upload-label">
+                      <span className="upload-icon">📤</span>
+                      <span>Upload Organization Profile (PDF)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Registration Certificate</label>
+              <div className="document-upload-container">
+                {formData.registrationCertificate ? (
+                  <div className="document-preview">
+                    <span className="document-icon">📄</span>
+                    <span className="document-name">{formData.registrationCertificate.split('/').pop()}</span>
+                    <div className="document-actions">
+                      <button 
+                        type="button" 
+                        className="btn-primary"
+                        onClick={() => viewPartnerDocument(formData, 'registrationCertificate')}
+                        title="View registration certificate document"
+                      >
+                        View Document
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-remove-document"
+                        onClick={() => setFormData({...formData, registrationCertificate: null})}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="document-upload-area">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleDocumentUpload('registrationCertificate')}
+                      className="document-input"
+                      id="reg-certificate"
+                    />
+                    <label htmlFor="reg-certificate" className="document-upload-label">
+                      <span className="upload-icon">📤</span>
+                      <span>Upload Registration Certificate (PDF)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Verification / Approval Document</label>
+              <div className="document-upload-container">
+                {formData.verificationDocument ? (
+                  <div className="document-preview">
+                    <span className="document-icon">📄</span>
+                    <span className="document-name">{formData.verificationDocument.split('/').pop()}</span>
+                    <div className="document-actions">
+                      <button 
+                        type="button" 
+                        className="btn-primary"
+                        onClick={() => viewPartnerDocument(formData, 'verificationDocument')}
+                        title="View verification document"
+                      >
+                        View Document
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-remove-document"
+                        onClick={() => setFormData({...formData, verificationDocument: null})}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="document-upload-area">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleDocumentUpload('verificationDocument')}
+                      className="document-input"
+                      id="verification-doc"
+                    />
+                    <label htmlFor="verification-doc" className="document-upload-label">
+                      <span className="upload-icon">📤</span>
+                      <span>Upload Verification Document (PDF)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={onCancel}>
                 Cancel
@@ -594,10 +870,11 @@ const UserManagement = () => {
                 </select>
               </div>
               <button 
-                className="btn-primary"
+                className="btn-primary btn-create"
                 onClick={() => setShowCreateForm(true)}
               >
-                Create Staff Record
+                <span className="btn-icon">+</span>
+                <span className="btn-text">Create Staff</span>
               </button>
             </div>
 
@@ -704,10 +981,11 @@ const UserManagement = () => {
                 </select>
               </div>
               <button 
-                className="btn-primary"
+                className="btn-primary btn-create"
                 onClick={() => setShowPartnerForm(true)}
               >
-                Create Partner Record
+                <span className="btn-icon">+</span>
+                <span className="btn-text">Create Partner</span>
               </button>
             </div>
 
@@ -769,6 +1047,61 @@ const UserManagement = () => {
                           <span className="value">
                             {partner.lastContact ? new Date(partner.lastContact).toLocaleDateString() : 'Never'}
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Document Management Section */}
+                      <div className="document-section">
+                        <h4>Documents</h4>
+                        <div className="document-list">
+                          <div className="document-item">
+                            <span className="document-label">Organization Profile:</span>
+                            {partner.organizationProfile ? (
+                              <div className="document-actions">
+                                <button 
+                                  className="btn-view"
+                                  onClick={() => viewPartnerDocument(partner, 'organizationProfile')}
+                                  title="View organization profile"
+                                >
+                                  View
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="no-document">Not uploaded</span>
+                            )}
+                          </div>
+                          <div className="document-item">
+                            <span className="document-label">Registration Certificate:</span>
+                            {partner.registrationCertificate ? (
+                              <div className="document-actions">
+                                <button 
+                                  className="btn-view"
+                                  onClick={() => viewPartnerDocument(partner, 'registrationCertificate')}
+                                  title="View registration certificate"
+                                >
+                                  View
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="no-document">Not uploaded</span>
+                            )}
+                          </div>
+                          <div className="document-item">
+                            <span className="document-label">Verification Document:</span>
+                            {partner.verificationDocument ? (
+                              <div className="document-actions">
+                                <button 
+                                  className="btn-view"
+                                  onClick={() => viewPartnerDocument(partner, 'verificationDocument')}
+                                  title="View verification document"
+                                >
+                                  View
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="no-document">Not uploaded</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
