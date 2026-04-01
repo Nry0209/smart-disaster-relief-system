@@ -13,7 +13,6 @@ export const SIDEBAR_ITEMS = [
     path: "/dashboard",
     roles: [
       ROLES.ADMIN,
-      ROLES.DMC,
       ROLES.INVENTORY,
       ROLES.ALLOCATION,
       ROLES.TRACKING,
@@ -21,8 +20,18 @@ export const SIDEBAR_ITEMS = [
     ],
   },
   {
+    label: "DMC Dashboard",
+    path: "/dmc-dashboard",
+    roles: [ROLES.DMC],
+  },
+  {
+    label: "Create Disaster Report",
+    path: "/disaster-report/create",
+    roles: [ROLES.DMC],
+  },
+  {
     label: "Disaster Reports",
-    path: "/disasters",
+    path: "/disaster-events",
     roles: [ROLES.ADMIN, ROLES.DMC],
   },
   {
@@ -62,7 +71,7 @@ export const SIDEBAR_ITEMS = [
   },
   {
     label: "Reports",
-    path: "/reports",
+    path: "/reports-analytics",
     roles: [ROLES.ADMIN, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
   },
   {

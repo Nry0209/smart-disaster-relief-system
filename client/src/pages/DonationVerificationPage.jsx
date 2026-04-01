@@ -123,7 +123,7 @@ const DonationVerificationPage = () => {
     <div className="donation-verification-page">
 
       {/* HEADER */}
-      <div className="donation-header">
+      <div className="tracking-header">
         <h1>Donation Verification</h1>
         <p>Review and verify incoming donations from various sources</p>
       </div>
@@ -131,10 +131,10 @@ const DonationVerificationPage = () => {
       {/* STATS */}
       <div className="donation-stats">
         {[
-          { icon: <Package size={24} color="#2563eb"/>, bg:"#eff6ff", lbl:"Total Donations", val: stats.total },
-          { icon: <Clock size={24} color="#f59e0b"/>, bg:"#fef3c7", lbl:"Pending Review", val: stats.pending },
-          { icon: <CheckCircle size={24} color="#16a34a"/>, bg:"#f0fdf4", lbl:"Verified", val: stats.verified },
-          { icon: <XCircle size={24} color="#dc2626"/>, bg:"#fef2f2", lbl:"Rejected", val: stats.rejected },
+          { icon: <Package size={16} color="#2563eb"/>, bg:"#eff6ff", lbl:"Total Donations", val: stats.total },
+          { icon: <Clock size={16} color="#f59e0b"/>, bg:"#fef3c7", lbl:"Pending Review", val: stats.pending },
+          { icon: <CheckCircle size={16} color="#16a34a"/>, bg:"#f0fdf4", lbl:"Verified", val: stats.verified },
+          { icon: <XCircle size={16} color="#dc2626"/>, bg:"#fef2f2", lbl:"Rejected", val: stats.rejected },
         ].map(s => (
           <div className="stat-card" key={s.lbl}>
             <div className="stat-icon" style={{ background: s.bg }}>{s.icon}</div>
@@ -147,17 +147,11 @@ const DonationVerificationPage = () => {
       </div>
 
       {/* FILTERS AND SEARCH */}
-      <div className="donation-actions">
+      <div className="tracking-actions">
         <div className="filter-controls">
-          <div className="search-input">
-            <Search size={18}/>
-            <input
-              placeholder="Search donations..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
-          </div>
+          <label htmlFor="status-filter">Filter by Status:</label>
           <select 
+            id="status-filter"
             className="filter-select"
             value={selectedStatus}
             onChange={e => setSelectedStatus(e.target.value)}
@@ -167,6 +161,16 @@ const DonationVerificationPage = () => {
             <option value="verified">Verified</option>
             <option value="rejected">Rejected</option>
           </select>
+        </div>
+        <div className="filter-controls">
+          <div className="search-input">
+            <Search size={14}/>
+            <input
+              placeholder="Search donations..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

@@ -160,31 +160,36 @@ const PartnerDirectory = () => {
           <form className="dispatch-form" onSubmit={handleSubmit}>
             <div className="form-group">
               <label>Organization Logo</label>
-              <div className="profile-upload-container">
-                {formData.profilePicture ? (
-                  <img 
-                    src={formData.profilePicture} 
-                    alt="Organization Logo" 
-                    className="profile-preview"
+              <div className="profile-upload-compact">
+                <div className="logo-preview-small">
+                  {formData.profilePicture ? (
+                    <img 
+                      src={formData.profilePicture} 
+                      alt="Logo" 
+                      className="logo-image-small"
+                    />
+                  ) : (
+                    <div className="logo-placeholder-small">
+                      <span>🏢</span>
+                    </div>
+                  )}
+                </div>
+                <div className="logo-upload-controls">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="profile-upload-input"
+                    id="logo-upload"
                   />
-                ) : (
-                  <div className="profile-placeholder">
-                    <span className="profile-icon">🏢</span>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="profile-upload-input"
-                />
-                <button 
-                  type="button" 
-                  className="btn-secondary upload-btn"
-                  onClick={() => document.querySelector('.profile-upload-input').click()}
-                >
-                  {formData.profilePicture ? 'Change Logo' : 'Upload Logo'}
-                </button>
+                  <button 
+                    type="button" 
+                    className="btn-compact"
+                    onClick={() => document.getElementById('logo-upload').click()}
+                  >
+                    {formData.profilePicture ? 'Change' : 'Upload'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="form-group">

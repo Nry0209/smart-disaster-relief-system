@@ -3,7 +3,8 @@ export { default as logo } from './logo1.png';
 export { default as loginImage } from './loginImage.png';
 
 // Slide images for the landing page carousel
-export { default as slide1 } from './d1.png';
+// Note: d1.png is currently missing, using d2.jpg as first slide
+export { default as slide1 } from './d2.jpg';
 export { default as slide2 } from './d2.jpg';
 export { default as slide3 } from './d3.jpg';
 
