@@ -6,6 +6,7 @@ import DistributionTracking from "./pages/DistributionTracking";
 import UserManagement from "./pages/UserManagement";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DmcDashboardPage from "./pages/DmcDashboardPage";
+import PublicDonationPage from "./pages/PublicDonationPage";
 
 import InventoryPage from "./pages/InventoryPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
@@ -23,6 +24,7 @@ function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/public-donation" element={<PublicDonationPage />} />
       <Route path="/ngo-donate" element={<NGODonationPage />} />
       <Route path="/dashboard" element={
         <DashboardLayout>
