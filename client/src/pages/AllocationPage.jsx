@@ -266,26 +266,14 @@ export default function AllocationPage() {
 
   return (
     <div className="allocation-page">
-
       {/* HEADER */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <Truck size={32} color="#2563eb" />
-          </div>
-          <div>
-            <h1>Resource Allocation</h1>
-            <p>Manage and allocate resources to DMC officer requests based on available inventory</p>
-          </div>
-        </div>
-        <Link to="/disaster-events" className="notification-btn">
-          <Bell size={20} color="#2563eb" />
-          <span className="notification-badge">3</span>
-        </Link>
+      <div className="allocation-header">
+        <h1>Resource Allocation</h1>
+        <p>Manage and allocate resources to DMC officer requests based on available inventory</p>
       </div>
 
       {/* STATS CARDS */}
-      <div className="stats-grid">
+      <div className="allocation-stats">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#eff6ff" }}>
             <Users size={24} color="#2563eb" />
@@ -327,32 +315,36 @@ export default function AllocationPage() {
         </div>
       </div>
 
-      {/* CURRENT INVENTORY STATUS */}
-      <div className="inventory-overview">
-        <h2>Current Inventory Status</h2>
-        <div className="inventory-grid">
+      {/* INVENTORY SECTION */}
+      <div className="allocation-inventory-section">
+        <h2>
+          <Package size={24} color="#2563eb" />
+          Current Inventory Status
+        </h2>
+        <div className="allocation-inventory-grid">
           {inventory.map(item => {
             const status = getStatus(item.stock, item.min);
             const canAllocate = item.stock > 0;
+            
             return (
-              <div key={item.id} className={`inventory-card ${!canAllocate ? 'out-of-stock' : ''}`}>
-                <div className="inventory-card-header">
-                  <h3>{item.name}</h3>
-                  <span className={`category-badge ${item.category.toLowerCase()}`}>{item.category}</span>
-                </div>
-                <div className="inventory-stats">
-                  <div className="stock-info">
-                    <span className="stock-amount">{item.stock.toLocaleString()}</span>
-                    <span className="stock-label">Available</span>
+              <div key={item.id} className="allocation-inventory-item">
+                <div className="item-header">
+                  <div className="item-info">
+                    <h3>{item.name}</h3>
+                    <span className="category">{item.category}</span>
                   </div>
-                  <div className="min-info">
-                    <span className="min-amount">{item.min.toLocaleString()}</span>
-                    <span className="min-label">Minimum</span>
+                  <div className="stock-info">
+                    <div className="stock-amount">{item.stock}</div>
+                    <div className="min-label">Minimum: {item.min}</div>
                   </div>
                 </div>
                 <div className="status-info">
-                  <span className={`status-badge ${status.label.toLowerCase()}`}>{status.label}</span>
-                  <span className="availability">{canAllocate ? 'Available' : 'Out of Stock'}</span>
+                  <span className={`status-badge ${status.label.toLowerCase()}`} style={{ color: status.color, background: status.bg }}>
+                    {status.label}
+                  </span>
+                  <span className="availability" style={{ color: canAllocate ? '#16a34a' : '#dc2626' }}>
+                    {canAllocate ? 'Available' : 'Out of Stock'}
+                  </span>
                 </div>
               </div>
             );
@@ -361,8 +353,8 @@ export default function AllocationPage() {
       </div>
 
       {/* FILTERS AND SEARCH */}
-      <div className="filters-section">
-        <div className="search-bar">
+      <div className="allocation-filters-section">
+        <div className="allocation-search-bar">
           <Search size={18} />
           <input
             type="text"
@@ -371,11 +363,11 @@ export default function AllocationPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="filter-buttons">
+        <div className="allocation-filter-buttons">
           {["all", "active", "allocated", "monitoring"].map(status => (
             <button
               key={status}
-              className={`filter-btn ${filterStatus === status ? "active" : ""}`}
+              className={`allocation-filter-btn ${filterStatus === status ? "active" : ""}`}
               onClick={() => setFilterStatus(status)}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -385,7 +377,7 @@ export default function AllocationPage() {
       </div>
 
       {/* DISASTER EVENTS TABLE */}
-      <div className="requests-section">
+      <div className="allocation-requests-section">
         <h2>DMC Disaster Events</h2>
         <div className="requests-table-container">
           <table className="requests-table">
@@ -632,33 +624,34 @@ export default function AllocationPage() {
               </div>
             </div>
             
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setAllocationModal(false)}>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setAllocationModal(false)}>
                 Cancel
               </button>
               {existingAllocation ? (
                 <>
                   <button 
-                    className="update-btn"
+                    className="btn-primary"
                     onClick={updateAllocation}
                   >
-                    Update
+                    Update Allocation
                   </button>
                   <button 
-                    className="delete-btn"
+                    className="btn-danger"
                     onClick={() => {
                       if (window.confirm('Are you sure you want to delete this allocation? This will return all allocated resources to inventory and cannot be undone.')) {
                         deleteAllocation();
                       }
                     }}
                   >
-                    Delete
+                    Delete Allocation
                   </button>
                 </>
               ) : (
                 <button 
-                  className="allocate-btn"
+                  className="btn-primary"
                   onClick={confirmAllocation}
+                  disabled={Object.values(allocationQuantities).every(qty => qty === 0)}
                 >
                   Confirm Allocation
                 </button>
