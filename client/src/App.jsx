@@ -14,6 +14,8 @@ import ResourceRequestPage from "./pages/ResourceRequestPage";
 import AllocationPage from "./pages/AllocationPage";
 import DisasterEventPage from "./pages/DisasterEventPage";
 import CreateDisasterReportPage from "./pages/CreateDisasterReportPage";
+import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 import "./App.css";
 
 function App() {
@@ -70,6 +72,16 @@ function App() {
       <Route path="/disaster-report/create" element={
         <DashboardLayout>
           <CreateDisasterReportPage />
+        </DashboardLayout>
+      } />
+      <Route path="/reports-analytics" element={
+        <DashboardLayout>
+          <ReportsAnalyticsPage />
+        </DashboardLayout>
+      } />
+      <Route path="/audit-logs" element={
+        <DashboardLayout>
+          <AuditLogsPage />
         </DashboardLayout>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
