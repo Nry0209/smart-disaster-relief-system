@@ -8,6 +8,7 @@ import "./Pages.css";
 function LoginPage() {
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("password");
+  const [role, setRole] = useState("admin");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -21,13 +22,13 @@ function LoginPage() {
     setTimeout(() => {
       const mockUser = {
         id: 1,
-        name: "Admin User",
+        name: role === "dmc_officer" ? "DMC Officer" : "Admin User",
         email,
-        role: "admin",
+        role,
       };
 
       login(mockUser);
-      navigate("/dashboard");
+      navigate(role === "dmc_officer" ? "/dmc-dashboard" : "/dashboard");
       setIsLoading(false);
     }, 1000);
   };
@@ -113,7 +114,7 @@ function LoginPage() {
 
               <div className="login-form-group">
                 <label>Login role</label>
-                <select defaultValue="admin">
+                <select value={role} onChange={(e) => setRole(e.target.value)}>
                   <option value="dmc_officer">DMC Officer</option>
                   <option value="inventory_officer">Inventory Officer</option>
                   <option value="allocation_officer">Allocation Officer</option>
