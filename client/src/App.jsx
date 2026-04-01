@@ -12,6 +12,8 @@ import NGODonationPage from "./pages/NGODonationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
 import AllocationPage from "./pages/AllocationPage";
 import DisasterEventPage from "./pages/DisasterEventPage";
+import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 import "./App.css";
 
 function App() {
@@ -58,6 +60,16 @@ function App() {
       <Route path="/disaster-events" element={
         <DashboardLayout>
           <DisasterEventPage />
+        </DashboardLayout>
+      } />
+      <Route path="/reports-analytics" element={
+        <DashboardLayout>
+          <ReportsAnalyticsPage />
+        </DashboardLayout>
+      } />
+      <Route path="/audit-logs" element={
+        <DashboardLayout>
+          <AuditLogsPage />
         </DashboardLayout>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
