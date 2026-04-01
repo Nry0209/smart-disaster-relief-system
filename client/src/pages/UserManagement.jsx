@@ -1063,7 +1063,7 @@ eligibility for partnership in relief operations.
                                   onClick={() => viewPartnerDocument(partner, 'organizationProfile')}
                                   title="View organization profile"
                                 >
-                                  View
+                                  View Profile
                                 </button>
                               </div>
                             ) : (
@@ -1079,7 +1079,7 @@ eligibility for partnership in relief operations.
                                   onClick={() => viewPartnerDocument(partner, 'registrationCertificate')}
                                   title="View registration certificate"
                                 >
-                                  View
+                                  View Certificate
                                 </button>
                               </div>
                             ) : (
@@ -1095,7 +1095,7 @@ eligibility for partnership in relief operations.
                                   onClick={() => viewPartnerDocument(partner, 'verificationDocument')}
                                   title="View verification document"
                                 >
-                                  View
+                                  View Verification
                                 </button>
                               </div>
                             ) : (
@@ -1119,13 +1119,13 @@ eligibility for partnership in relief operations.
                             className="btn-edit"
                             onClick={() => setEditingPartner(partner)}
                           >
-                            Edit
+                            Edit Partner
                           </button>
                           <button 
                             className="btn-delete"
                             onClick={() => handleDeletePartner(partner.id)}
                           >
-                            Delete
+                            Delete Partner
                           </button>
                         </div>
                       </div>

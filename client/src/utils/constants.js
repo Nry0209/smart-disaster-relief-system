@@ -71,7 +71,7 @@ export const SIDEBAR_ITEMS = [
   },
   {
     label: "Reports",
-    path: "/reports",
+    path: "/reports-analytics",
     roles: [ROLES.ADMIN, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
   },
   {
