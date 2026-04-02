@@ -45,7 +45,33 @@ const DistributionTracking = () => {
       }
 
     ];
-    setDispatchRecords(mockData);
+
+    // Get distribution records from localStorage (from AllocationPage)
+    const distributionRecords = JSON.parse(localStorage.getItem('distributionTrackingRecords') || '[]');
+    
+    // Convert distribution records to dispatch record format
+    const convertedRecords = distributionRecords.map(record => ({
+      id: record.id,
+      allocationRef: record.distributionId,
+      dispatchDate: new Date(record.releasedDate).toISOString().split('T')[0],
+      transportDetails: `${record.transportMethod} - Contact: ${record.allocationOfficerContact}`,
+      currentLocation: record.currentLocation,
+      status: record.status,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      eventId: record.eventId,
+      disasterType: record.disasterType,
+      location: record.location,
+      dmcOfficer: record.dmcOfficer,
+      dmcContact: record.dmcContact,
+      priorityLevel: record.priorityLevel,
+      specialInstructions: record.specialInstructions,
+      allocatedResources: record.allocatedResources
+    }));
+
+    // Combine mock data with real distribution records
+    const allRecords = [...convertedRecords, ...mockData];
+    setDispatchRecords(allRecords);
   }, []);
 
   const statusOptions = [
@@ -119,26 +145,184 @@ const DistributionTracking = () => {
 
   // View Functions for Distribution Tracking
   const viewDispatchSummary = (record) => {
-    const content = `
+    let content = `
 DISPATCH SUMMARY
 ================
-Allocation Reference: ${record.allocationRef}
+Distribution ID: ${record.allocationRef}
+${record.eventId ? `Event ID: ${record.eventId}` : ''}
+${record.disasterType ? `Disaster Type: ${record.disasterType}` : ''}
+${record.location ? `Location: ${record.location}` : ''}
+${record.dmcOfficer ? `DMC Officer: ${record.dmcOfficer}` : ''}
+${record.dmcContact ? `DMC Contact: ${record.dmcContact}` : ''}
 Dispatch Date: ${new Date(record.dispatchDate).toLocaleDateString()}
 Transport Details: ${record.transportDetails}
 Current Location: ${record.currentLocation}
-Status: ${record.status}
+${record.priorityLevel ? `Priority Level: ${record.priorityLevel.toUpperCase()}` : ''}
+Status: ${getStatusLabel(record.status)}
 Created: ${new Date(record.createdAt).toLocaleString()}
-Last Updated: ${new Date(record.updatedAt).toLocaleString()}
+Last Updated: ${new Date(record.updatedAt).toLocaleString()}`;
 
-This summary provides an overview of the dispatch record including
-current status, location, and transport information.
+    // Add special instructions if available
+    if (record.specialInstructions) {
+      content += `
+
+Special Instructions:
+${record.specialInstructions}`;
+    }
+
+    // Add allocated resources if available
+    if (record.allocatedResources && record.allocatedResources.quantities) {
+      content += `
+
+Allocated Resources:
+${Object.entries(record.allocatedResources.quantities).map(([resource, quantity]) => 
+  `- ${resource}: ${quantity.toLocaleString()} units`
+).join('\n')}`;
+    }
+
+    content += `
+
+This summary provides an overview of the distribution record including
+status, location, transport information, and resource details.
     `.trim();
 
     setViewModal({
       show: true,
       type: 'dispatch-summary',
       content: content,
-      title: `Dispatch Summary - ${record.allocationRef}`
+      title: `Distribution Summary - ${record.allocationRef}`
+    });
+  };
+
+  // Combined Section View Functions
+  const viewBasicAndContactInfo = (record) => {
+    const content = `
+<div class="distribution-form-view">
+  <div class="form-section">
+    <h4>Basic Distribution Information</h4>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Distribution ID</label>
+        <input type="text" value="${record.allocationRef}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Event ID</label>
+        <input type="text" value="${record.eventId || '-'}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Disaster Type</label>
+        <input type="text" value="${record.disasterType}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" value="${record.location}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Priority Level</label>
+        <input type="text" value="${record.priorityLevel?.toUpperCase() || '-'}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Released Date</label>
+        <input type="text" value="${new Date(record.releasedDate || record.dispatchDate).toLocaleString()}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Created Date</label>
+        <input type="text" value="${new Date(record.createdAt).toLocaleString()}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Last Updated</label>
+        <input type="text" value="${new Date(record.updatedAt).toLocaleString()}" readonly />
+      </div>
+    </div>
+  </div>
+  
+  <div class="form-section">
+    <h4>Contact Information</h4>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>DMC Officer Name</label>
+        <input type="text" value="${record.dmcOfficer}" readonly />
+      </div>
+      <div class="form-group">
+        <label>DMC Officer Contact</label>
+        <input type="text" value="${record.dmcContact}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Allocation Officer Contact</label>
+        <input type="text" value="${record.transportDetails?.split(' - ')[1] || '-'}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" value="${record.location}" readonly />
+      </div>
+    </div>
+  </div>
+</div>
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'basic-contact',
+      content: content,
+      title: `Basic & Contact Information - ${record.allocationRef}`
+    });
+  };
+
+  const viewResourcesAndInstructions = (record) => {
+    let resourcesContent = '';
+    if (record.allocatedResources && record.allocatedResources.quantities) {
+      resourcesContent = Object.entries(record.allocatedResources.quantities).map(([resource, quantity]) => 
+        `<div class="form-group">
+          <label>${resource}</label>
+          <input type="text" value="${quantity.toLocaleString()} units" readonly />
+        </div>`
+      ).join('');
+    } else {
+      resourcesContent = '<div class="form-group"><label>Resources</label><input type="text" value="No resources allocated" readonly /></div>';
+    }
+
+    const content = `
+<div class="distribution-form-view">
+  <div class="form-section">
+    <h4>Allocated Resources</h4>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Distribution ID</label>
+        <input type="text" value="${record.allocationRef}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Disaster Type</label>
+        <input type="text" value="${record.disasterType}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Location</label>
+        <input type="text" value="${record.location}" readonly />
+      </div>
+      <div class="form-group">
+        <label>Priority Level</label>
+        <input type="text" value="${record.priorityLevel?.toUpperCase() || '-'}" readonly />
+      </div>
+      ${resourcesContent}
+    </div>
+  </div>
+  
+  <div class="form-section">
+    <h4>Special Instructions</h4>
+    <div class="form-grid">
+      <div class="form-group full-width">
+        <label>Special Instructions</label>
+        <textarea readonly>${record.specialInstructions || 'No special instructions provided'}</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+    `.trim();
+
+    setViewModal({
+      show: true,
+      type: 'resources-instructions',
+      content: content,
+      title: `Resources & Instructions - ${record.allocationRef}`
     });
   };
 
@@ -280,118 +464,190 @@ suitable for download and import into spreadsheet applications.
             <p>No dispatch records found</p>
           </div>
         ) : (
-          <div className="records-grid">
-            {filteredRecords.map(record => (
-              <div key={record.id} className="record-card">
-                <div className="record-header">
-                  <h3>{record.allocationRef}</h3>
-                  <span 
-                    className="status-badge"
-                    style={{ backgroundColor: getStatusColor(record.status) }}
-                  >
-                    {getStatusLabel(record.status)}
-                  </span>
-                </div>
+          <>
+            {/* Distribution Details Table */}
+            <div className="distribution-details-table-container">
+              <h2>Distribution Details</h2>
+              <div className="distribution-table-content">
+                {filteredRecords.filter(record => record.disasterType).length > 0 ? (
+                  <div className="distribution-records-grid">
+                    {filteredRecords.filter(record => record.disasterType).map(record => (
+                      <div key={record.id} className="distribution-record-card">
+                        {/* Card Header */}
+                        <div className="record-card-header">
+                          <div className="record-title">
+                            <span className="distribution-id">{record.allocationRef}</span>
+                            <span 
+                              className="priority-badge"
+                              style={{ 
+                                backgroundColor: record.priorityLevel === 'critical' ? '#dc2626' : 
+                                                record.priorityLevel === 'high' ? '#ea580c' : 
+                                                record.priorityLevel === 'medium' ? '#d97706' : '#16a34a',
+                                color: 'white',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px'
+                              }}
+                            >
+                              {record.priorityLevel?.toUpperCase() || '-'}
+                            </span>
+                          </div>
+                          <div className="record-disaster">
+                            <span className="disaster-type">{record.disasterType}</span>
+                            <span className="location">{record.location}</span>
+                          </div>
+                        </div>
 
-                <div className="record-details">
-                  <div className="detail-row">
-                    <span className="label">Dispatch Date:</span>
-                    <span className="value">{new Date(record.dispatchDate).toLocaleDateString()}</span>
+                        {/* Section Buttons */}
+                        <div className="record-section-buttons">
+                          <button 
+                            className="section-btn basic-contact-btn"
+                            onClick={() => viewBasicAndContactInfo(record)}
+                            title="View basic and contact information"
+                          >
+                            📋 Basic & Contact
+                          </button>
+                          <button 
+                            className="section-btn resources-instructions-btn"
+                            onClick={() => viewResourcesAndInstructions(record)}
+                            title="View resources and instructions"
+                          >
+                            📦 Resources & Instructions
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-
-                  <div className="detail-row">
-                    <span className="label">Transport:</span>
-                    <span className="value">{record.transportDetails}</span>
+                ) : (
+                  <div className="no-distribution-records">
+                    <p>No distribution details found</p>
                   </div>
-                  <div className="detail-row">
-                    <span className="label">Current Location:</span>
-                    <span className="value">{record.currentLocation}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Last Updated:</span>
-                    <span className="value">
-                      {new Date(record.updatedAt).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="record-actions">
-                  <div className="status-actions">
-                    {record.status !== 'confirmed' && (
-                      <select 
-                        className="status-update-select"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleUpdateStatus(record.id, e.target.value);
-                           e.target.value = '';
-                          }
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Update Status</option>
-                        {statusOptions
-                          .filter(option => {
-
-                            const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
-                            const optionIndex = statusOptions.findIndex(opt => opt.value === option.value);
-                            return optionIndex > currentIndex && optionIndex <= currentIndex + 1;
-                          })
-                          .map(option => (
-                            <option key={option.value} value={option.value}>
-                              Mark as {option.label}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="action-buttons">
-                    <button 
-                      className="btn-view"
-                      onClick={() => viewDispatchReport(record)}
-                      title="View dispatch report"
-                    >
-                      📄 Dispatch
-                    </button>
-                    {record.status === 'delivered' && (
-                      <>
-                        <button 
-                          className="btn-view"
-                          onClick={() => viewDeliveryConfirmation(record)}
-                          title="View delivery confirmation"
-                        >
-                          ✅ Delivery
-                        </button>
-                        <button 
-                          className="btn-view"
-                          onClick={() => viewExportSummary(record)}
-                          title="View CSV export data"
-                        >
-                          📊 Export Summary
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  
-                  <div className="action-buttons secondary">
-                    <button 
-                      className="btn-edit"
-                      onClick={() => handleEditRecord(record)}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      className="btn-delete"
-                      onClick={() => handleDeleteRecord(record.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
+
+            {/* Original Status Tracking Records - Without Distribution Details */}
+            <div className="records-container">
+              <h2>Status Tracking</h2>
+              {filteredRecords.filter(record => !record.disasterType).length === 0 ? (
+                <div className="no-records">
+                  <p>No status tracking records found</p>
+                </div>
+              ) : (
+                <div className="records-grid">
+                  {filteredRecords.filter(record => !record.disasterType).map(record => (
+                    <div key={record.id} className="record-card">
+                      <div className="record-header">
+                        <h3>{record.allocationRef}</h3>
+                        <span 
+                          className="status-badge"
+                          style={{ backgroundColor: getStatusColor(record.status) }}
+                        >
+                          {getStatusLabel(record.status)}
+                        </span>
+                      </div>
+
+                      <div className="record-details">
+                        <div className="detail-row">
+                          <span className="label">Dispatch Date:</span>
+                          <span className="value">{new Date(record.dispatchDate).toLocaleDateString()}</span>
+                        </div>
+
+                        <div className="detail-row">
+                          <span className="label">Transport:</span>
+                          <span className="value">{record.transportDetails}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="label">Current Location:</span>
+                          <span className="value">{record.currentLocation}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="label">Last Updated:</span>
+                          <span className="value">
+                            {new Date(record.updatedAt).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="record-actions">
+                        <div className="status-actions">
+                          {record.status !== 'confirmed' && (
+                            <select 
+                              className="status-update-select"
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleUpdateStatus(record.id, e.target.value);
+                                 e.target.value = '';
+                                }
+                              }}
+                              defaultValue=""
+                            >
+                              <option value="" disabled>Update Status</option>
+                              {statusOptions
+                                .filter(option => {
+                                  const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
+                                  const optionIndex = statusOptions.findIndex(opt => opt.value === option.value);
+                                  return optionIndex > currentIndex && optionIndex <= currentIndex + 1;
+                                })
+                                .map(option => (
+                                  <option key={option.value} value={option.value}>
+                                    Mark as {option.label}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                        </div>
+
+                        <div className="action-buttons">
+                          <button 
+                            className="btn-view"
+                            onClick={() => viewDispatchReport(record)}
+                            title="View dispatch report"
+                          >
+                            📄 Dispatch
+                          </button>
+                          {record.status === 'delivered' && (
+                            <>
+                              <button 
+                                className="btn-view"
+                                onClick={() => viewDeliveryConfirmation(record)}
+                                title="View delivery confirmation"
+                              >
+                                ✅ Delivery
+                              </button>
+                              <button 
+                                className="btn-view"
+                                onClick={() => viewExportSummary(record)}
+                                title="View CSV export data"
+                              >
+                                📊 Export Summary
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        
+                        <div className="action-buttons secondary">
+                          <button 
+                            className="btn-edit"
+                            onClick={() => handleEditRecord(record)}
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            className="btn-delete"
+                            onClick={() => handleDeleteRecord(record.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -420,9 +676,10 @@ suitable for download and import into spreadsheet applications.
               </button>
             </div>
             <div className="modal-body">
-              <div className="document-content">
-                {viewModal.content}
-              </div>
+              <div 
+                className="document-content"
+                dangerouslySetInnerHTML={{ __html: viewModal.content }}
+              />
             </div>
             <div className="modal-footer">
               {viewModal.type === 'export-summary' && (

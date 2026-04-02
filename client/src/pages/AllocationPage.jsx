@@ -67,7 +67,7 @@ const initialDisasterEvents = [
     coordinates: { lat: 13.0827, lng: 80.2707 },
     estimatedDuration: "3-4 days",
     immediateNeeds: ["Emergency Kits", "Water Purification Tablets", "Blankets"],
-    status: "monitoring",
+    status: "active",
     priority: "medium",
     lastUpdated: "2026-03-26T16:45:00Z"
   }
@@ -110,6 +110,17 @@ export default function AllocationPage() {
   const [allocationQuantities, setAllocationQuantities] = useState({});
   const [allocationMessage, setAllocationMessage] = useState("");
   const [existingAllocation, setExistingAllocation] = useState(null);
+  const [distributionModal, setDistributionModal] = useState(false);
+  const [selectedDistribution, setSelectedDistribution] = useState(null);
+  const [distributionForm, setDistributionForm] = useState({
+    distributionId: '',
+    releaseDate: '',
+    releasedDate: '',
+    transportMethod: '',
+    priorityLevel: 'standard',
+    specialInstructions: '',
+    allocationOfficerContact: '+91 98765 12345'
+  });
 
   const filteredEvents = disasterEvents.filter(event => {
     const matchesSearch = event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -264,6 +275,88 @@ export default function AllocationPage() {
     return item ? item.stock + allocatedQty : 0;
   };
 
+  const handleReleaseDistribution = (eventId) => {
+    const event = disasterEvents.find(e => e.id === eventId);
+    setSelectedDistribution(event);
+    setDistributionForm({
+      distributionId: `DIST-${Date.now()}`,
+      releasedDate: new Date().toISOString().slice(0, 16),
+      transportMethod: '',
+      priorityLevel: event.priority || 'standard',
+      specialInstructions: event.allocatedResources?.message || '',
+      allocationOfficerContact: '+91 98765 12345'
+    });
+    setDistributionModal(true);
+  };
+
+  const confirmDistribution = () => {
+    if (!selectedDistribution) return;
+
+    // Create distribution tracking record for tracking officers
+    const trackingRecord = {
+      id: Date.now(),
+      distributionId: distributionForm.distributionId,
+      eventId: selectedDistribution.id,
+      disasterType: selectedDistribution.disasterType,
+      location: selectedDistribution.location,
+      dmcOfficer: selectedDistribution.reportedBy,
+      dmcContact: selectedDistribution.contactPhone,
+      allocationOfficerContact: distributionForm.allocationOfficerContact,
+      releasedDate: distributionForm.releasedDate,
+      transportMethod: distributionForm.transportMethod,
+      priorityLevel: distributionForm.priorityLevel,
+      specialInstructions: distributionForm.specialInstructions,
+      allocatedResources: selectedDistribution.allocatedResources,
+      status: 'prepared',
+      currentLocation: 'Warehouse',
+      distributedBy: "Distribution Officer",
+      distributedDate: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Store in localStorage for Distribution Tracking page to access
+    const existingRecords = JSON.parse(localStorage.getItem('distributionTrackingRecords') || '[]');
+    const updatedRecords = [...existingRecords, trackingRecord];
+    localStorage.setItem('distributionTrackingRecords', JSON.stringify(updatedRecords));
+
+    // Update event with distribution information
+    const updatedEvents = disasterEvents.map(event => 
+      event.id === selectedDistribution.id 
+        ? { 
+            ...event, 
+            status: "released",
+            distributionInfo: {
+              ...distributionForm,
+              distributedBy: "Distribution Officer",
+              distributedDate: new Date().toISOString(),
+              trackingRecordId: trackingRecord.id
+            }
+          }
+        : event
+    );
+    
+    setDisasterEvents(updatedEvents);
+    setDistributionModal(false);
+    setSelectedDistribution(null);
+    setDistributionForm({
+      distributionId: '',
+      releaseDate: '',
+      releasedDate: '',
+      transportMethod: '',
+      priorityLevel: 'standard',
+      specialInstructions: '',
+      allocationOfficerContact: '+91 98765 12345'
+    });
+  };
+
+  const handleDistributionFormChange = (field, value) => {
+    setDistributionForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   return (
     <div className="allocation-page">
       {/* HEADER */}
@@ -364,7 +457,7 @@ export default function AllocationPage() {
           />
         </div>
         <div className="allocation-filter-buttons">
-          {["all", "active", "allocated", "monitoring"].map(status => (
+          {["all", "active", "allocated"].map(status => (
             <button
               key={status}
               className={`allocation-filter-btn ${filterStatus === status ? "active" : ""}`}
@@ -472,10 +565,43 @@ export default function AllocationPage() {
                               >
                                 Delete
                               </button>
+                              <button 
+                                className="release-btn"
+                                onClick={() => handleReleaseDistribution(event.id)}
+                              >
+                                <Truck size={14} /> Release to Distribution
+                              </button>
                             </div>
                           )}
-                          {event.status === "monitoring" && (
-                            <span className="monitoring-text">📋 Monitoring</span>
+                          {event.status === "distributed" && (
+                            <div className="distributed-info">
+                              <span className="distributed-badge">✓ Distributed</span>
+                              <button 
+                                className="view-distribution-btn"
+                                onClick={() => {
+                                  setSelectedDistribution(event);
+                                  setDistributionForm(event.distributionInfo);
+                                  setDistributionModal(true);
+                                }}
+                              >
+                                <Truck size={14} /> View Details
+                              </button>
+                            </div>
+                          )}
+                          {event.status === "released" && (
+                            <div className="distributed-info">
+                              <span className="released-badge">✓ Released</span>
+                              <button 
+                                className="view-distribution-btn"
+                                onClick={() => {
+                                  setSelectedDistribution(event);
+                                  setDistributionForm(event.distributionInfo);
+                                  setDistributionModal(true);
+                                }}
+                              >
+                                <Truck size={14} /> View Details
+                              </button>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -533,7 +659,6 @@ export default function AllocationPage() {
                 {selectedEvent.immediateNeeds.map((need, index) => {
                   const available = getAvailableStock(need);
                   const currentQty = allocationQuantities[need] || 0;
-                  const hasStock = currentQty <= available;
                   
                   return (
                     <div key={index} className="allocation-item">
@@ -549,17 +674,9 @@ export default function AllocationPage() {
                           value={currentQty}
                           onChange={(e) => handleQuantityChange(need, e.target.value)}
                           placeholder="0"
-                          className={`qty-input ${hasStock ? 'valid' : 'invalid'}`}
+                          className="qty-input"
                         />
                         <span className="unit-label">units</span>
-                      </div>
-                      <div className="stock-info">
-                        <span className={`available-stock ${hasStock ? 'sufficient' : 'insufficient'}`}>
-                          {hasStock ? '✓ Available' : '⚠ Insufficient'}
-                        </span>
-                        {!hasStock && currentQty > available && (
-                          <AlertTriangle size={16} color="#dc2626" />
-                        )}
                       </div>
                     </div>
                   );
@@ -575,20 +692,6 @@ export default function AllocationPage() {
                   className="message-textarea"
                   rows="4"
                 />
-                <div className="message-options">
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.sendSMS || false} />
-                    Send SMS updates to contact person
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.sendEmail || false} />
-                    Send email confirmation
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.requireSignature || false} />
-                    Require signature on delivery
-                  </label>
-                </div>
               </div>
               
               {existingAllocation && (
@@ -656,6 +759,151 @@ export default function AllocationPage() {
                   Confirm Allocation
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* DISTRIBUTION MODAL */}
+      {distributionModal && selectedDistribution && (
+        <div className="modal-overlay" onClick={() => setDistributionModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Release to Distribution</h2>
+              <button className="close-btn" onClick={() => setDistributionModal(false)}>×</button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="request-summary">
+                <h3>Event Summary</h3>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span>Event ID:</span>
+                    <strong>{selectedDistribution.id}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Disaster:</span>
+                    <strong>{selectedDistribution.disasterType}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Location:</span>
+                    <strong>{selectedDistribution.location}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Priority:</span>
+                    <strong>{selectedDistribution.priority.toUpperCase()}</strong>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="distribution-details">
+                <h3>Distribution Information</h3>
+                
+                {/* Section 1: Basic Distribution Details */}
+                <div className="distribution-section">
+                  <h4>Basic Distribution Details</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Distribution ID</label>
+                      <input type="text" className="form-input" value={distributionForm.distributionId} readOnly />
+                    </div>
+                    <div className="form-group">
+                      <label>Released Date & Time</label>
+                      <input 
+                        type="datetime-local" 
+                        className="form-input" 
+                        value={distributionForm.releasedDate} 
+                        onChange={(e) => handleDistributionFormChange('releasedDate', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Suggested Transportation Method</label>
+                      <select className="form-select" value={distributionForm.transportMethod} onChange={(e) => handleDistributionFormChange('transportMethod', e.target.value)}>
+                        <option value="">Select Method</option>
+                        <option value="Air Transport">Air Transport</option>
+                        <option value="Ground Transport">Ground Transport</option>
+                        <option value="Water Transport">Water Transport</option>
+                        <option value="Helicopter">Helicopter</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Priority Level</label>
+                      <select className="form-select" value={distributionForm.priorityLevel} onChange={(e) => handleDistributionFormChange('priorityLevel', e.target.value)}>
+                        <option value="standard">Standard</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="emergency">Emergency</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Section 2: Contact Information */}
+                <div className="distribution-section">
+                  <h4>Contact Information</h4>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>DMC Officer Name</label>
+                      <input type="text" className="form-input" value={selectedDistribution.reportedBy} readOnly />
+                    </div>
+                    <div className="form-group">
+                      <label>DMC Officer Contact</label>
+                      <input type="tel" className="form-input" value={selectedDistribution.contactPhone} readOnly />
+                    </div>
+                    <div className="form-group">
+                      <label>Allocation Officer Contact</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={distributionForm.allocationOfficerContact || '+91 98765 12345'} 
+                        onChange={(e) => handleDistributionFormChange('allocationOfficerContact', e.target.value)}
+                        placeholder="Enter allocation officer contact details..."
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Section 3: Special Instructions */}
+                <div className="distribution-section">
+                  <h4>Special Instructions</h4>
+                  <div className="form-group full-width">
+                    <textarea 
+                      className="form-textarea" 
+                      value={distributionForm.specialInstructions || (selectedDistribution.allocatedResources?.message || '')} 
+                      onChange={(e) => handleDistributionFormChange('specialInstructions', e.target.value)} 
+                      rows="4" 
+                      placeholder="Enter any special handling requirements, access points, or delivery instructions..."
+                    />
+                  </div>
+                </div>
+                
+                {/* Section 4: Allocated Resources */}
+                <div className="distribution-section">
+                  <h4>Allocated Resources</h4>
+                  {selectedDistribution.allocatedResources && (
+                    <div className="resources-list">
+                      {Object.entries(selectedDistribution.allocatedResources.quantities).map(([resource, quantity]) => (
+                        <div key={resource} className="resource-item">
+                          <span className="resource-name">{resource}:</span>
+                          <span className="resource-quantity">{quantity.toLocaleString()} units</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setDistributionModal(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={confirmDistribution}
+                disabled={!distributionForm.transportMethod}
+              >
+                Confirm Release to Distribution
+              </button>
             </div>
           </div>
         </div>
