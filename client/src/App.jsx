@@ -17,7 +17,6 @@ import DisasterEventPage from "./pages/DisasterEventPage";
 import CreateDisasterReportPage from "./pages/CreateDisasterReportPage";
 import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
-import PartnerDirectory from "./pages/PartnerDirectory";
 import "./App.css";
 
 function App() {
@@ -59,11 +58,6 @@ function App() {
       <Route path="/distribution-tracking" element={
         <DashboardLayout>
           <DistributionTracking />
-        </DashboardLayout>
-      } />
-      <Route path="/partner-directory" element={
-        <DashboardLayout>
-          <PartnerDirectory />
         </DashboardLayout>
       } />
       <Route path="/users" element={

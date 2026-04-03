@@ -65,11 +65,6 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.CHARITY],
   },
   {
-    label: "Partner Directory",
-    path: "/partner-directory",
-    roles: [ROLES.ADMIN, ROLES.INVENTORY],
-  },
-  {
     label: "User Management",
     path: "/users",
     roles: [ROLES.ADMIN, ROLES.INVENTORY],
