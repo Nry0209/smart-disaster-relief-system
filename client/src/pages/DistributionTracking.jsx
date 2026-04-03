@@ -317,35 +317,6 @@ suitable for download and import into spreadsheet applications.
 
                 {/* Action Buttons */}
                 <div className="record-actions">
-                  <div className="status-actions">
-                    {record.status !== 'confirmed' && (
-                      <select 
-                        className="status-update-select"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleUpdateStatus(record.id, e.target.value);
-                           e.target.value = '';
-                          }
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Update Status</option>
-                        {statusOptions
-                          .filter(option => {
-
-                            const currentIndex = statusOptions.findIndex(opt => opt.value === record.status);
-                            const optionIndex = statusOptions.findIndex(opt => opt.value === option.value);
-                            return optionIndex > currentIndex && optionIndex <= currentIndex + 1;
-                          })
-                          .map(option => (
-                            <option key={option.value} value={option.value}>
-                              Mark as {option.label}
-                            </option>
-                          ))}
-                      </select>
-                    )}
-                  </div>
-
                   <div className="action-buttons">
                     <button 
                       className="btn-view"

@@ -48,25 +48,24 @@ const DisasterEventPage = () => {
       severity: "medium",
       location: "Chennai, Tamil Nadu",
       affectedPopulation: 5000,
-      eventDate: "2026-03-26",
-      reportedBy: "Anand Verma",
+      eventDate: "2026-03-25",
+      reportedBy: "Mohan Raj",
       designation: "DMC Officer",
-      contactPhone: "+91 76543 21098",
-      contactEmail: "anand.verma@dmc.gov.in",
-      description: "Coastal cyclone with wind speeds up to 120 km/h. Power outages reported in affected areas.",
+      contactPhone: "+91 98765 12345",
+      contactEmail: "mohan.raj@dmc.gov.in",
+      description: "Cyclonic storm causing heavy rainfall and strong winds. Coastal areas evacuated.",
       coordinates: { lat: 13.0827, lng: 80.2707 },
       estimatedDuration: "3-4 days",
-      immediateNeeds: ["Emergency Kits", "Water Purification Tablets", "Blankets"],
+      immediateNeeds: ["Emergency Supplies", "Food", "Water", "Medical Aid"],
       status: "monitoring",
       priority: "medium",
       lastUpdated: "2026-03-26T16:45:00Z"
     }
   ]);
 
-  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
-  const [searchTerm, setSearchTerm] = useState("");
 
   const getSeverityColor = (severity) => {
     switch(severity) {
@@ -108,8 +107,8 @@ const DisasterEventPage = () => {
 
   const stats = {
     totalEvents: disasterEvents.length,
-    activeEvents: disasterEvents.filter(e => e.status === "active").length,
-    criticalEvents: disasterEvents.filter(e => e.priority === "critical").length,
+    activeEvents: disasterEvents.filter(e => e.status === 'active').length,
+    criticalEvents: disasterEvents.filter(e => e.priority === 'critical').length,
     totalAffected: disasterEvents.reduce((sum, e) => sum + e.affectedPopulation, 0)
   };
 
@@ -126,199 +125,181 @@ const DisasterEventPage = () => {
   };
 
   return (
-    <div className="disaster-event-page">
-
-      {/* HEADER */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <AlertTriangle size={32} color="#dc2626" />
-          </div>
-          <div>
-            <h1>Disaster Events</h1>
-            <p>Monitor and manage disaster events reported by DMC officers</p>
-          </div>
+    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
+      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span className="text-xs font-semibold text-slate-500">
+            Admin / Disaster Management
+          </span>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+            Smart Disaster Relief System - Disaster Events
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Monitor and manage disaster events reported by DMC officers
+          </p>
         </div>
-      </div>
+      </section>
 
       {/* STATS CARDS */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#eff6ff" }}>
-            <FileText size={24} color="#2563eb" />
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <FileText size={20} />
           </div>
-          <div className="stat-content">
-            <h3>Total Events</h3>
-            <p>{stats.totalEvents}</p>
-          </div>
-        </div>
-        
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#dcfce7" }}>
-            <CheckCircle size={24} color="#16a34a" />
-          </div>
-          <div className="stat-content">
-            <h3>Active Events</h3>
-            <p>{stats.activeEvents}</p>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Total Events</p>
+            <strong className="text-xl font-semibold text-slate-900">{stats.totalEvents}</strong>
           </div>
         </div>
         
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#fee2e2" }}>
-            <AlertTriangle size={24} color="#dc2626" />
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <CheckCircle size={20} />
           </div>
-          <div className="stat-content">
-            <h3>Critical Priority</h3>
-            <p>{stats.criticalEvents}</p>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Active Events</p>
+            <strong className="text-xl font-semibold text-slate-900">{stats.activeEvents}</strong>
           </div>
         </div>
         
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#fef3c7" }}>
-            <Users size={24} color="#d97706" />
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+            <AlertTriangle size={20} />
           </div>
-          <div className="stat-content">
-            <h3>Total Affected</h3>
-            <p>{formatPopulation(stats.totalAffected)}</p>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Critical Priority</p>
+            <strong className="text-xl font-semibold text-slate-900">{stats.criticalEvents}</strong>
           </div>
         </div>
-      </div>
+        
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+            <Users size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Total Affected</p>
+            <strong className="text-xl font-semibold text-slate-900">{formatPopulation(stats.totalAffected)}</strong>
+          </div>
+        </div>
+      </section>
 
       {/* FILTERS AND SEARCH */}
-      <div className="filters-section">
-        <div className="search-bar">
-          <MapPin size={18} />
-          <input
-            type="text"
-            placeholder="Search by location, disaster type, or reporting officer..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="filter-buttons">
-          <select 
-            className="filter-select" 
-            value={filterStatus} 
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <select 
-            className="filter-select" 
-            value={filterPriority} 
-            onChange={(e) => setFilterPriority(e.target.value)}
-          >
-            <option value="all">All Priority</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-      </div>
-
-      {/* DISASTER EVENTS GRID */}
-      <div className="events-grid">
-        {filteredEvents.length === 0 ? (
-          <div className="no-events">
-            <AlertTriangle size={48} color="#94a3b8" />
-            <h3>No events found</h3>
-            <p>No disaster events match your current filters.</p>
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex-1 min-w-[300px]">
+            <div className="relative">
+              <MapPin size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by location, disaster type, or reporting officer..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-        ) : (
-          filteredEvents.map(event => {
-            const severityStyle = getSeverityColor(event.severity);
-            const statusStyle = getStatusColor(event.status);
-            const priorityStyle = getPriorityColor(event.priority);
-            const SeverityIcon = severityStyle.icon;
-            
-            return (
-              <div key={event.id} className="event-card">
-                <div className="event-header">
-                  <div className="event-title">
-                    <h3>{event.disasterType}</h3>
-                    <span className="event-id">{event.id}</span>
-                  </div>
-                  <div className="event-badges">
-                    <span 
-                      className="severity-badge" 
-                      style={{ color: severityStyle.color, background: severityStyle.bg }}
-                    >
-                      <SeverityIcon size={12} />
-                      {event.severity.toUpperCase()}
-                    </span>
-                    <span 
-                      className="priority-badge"
-                      style={{ color: priorityStyle.color, background: priorityStyle.bg }}
-                    >
-                      {event.priority.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
+          <div className="flex gap-3">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="resolved">Resolved</option>
+            </select>
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Priority</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+        </div>
+      </section>
 
-                <div className="event-location">
-                  <MapPin size={16} />
-                  <span>{event.location}</span>
-                </div>
-
-                <div className="event-details">
-                  <div className="detail-item">
-                    <Users size={16} />
-                    <span>{formatPopulation(event.affectedPopulation)} affected</span>
-                  </div>
-                  <div className="detail-item">
-                    <Calendar size={16} />
-                    <span>{formatDate(event.eventDate)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <Clock size={16} />
-                    <span>Est. {event.estimatedDuration}</span>
-                  </div>
-                </div>
-
-                <div className="event-description">
-                  <p>{event.description}</p>
-                </div>
-
-                <div className="event-needs">
-                  <h4>Immediate Needs:</h4>
-                  <div className="needs-tags">
-                    {event.immediateNeeds.map((need, index) => (
-                      <span key={index} className="need-tag">{need}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="event-footer">
-                  <div className="event-contact">
-                    <div className="contact-info">
-                      <span className="contact-name">{event.reportedBy}</span>
-                      <span className="contact-designation">{event.designation}</span>
+      {/* EVENTS LIST */}
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Disaster Events</h2>
+        <div className="space-y-4">
+          {filteredEvents.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">No disaster events found</p>
+              <p className="text-sm">Try adjusting your search or filters</p>
+            </div>
+          ) : (
+            filteredEvents.map(event => {
+              const severityStyle = getSeverityColor(event.severity);
+              const statusStyle = getStatusColor(event.status);
+              const priorityStyle = getPriorityColor(event.priority);
+              const SeverityIcon = severityStyle.icon;
+              
+              return (
+                <div key={event.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-slate-900">{event.disasterType}</h3>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityStyle.bg} ${priorityStyle.color}`}>
+                          {event.priority.toUpperCase()}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.color}`}>
+                          {event.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
+                        <div className="flex items-center gap-1">
+                          <MapPin size={16} />
+                          <span>{event.location}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar size={16} />
+                          <span>{formatDate(event.eventDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Users size={16} />
+                          <span>{formatPopulation(event.affectedPopulation)} affected</span>
+                        </div>
+                      </div>
+                      <p className="text-slate-700 mb-3">{event.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <span>Reported by: {event.reportedBy} ({event.designation})</span>
+                        <span>•</span>
+                        <span>{event.contactPhone}</span>
+                      </div>
                     </div>
-                    <div className="contact-details">
-                      <span className="contact-phone">{event.contactPhone}</span>
-                      <span className="contact-email">{event.contactEmail}</span>
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${severityStyle.bg} ${severityStyle.color}`}>
+                      <SeverityIcon size={24} />
                     </div>
                   </div>
-                  <div className="event-status">
-                    <span 
-                      className="status-badge"
-                      style={{ color: statusStyle.color, background: statusStyle.bg }}
-                    >
-                      {event.status.toUpperCase()}
-                    </span>
-                  </div>
+                  
+                  {event.immediateNeeds && (
+                    <div className="border-t border-slate-200 pt-4">
+                      <h4 className="text-sm font-medium text-slate-900 mb-2">Immediate Needs:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {event.immediateNeeds.map((need, index) => (
+                          <span key={index} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs">
+                            {need}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
-};
+}
 
 export default DisasterEventPage;
