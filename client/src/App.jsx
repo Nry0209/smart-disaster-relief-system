@@ -10,7 +10,6 @@ import PublicDonationPage from "./pages/PublicDonationPage";
 
 import InventoryPage from "./pages/InventoryPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
-import NGODonationPage from "./pages/NGODonationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
 import AllocationPage from "./pages/AllocationPage";
 import DisasterEventPage from "./pages/DisasterEventPage";
@@ -25,7 +24,6 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/public-donation" element={<PublicDonationPage />} />
-      <Route path="/ngo-donate" element={<NGODonationPage />} />
       <Route path="/dashboard" element={
         <DashboardLayout>
           <DashboardPage />

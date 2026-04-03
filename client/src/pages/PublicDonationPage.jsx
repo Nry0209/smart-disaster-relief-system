@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, Package, Users, DollarSign, CheckCircle, AlertCircle, CreditCard, Smartphone, Building, User, ArrowLeft } from 'lucide-react';
+import { Heart, Package, Users, DollarSign, CheckCircle, AlertCircle, CreditCard, Smartphone, Building, User, ArrowLeft, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './Pages.css';
 
@@ -843,6 +843,36 @@ const PublicDonationPage = () => {
               </div>
             )}
           </form>
+        </div>
+      </div>
+
+      {/* INFO SECTION */}
+      <div className="donation-form-container">
+        <div className="info-card">
+          <h3>Important Information</h3>
+          <div className="info-content">
+            <div className="info-item">
+              <AlertCircle size={20} color="#f59e0b" />
+              <div>
+                <strong>Verification Process:</strong>
+                <p>All donations are manually verified by our inventory team before being added to our system. This ensures accuracy and quality control.</p>
+              </div>
+            </div>
+            <div className="info-item">
+              <Calendar size={20} color="#2563eb" />
+              <div>
+                <strong>Delivery Timeline:</strong>
+                <p>Please ensure items are delivered on the specified date. Late deliveries may impact disaster response efforts.</p>
+              </div>
+            </div>
+            <div className="info-item">
+              <Package size={20} color="#16a34a" />
+              <div>
+                <strong>Quality Standards:</strong>
+                <p>All items should be new or in excellent condition. Expired or damaged items cannot be accepted.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
