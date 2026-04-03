@@ -165,7 +165,6 @@ export default function InventoryPage() {
             { label:"➕ Add New Item",    class:"add",     fn:()=>setModal("add")      },
             { label:"⚠ Update Stock",     class:"adjust",   fn:()=>setModal("adjust")   },
             { label:"↔ Transfer Items",   class:"transfer", fn:()=>setModal("transfer")  },
-            { label:"🎁 Record Donation",  class:"donate",   fn:()=>setModal("donate")   },
             { label:"📊 Export Report",   class:"export",   fn: handleExport             },
           ].map(a => (
             <button key={a.label} className={`action-btn ${a.class}`} onClick={a.fn}>{a.label}</button>
