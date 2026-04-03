@@ -10,11 +10,12 @@ async function startServer() {
     await connectDB();
     dbConnected = true;
   } catch (error) {
-    console.error("Failed to connect MongoDB. Starting with in-memory fallback:", error.message);
+    console.error("Failed to connect MongoDB:", error.message);
+    console.error("API is running in DB-disconnected mode. Report create/list endpoints will return 503 until MongoDB connects.");
   }
 
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}${dbConnected ? "" : " (in-memory mode)"}`);
+    console.log(`Server running on port ${PORT}${dbConnected ? "" : " (db disconnected)"}`);
   });
 }
 

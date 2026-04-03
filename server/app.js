@@ -3,7 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const disasterReportRoutes = require("./routes/disasterReportRoutes");
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 

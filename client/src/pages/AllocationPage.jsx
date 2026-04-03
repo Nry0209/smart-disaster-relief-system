@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
-import { Link } from 'react-router-dom';
-import './Pages.css';
+import { fetchDisasterReports } from "../services/disasterReportService";
+import "./Pages.css";
 
 // Mock inventory data (same as InventoryPage)
 const initialInventory = [
@@ -10,67 +10,6 @@ const initialInventory = [
   { id: 3, name: "Blankets",       category: "Shelter", stock: 2600, min: 2000 },
   { id: 4, name: "Tents",          category: "Shelter", stock: 240,  min: 400  },
   { id: 5, name: "Medicine Kits",  category: "Medical", stock: 310,  min: 500  },
-];
-
-// Mock disaster events from DMC officers (same as DisasterEventPage)
-const initialDisasterEvents = [
-  {
-    id: "DIS-001",
-    disasterType: "Flood",
-    severity: "critical",
-    location: "Mumbai, Maharashtra",
-    affectedPopulation: 15000,
-    eventDate: "2026-03-28",
-    reportedBy: "Rajesh Kumar",
-    designation: "DMC Officer",
-    contactPhone: "+91 98765 43210",
-    contactEmail: "rajesh.kumar@dmc.gov.in",
-    description: "Severe flooding in low-lying areas due to heavy rainfall. Multiple evacuation centers established.",
-    coordinates: { lat: 19.0760, lng: 72.8777 },
-    estimatedDuration: "5-7 days",
-    immediateNeeds: ["Water", "Food", "Medical Supplies", "Shelter"],
-    status: "active",
-    priority: "high",
-    lastUpdated: "2026-03-28T14:30:00Z"
-  },
-  {
-    id: "DIS-002",
-    disasterType: "Earthquake",
-    severity: "high",
-    location: "Gujarat, Kutch District",
-    affectedPopulation: 8500,
-    eventDate: "2026-03-27",
-    reportedBy: "Priya Sharma",
-    designation: "DMC Officer",
-    contactPhone: "+91 87654 32109",
-    contactEmail: "priya.sharma@dmc.gov.in",
-    description: "Magnitude 6.2 earthquake caused structural damage to buildings. Rescue operations ongoing.",
-    coordinates: { lat: 23.8315, lng: 69.6637 },
-    estimatedDuration: "2-3 weeks",
-    immediateNeeds: ["Tents", "Medical Kits", "Dry Food", "Rescue Equipment"],
-    status: "active",
-    priority: "critical",
-    lastUpdated: "2026-03-27T09:15:00Z"
-  },
-  {
-    id: "DIS-003",
-    disasterType: "Cyclone",
-    severity: "medium",
-    location: "Chennai, Tamil Nadu",
-    affectedPopulation: 5000,
-    eventDate: "2026-03-26",
-    reportedBy: "Anand Verma",
-    designation: "DMC Officer",
-    contactPhone: "+91 76543 21098",
-    contactEmail: "anand.verma@dmc.gov.in",
-    description: "Coastal cyclone with wind speeds up to 120 km/h. Power outages reported in affected areas.",
-    coordinates: { lat: 13.0827, lng: 80.2707 },
-    estimatedDuration: "3-4 days",
-    immediateNeeds: ["Emergency Kits", "Water Purification Tablets", "Blankets"],
-    status: "monitoring",
-    priority: "medium",
-    lastUpdated: "2026-03-26T16:45:00Z"
-  }
 ];
 
 function getStatus(stock, min) {
@@ -93,16 +32,38 @@ function getUrgencyColor(urgency) {
 
 function getStatusColor(status) {
   switch(status) {
+    case 'pending_inventory': return { color: "#1d4ed8", bg: "#dbeafe" };
+    case 'active': return { color: "#0f766e", bg: "#ccfbf1" };
     case 'allocated': return { color: "#16a34a", bg: "#dcfce7" };
+    case 'monitoring': return { color: "#d97706", bg: "#fef3c7" };
+    case 'resolved': return { color: "#0891b2", bg: "#cffafe" };
     case 'pending': return { color: "#d97706", bg: "#fef3c7" };
     case 'rejected': return { color: "#dc2626", bg: "#fee2e2" };
     default: return { color: "#6b7280", bg: "#f3f4f6" };
   }
 }
 
+function formatStatusLabel(status) {
+  if (!status) return "UNKNOWN";
+  return String(status)
+    .split("_")
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
+}
+
+function formatEventDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN");
+}
+
 export default function AllocationPage() {
   const [inventory, setInventory] = useState(initialInventory);
-  const [disasterEvents, setDisasterEvents] = useState(initialDisasterEvents);
+  const [disasterEvents, setDisasterEvents] = useState([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [eventsError, setEventsError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -111,10 +72,50 @@ export default function AllocationPage() {
   const [allocationMessage, setAllocationMessage] = useState("");
   const [existingAllocation, setExistingAllocation] = useState(null);
 
+  const statusFilters = [
+    { value: "all", label: "All" },
+    { value: "pending_inventory", label: "Pending Allocation" },
+    { value: "active", label: "Active" },
+    { value: "allocated", label: "Allocated" },
+    { value: "monitoring", label: "Monitoring" },
+  ];
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDisasterEvents = async () => {
+      setIsLoadingEvents(true);
+      setEventsError("");
+
+      try {
+        const reports = await fetchDisasterReports();
+        if (!isMounted) return;
+        setDisasterEvents(Array.isArray(reports) ? reports : []);
+      } catch (error) {
+        if (!isMounted) return;
+        setDisasterEvents([]);
+        setEventsError(error.message || "Failed to load disaster events.");
+      } finally {
+        if (isMounted) {
+          setIsLoadingEvents(false);
+        }
+      }
+    };
+
+    loadDisasterEvents();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const filteredEvents = disasterEvents.filter(event => {
-    const matchesSearch = event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.disasterType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.reportedBy.toLowerCase().includes(searchTerm.toLowerCase());
+    const query = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      event.location?.toLowerCase().includes(query) ||
+      event.disasterType?.toLowerCase().includes(query) ||
+      event.reportedBy?.toLowerCase().includes(query);
     const matchesFilter = filterStatus === "all" || event.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -364,13 +365,13 @@ export default function AllocationPage() {
           />
         </div>
         <div className="allocation-filter-buttons">
-          {["all", "active", "allocated", "monitoring"].map(status => (
+          {statusFilters.map((status) => (
             <button
-              key={status}
-              className={`allocation-filter-btn ${filterStatus === status ? "active" : ""}`}
-              onClick={() => setFilterStatus(status)}
+              key={status.value}
+              className={`allocation-filter-btn ${filterStatus === status.value ? "active" : ""}`}
+              onClick={() => setFilterStatus(status.value)}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {status.label}
             </button>
           ))}
         </div>
@@ -395,7 +396,19 @@ export default function AllocationPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.length === 0 ? (
+              {isLoadingEvents ? (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+                    Loading disaster events...
+                  </td>
+                </tr>
+              ) : eventsError ? (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#dc2626" }}>
+                    {eventsError}
+                  </td>
+                </tr>
+              ) : filteredEvents.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                     No disaster events found matching your criteria.
@@ -405,7 +418,8 @@ export default function AllocationPage() {
                 filteredEvents.map(event => {
                   const priorityStyle = getUrgencyColor(event.priority);
                   const statusStyle = getStatusColor(event.status);
-                  const canAllocate = event.status === "active";
+                  const canAllocate = ["active", "pending_inventory"].includes(event.status);
+                  const needs = Array.isArray(event.immediateNeeds) ? event.immediateNeeds : [];
                   
                   return (
                     <tr key={event.id}>
@@ -419,38 +433,42 @@ export default function AllocationPage() {
                       </td>
                       <td>
                         <span className="urgency-badge" style={{ color: priorityStyle.color, background: priorityStyle.bg }}>
-                          {event.priority.toUpperCase()}
+                          {String(event.priority || "unknown").toUpperCase()}
                         </span>
                       </td>
                       <td>
                         <div className="contact-info">
-                          <div className="contact-name">{event.reportedBy}</div>
-                          <div className="contact-email">{event.contactEmail}</div>
+                          <div className="contact-name">{event.reportedBy || "DMC Officer"}</div>
+                          <div className="contact-email">{event.contactEmail || "-"}</div>
                         </div>
                       </td>
                       <td>
                         <div className="items-summary">
-                          {event.immediateNeeds.map((need, idx) => (
-                            <div key={idx} className="item-line">
-                              {need}
-                            </div>
-                          ))}
+                          {needs.length === 0 ? (
+                            <div className="item-line">No items listed</div>
+                          ) : (
+                            needs.map((need, idx) => (
+                              <div key={idx} className="item-line">
+                                {need}
+                              </div>
+                            ))
+                          )}
                         </div>
                       </td>
                       <td>
                         <div className="date-info">
                           <Calendar size={14} />
-                          {event.eventDate}
+                          {formatEventDate(event.eventDate)}
                         </div>
                       </td>
                       <td>
                         <span className="status-badge" style={{ color: statusStyle.color, background: statusStyle.bg }}>
-                          {event.status.toUpperCase()}
+                          {formatStatusLabel(event.status)}
                         </span>
                       </td>
                       <td>
                         <div className="action-buttons">
-                          {event.status === "active" && canAllocate && (
+                          {canAllocate && (
                             <button 
                               className="allocate-btn"
                               onClick={() => handleAllocate(event.id)}
@@ -474,7 +492,7 @@ export default function AllocationPage() {
                               </button>
                             </div>
                           )}
-                          {event.status === "monitoring" && (
+                          {!canAllocate && event.status === "monitoring" && (
                             <span className="monitoring-text">📋 Monitoring</span>
                           )}
                         </div>

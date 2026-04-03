@@ -40,3 +40,44 @@ export async function fetchDisasterReports(params = {}) {
 
   return data;
 }
+
+export async function fetchDisasterReportById(id) {
+  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to fetch disaster report.");
+  }
+
+  return data;
+}
+
+export async function updateDisasterReport(id, payload) {
+  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to update disaster report.");
+  }
+
+  return data;
+}
+
+export async function deleteDisasterReport(id) {
+  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`, {
+    method: "DELETE",
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to delete disaster report.");
+  }
+
+  return data;
+}

@@ -1,30 +1,22 @@
 const DisasterReport = require("../models/DisasterReport");
 const mongoose = require("mongoose");
 
-const inMemoryReports = [];
 const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "monitoring", "resolved"];
+const UPDATABLE_FIELDS = [
+  "disasterType",
+  "location",
+  "severity",
+  "affectedPopulation",
+  "eventDate",
+  "priority",
+  "description",
+  "immediateNeeds",
+  "status",
+  "reportedBy",
+];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
-}
-
-function makeMemoryReport(payload) {
-  const now = new Date();
-  return {
-    id: `mem-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    disasterType: payload.disasterType,
-    location: payload.location,
-    severity: payload.severity,
-    affectedPopulation: payload.affectedPopulation,
-    eventDate: payload.eventDate,
-    priority: payload.priority,
-    description: payload.description,
-    immediateNeeds: payload.immediateNeeds || [],
-    status: payload.status || "active",
-    reportedBy: payload.reportedBy || "DMC Officer",
-    createdAt: now,
-    updatedAt: now,
-  };
 }
 
 function formatReport(report) {
@@ -69,20 +61,9 @@ async function createDisasterReport(req, res) {
     }
 
     if (!isDbConnected()) {
-      const report = makeMemoryReport({
-        disasterType,
-        location,
-        severity,
-        affectedPopulation,
-        eventDate,
-        priority,
-        description,
-        immediateNeeds,
-        status,
-        reportedBy,
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
       });
-      inMemoryReports.unshift(report);
-      return res.status(201).json(report);
     }
 
     const report = await DisasterReport.create({
@@ -109,27 +90,9 @@ async function listDisasterReports(req, res) {
     const { status, priority, search } = req.query;
 
     if (!isDbConnected()) {
-      let reports = [...inMemoryReports];
-
-      if (status) {
-        reports = reports.filter((item) => item.status === status);
-      }
-
-      if (priority) {
-        reports = reports.filter((item) => item.priority === priority);
-      }
-
-      if (search) {
-        const query = search.toLowerCase();
-        reports = reports.filter(
-          (item) =>
-            item.location?.toLowerCase().includes(query) ||
-            item.disasterType?.toLowerCase().includes(query) ||
-            item.reportedBy?.toLowerCase().includes(query)
-        );
-      }
-
-      return res.json(reports);
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
     }
 
     const filter = {};
@@ -157,7 +120,127 @@ async function listDisasterReports(req, res) {
   }
 }
 
+async function getDisasterReportById(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    const report = await DisasterReport.findById(id);
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    return res.json(formatReport(report));
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch disaster report.", error: error.message });
+  }
+}
+
+async function updateDisasterReport(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    const updates = {};
+
+    UPDATABLE_FIELDS.forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ message: "No valid fields provided for update." });
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(updates, "status") &&
+      !ALLOWED_STATUSES.includes(updates.status)
+    ) {
+      return res.status(400).json({ message: "Invalid status value." });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "affectedPopulation")) {
+      const population = Number(updates.affectedPopulation);
+      if (!Number.isFinite(population) || population <= 0) {
+        return res.status(400).json({ message: "affectedPopulation must be greater than 0." });
+      }
+      updates.affectedPopulation = population;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "immediateNeeds")) {
+      if (!Array.isArray(updates.immediateNeeds)) {
+        return res.status(400).json({ message: "immediateNeeds must be an array." });
+      }
+      updates.immediateNeeds = updates.immediateNeeds
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+    }
+
+    const report = await DisasterReport.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    return res.json(formatReport(report));
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update disaster report.", error: error.message });
+  }
+}
+
+async function deleteDisasterReport(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    const report = await DisasterReport.findByIdAndDelete(id);
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    return res.json({ message: "Disaster report deleted successfully.", id });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to delete disaster report.", error: error.message });
+  }
+}
+
 module.exports = {
   createDisasterReport,
   listDisasterReports,
+  getDisasterReportById,
+  updateDisasterReport,
+  deleteDisasterReport,
 };
