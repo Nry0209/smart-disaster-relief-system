@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import './Pages.css';
 
 const UserManagement = () => {
+  const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [partners, setPartners] = useState([]);
   const [activeTab, setActiveTab] = useState('staff');
@@ -12,6 +14,18 @@ const UserManagement = () => {
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
+
+  // Check user role for permissions
+  const isInventoryOfficer = user?.role === 'inventory_officer';
+  const canEditUsers = user?.role === 'admin';
+  const canEditPartners = user?.role === 'admin';
+
+  // Auto-show partners tab for inventory officers (they can't see staff)
+  useEffect(() => {
+    if (isInventoryOfficer) {
+      setActiveTab('partners');
+    }
+  }, [isInventoryOfficer]);
 
   // Mock data - in real app, this would come from API
   useEffect(() => {
@@ -835,13 +849,15 @@ eligibility for partnership in relief operations.
       </div>
 
       <div className="directory-tabs">
-        <button
-          className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
-          onClick={() => setActiveTab('staff')}
-        >
-          <span className="tab-icon">👥</span>
-          <span className="tab-label">Staff Directory</span>
-        </button>
+        {!isInventoryOfficer && (
+          <button
+            className={`tab-button ${activeTab === 'staff' ? 'active' : ''}`}
+            onClick={() => setActiveTab('staff')}
+          >
+            <span className="tab-icon">👥</span>
+            <span className="tab-label">Staff Directory</span>
+          </button>
+        )}
         <button
           className={`tab-button ${activeTab === 'partners' ? 'active' : ''}`}
           onClick={() => setActiveTab('partners')}
@@ -869,13 +885,15 @@ eligibility for partnership in relief operations.
                   ))}
                 </select>
               </div>
-              <button 
-                className="btn-primary btn-create"
-                onClick={() => setShowCreateForm(true)}
-              >
-                <span className="btn-icon">+</span>
-                <span className="btn-text">Create Staff</span>
-              </button>
+              {canEditUsers && (
+                <button 
+                  className="btn-primary btn-create"
+                  onClick={() => setShowCreateForm(true)}
+                >
+                  <span className="btn-icon">+</span>
+                  <span className="btn-text">Create Staff</span>
+                </button>
+              )}
             </div>
 
             <div className="records-container">
@@ -940,20 +958,22 @@ eligibility for partnership in relief operations.
                             {user.status === 'active' ? 'Deactivate' : 'Activate'}
                           </button>
                         </div>
-                        <div className="action-buttons">
-                          <button 
-                            className="btn-edit"
-                            onClick={() => setEditingUser(user)}
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            className="btn-delete"
-                            onClick={() => handleDeleteUser(user.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
+                        {canEditUsers && (
+                          <div className="action-buttons">
+                            <button 
+                              className="btn-edit"
+                              onClick={() => setEditingUser(user)}
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              className="btn-delete"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -980,13 +1000,15 @@ eligibility for partnership in relief operations.
                   ))}
                 </select>
               </div>
-              <button 
-                className="btn-primary btn-create"
-                onClick={() => setShowPartnerForm(true)}
-              >
-                <span className="btn-icon">+</span>
-                <span className="btn-text">Create Partner</span>
-              </button>
+              {canEditPartners && (
+                <button 
+                  className="btn-primary btn-create"
+                  onClick={() => setShowPartnerForm(true)}
+                >
+                  <span className="btn-icon">+</span>
+                  <span className="btn-text">Create Partner</span>
+                </button>
+              )}
             </div>
 
             <div className="records-container">
@@ -1114,20 +1136,22 @@ eligibility for partnership in relief operations.
                             {partner.status === 'active' ? 'Deactivate' : 'Activate'}
                           </button>
                         </div>
-                        <div className="action-buttons">
-                          <button 
-                            className="btn-edit"
-                            onClick={() => setEditingPartner(partner)}
-                          >
-                            Edit Partner
-                          </button>
-                          <button 
-                            className="btn-delete"
-                            onClick={() => handleDeletePartner(partner.id)}
-                          >
-                            Delete Partner
-                          </button>
-                        </div>
+                        {canEditPartners && (
+                          <div className="action-buttons">
+                            <button 
+                              className="btn-edit"
+                              onClick={() => setEditingPartner(partner)}
+                            >
+                              Edit Partner
+                            </button>
+                            <button 
+                              className="btn-delete"
+                              onClick={() => handleDeletePartner(partner.id)}
+                            >
+                              Delete Partner
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

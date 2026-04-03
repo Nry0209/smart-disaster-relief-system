@@ -53,7 +53,7 @@ const DistributionTracking = () => {
     { value: 'dispatched', label: 'Dispatched', color: '#7c3aed' },
     { value: 'in_transit', label: 'In Transit', color: '#f59e0b' },
     { value: 'delivered', label: 'Delivered', color: '#10b981' },
-    { value: 'confirmed', label: 'Confirmed Delivered', color: '#059669' }
+    { value: 'verified', label: 'Verified & Confirmed', color: '#059669' }
   ];
 
 
