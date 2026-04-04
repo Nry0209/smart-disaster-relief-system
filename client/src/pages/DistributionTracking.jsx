@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { Package, Calendar, MapPin, Truck, Users, AlertCircle, CheckCircle, Clock, ArrowRight, X } from 'lucide-react';
 
@@ -15,6 +15,8 @@ import './Pages.css';
 
 
 const DistributionTracking = () => {
+
+  const navigate = useNavigate();
 
   const { user } = useAuth();
 
@@ -824,7 +826,7 @@ suitable for download and import into spreadsheet applications.
               </p>
               <button 
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 mt-4"
-                onClick={() => window.location.href = '/allocation'}
+                onClick={() => navigate('/allocations')}
               >
                 Go to Allocation Planning
               </button>

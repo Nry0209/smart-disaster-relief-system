@@ -70,6 +70,7 @@ function App() {
           <AllocationPage />
         </DashboardLayout>
       } />
+      <Route path="/allocation" element={<Navigate to="/allocations" replace />} />
       <Route path="/disaster-events" element={
         <DashboardLayout>
           <DisasterEventPage />
@@ -81,6 +82,11 @@ function App() {
         </DashboardLayout>
       } />
       <Route path="/reports-analytics" element={
+        <DashboardLayout>
+          <ReportsAnalyticsPage />
+        </DashboardLayout>
+      } />
+      <Route path="/prediction" element={
         <DashboardLayout>
           <ReportsAnalyticsPage />
         </DashboardLayout>

@@ -215,7 +215,7 @@ const PublicDonationPage = () => {
               <button className="btn-primary" onClick={resetForm}>
                 Make Another Donation
               </button>
-              <button className="btn-secondary" onClick={() => window.location.href = '/'}>
+              <button className="btn-secondary" onClick={() => navigate('/')}>
                 Return to Home
               </button>
             </div>

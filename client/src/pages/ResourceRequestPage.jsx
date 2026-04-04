@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Package, Send, CheckCircle, Plus, Trash2, AlertTriangle } from "lucide-react";
 import './Pages.css';
 
 const ResourceRequestPage = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     disasterType: "",
     location: "",
@@ -126,7 +128,7 @@ const ResourceRequestPage = () => {
               </button>
               <button 
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
-                onClick={() => window.location.href = "/inventory"}
+                onClick={() => navigate("/inventory")}
               >
                 Back to Inventory
               </button>

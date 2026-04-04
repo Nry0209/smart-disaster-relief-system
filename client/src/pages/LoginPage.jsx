@@ -5,6 +5,24 @@ import illustration from "../assets/images/loginImage.png";
 import logo from "../assets/images/logo1.png";
 import "./Pages.css";
 
+const ROLE_REDIRECT_PATHS = {
+  admin: "/dashboard",
+  dmc_officer: "/dmc-dashboard",
+  inventory_officer: "/inventory",
+  allocation_officer: "/allocations",
+  tracking_officer: "/distribution-tracking",
+  charity_staff: "/distribution-tracking",
+};
+
+const ROLE_DISPLAY_NAMES = {
+  admin: "Admin User",
+  dmc_officer: "DMC Officer",
+  inventory_officer: "Inventory Officer",
+  allocation_officer: "Allocation Officer",
+  tracking_officer: "Tracking Officer",
+  charity_staff: "Charity Staff",
+};
+
 function LoginPage() {
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("password");
@@ -22,13 +40,13 @@ function LoginPage() {
     setTimeout(() => {
       const mockUser = {
         id: 1,
-        name: role === "dmc_officer" ? "DMC Officer" : "Admin User",
+        name: ROLE_DISPLAY_NAMES[role] || "Admin User",
         email,
         role,
       };
 
       login(mockUser);
-      navigate(role === "dmc_officer" ? "/dmc-dashboard" : "/dashboard");
+      navigate(ROLE_REDIRECT_PATHS[role] || "/dashboard");
       setIsLoading(false);
     }, 1000);
   };
@@ -119,6 +137,7 @@ function LoginPage() {
                   <option value="inventory_officer">Inventory Officer</option>
                   <option value="allocation_officer">Allocation Officer</option>
                   <option value="tracking_officer">Tracking Officer</option>
+                  <option value="charity_staff">Charity Staff</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
