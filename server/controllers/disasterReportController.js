@@ -1,7 +1,7 @@
 const DisasterReport = require("../models/DisasterReport");
 const mongoose = require("mongoose");
 
-const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "monitoring", "resolved"];
+const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
 const UPDATABLE_FIELDS = [
   "disasterType",
   "location",
@@ -13,10 +13,108 @@ const UPDATABLE_FIELDS = [
   "immediateNeeds",
   "status",
   "reportedBy",
+  "allocatedResources",
 ];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
+}
+
+function toIsoDateOrNull(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeAllocatedResources(value) {
+  if (value === null) {
+    return null;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("allocatedResources must be an object or null.");
+  }
+
+  const rawQuantities =
+    value.quantities && typeof value.quantities === "object" && !Array.isArray(value.quantities)
+      ? value.quantities
+      : {};
+
+  const quantities = {};
+  Object.entries(rawQuantities).forEach(([key, qty]) => {
+    const parsedQty = Number(qty);
+    if (!Number.isFinite(parsedQty) || parsedQty < 0) {
+      throw new Error("allocatedResources quantities must be non-negative numbers.");
+    }
+    quantities[key] = parsedQty;
+  });
+
+  const rawLineItems = Array.isArray(value.lineItems) ? value.lineItems : [];
+  const lineItems = rawLineItems.map((item) => {
+    const quantity = Number(item.quantity);
+    const itemId = String(item.itemId || "").trim();
+    const itemName = String(item.itemName || "").trim();
+
+    if (!itemId || !itemName || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error("allocatedResources lineItems contain invalid data.");
+    }
+
+    return {
+      itemId,
+      itemName,
+      quantity,
+      category: String(item.category || "").trim(),
+    };
+  });
+
+  const allocatedDate = value.allocatedDate ? toIsoDateOrNull(value.allocatedDate) : new Date();
+  if (value.allocatedDate && !allocatedDate) {
+    throw new Error("allocatedResources allocatedDate is invalid.");
+  }
+
+  const lastUpdated = value.lastUpdated ? toIsoDateOrNull(value.lastUpdated) : new Date();
+  if (value.lastUpdated && !lastUpdated) {
+    throw new Error("allocatedResources lastUpdated is invalid.");
+  }
+
+  return {
+    quantities,
+    lineItems,
+    message: String(value.message || "").trim(),
+    allocatedDate,
+    allocatedBy: String(value.allocatedBy || "Allocation Officer").trim(),
+    lastUpdated,
+  };
+}
+
+function formatAllocatedResources(allocatedResources) {
+  if (!allocatedResources) {
+    return null;
+  }
+
+  const quantities = allocatedResources.quantities;
+  const normalizedQuantities =
+    quantities instanceof Map
+      ? Object.fromEntries(quantities.entries())
+      : quantities && typeof quantities === "object"
+        ? quantities
+        : {};
+
+  return {
+    quantities: normalizedQuantities,
+    lineItems: Array.isArray(allocatedResources.lineItems)
+      ? allocatedResources.lineItems.map((item) => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          quantity: item.quantity,
+          category: item.category,
+        }))
+      : [],
+    message: allocatedResources.message || "",
+    allocatedDate: allocatedResources.allocatedDate || null,
+    allocatedBy: allocatedResources.allocatedBy || "",
+    lastUpdated: allocatedResources.lastUpdated || null,
+  };
 }
 
 function formatReport(report) {
@@ -32,6 +130,7 @@ function formatReport(report) {
     immediateNeeds: report.immediateNeeds,
     status: report.status,
     reportedBy: report.reportedBy,
+    allocatedResources: formatAllocatedResources(report.allocatedResources),
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -194,6 +293,14 @@ async function updateDisasterReport(req, res) {
       updates.immediateNeeds = updates.immediateNeeds
         .map((item) => String(item).trim())
         .filter(Boolean);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "allocatedResources")) {
+      try {
+        updates.allocatedResources = normalizeAllocatedResources(updates.allocatedResources);
+      } catch (error) {
+        return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
+      }
     }
 
     const report = await DisasterReport.findByIdAndUpdate(id, updates, {

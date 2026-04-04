@@ -160,6 +160,8 @@ const DisasterEventPage = () => {
         return { color: "#047857", bg: "#d1fae5" };
       case "pending_inventory":
         return { color: "#4338ca", bg: "#e0e7ff" };
+      case "allocated":
+        return { color: "#166534", bg: "#dcfce7" };
       case "monitoring":
         return { color: "#b45309", bg: "#fef3c7" };
       case "resolved":
@@ -384,6 +386,7 @@ const DisasterEventPage = () => {
             <option value="draft">Draft</option>
             <option value="active">Active</option>
             <option value="pending_inventory">Pending Inventory</option>
+            <option value="allocated">Allocated</option>
             <option value="monitoring">Monitoring</option>
             <option value="resolved">Resolved</option>
           </select>
@@ -508,6 +511,22 @@ const DisasterEventPage = () => {
                       disabled
                     >
                       Sent to Allocation
+                    </button>
+                  ) : event.status === "allocated" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Allocated by Officer
+                    </button>
+                  ) : event.status === "monitoring" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Allocation in Monitoring
                     </button>
                   ) : (
                     <button
@@ -638,6 +657,7 @@ const DisasterEventPage = () => {
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
                   <option value="pending_inventory">Pending Inventory</option>
+                  <option value="allocated">Allocated</option>
                   <option value="monitoring">Monitoring</option>
                   <option value="resolved">Resolved</option>
                 </select>
