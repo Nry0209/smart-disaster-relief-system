@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 const PartnerDirectory = () => {
@@ -290,39 +291,26 @@ const PartnerDirectory = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-      {/* Header */}
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            {isInventoryOfficer ? 'Inventory Officer / NGO Directory' : 'Admin / Partner Management'}
-          </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Smart Disaster Relief System - Partner Directory
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            {isInventoryOfficer 
-              ? 'View NGO partner organizations for resource requests and donations' 
-              : 'Manage NGO contacts and partner organizations for donation notifications'
-            }
-          </p>
-          {isInventoryOfficer && (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-              Read-Only Access
-            </div>
-          )}
+      <PageHeader 
+        role={isInventoryOfficer ? 'Inventory Officer / NGO Directory' : 'Admin / Partner Management'}
+        title="Partner Directory"
+        description={isInventoryOfficer 
+          ? "View and search registered NGO partners and their contact information" 
+          : "Manage NGO partner organizations and their contact details"}
+        showReadOnlyBadge={isInventoryOfficer}
+      />
+
+      {/* Partner Directory Content */}
+      {canEdit && (
+        <div className="flex flex-wrap gap-3">
+          <button 
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
+            onClick={() => setShowCreateForm(true)}
+          >
+            Add New Partner
+          </button>
         </div>
-        {canEdit && (
-          <div className="flex flex-wrap gap-3">
-            <button 
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
-              onClick={() => setShowCreateForm(true)}
-            >
-              Add New Partner
-            </button>
-          </div>
-        )}
-      </section>
+      )}
 
       {/* Filters */}
       <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">

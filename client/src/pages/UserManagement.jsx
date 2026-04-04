@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, Package, MapPin, Phone, Mail, Building, Users, CheckCircle, AlertTriangle, Clock, ArrowRight, Search, Filter, Truck, Bell, Trash2, X, Upload } from 'lucide-react';
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 const UserManagement = () => {
@@ -1375,19 +1376,11 @@ eligibility for partnership in relief operations.
 
   return (
     <div className="user-management">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            Admin / User & Partner Management
-          </span>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            User Management
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Manage system users and NGO partner organizations
-          </p>
-        </div>
-      </section>
+      <PageHeader 
+        role="Admin / User & Partner Management"
+        title="User Management"
+        description="Manage system users and NGO partner organizations"
+      />
 
 
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
 import { Link } from 'react-router-dom';
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 // Mock inventory data (same as InventoryPage)
@@ -305,19 +306,11 @@ export default function AllocationPage() {
 
   return (
     <div className="allocation-page">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            Allocation Officer / Resource Planning
-          </span>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Resource Allocation
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Manage and allocate resources to DMC officer requests based on available inventory
-          </p>
-        </div>
-      </section>
+      <PageHeader 
+        role="Allocation Officer / Resource Planning"
+        title="Resource Allocation"
+        description="Manage and allocate resources to DMC officer requests based on available inventory"
+      />
 
       {/* STATS CARDS */}
       <div className="allocation-stats">
