@@ -2725,6 +2725,66 @@
 
 }
 
+.status-update-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.btn-status-update {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-status-update.dispatched {
+  background: #7c3aed;
+  color: white;
+}
+
+.btn-status-update.dispatched:hover {
+  background: #6d28d9;
+  transform: translateY(-1px);
+}
+
+.btn-status-update.in-transit {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-status-update.in-transit:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+}
+
+.btn-status-update.delivered {
+  background: #10b981;
+  color: white;
+}
+
+.btn-status-update.delivered:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.btn-status-update.verify {
+  background: #059669;
+  color: white;
+}
+
+.btn-status-update.verify:hover {
+  background: #047857;
+  transform: translateY(-1px);
+}
+
 
 /* Modal Styles */
 
@@ -4081,6 +4141,59 @@
   background: #94a3b8;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.finalize-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: #16a34a;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.finalize-btn:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.finalized-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.finalized-text {
+  color: #16a34a;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.view-dispatch-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  background: #f0fdf4;
+  color: #16a34a;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.view-dispatch-btn:hover {
+  background: #dcfce7;
+  transform: translateY(-1px);
 }
 
 .allocated-text {

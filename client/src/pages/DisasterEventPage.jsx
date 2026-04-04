@@ -131,8 +131,8 @@ const DisasterEventPage = () => {
           <span className="text-xs font-semibold text-slate-500">
             Admin / Disaster Management
           </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Smart Disaster Relief System - Disaster Events
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            Disaster Events
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
             Monitor and manage disaster events reported by DMC officers

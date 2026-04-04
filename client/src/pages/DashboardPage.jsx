@@ -60,11 +60,11 @@ function DashboardPage() {
           <span className="text-xs font-semibold text-slate-500">
             {getRoleTitle()} / Operations Overview
           </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Smart Disaster Relief System - Relief Operations Dashboard
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            Relief Operations Dashboard
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Monitor delivery progress, track relief operations, and stay updated on disaster response activities.
+            Monitor delivery progress, track relief operations, and stay updated on disaster response activities
           </p>
         </div>
       </section>

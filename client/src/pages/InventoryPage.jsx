@@ -71,10 +71,19 @@ export default function InventoryPage() {
     <div className="inventory-page">
 
       {/* HEADER */}
-      <div className="inventory-header">
-        <h1>Inventory Management</h1>
-        <p>Track and manage your disaster relief supplies</p>
-      </div>
+      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span className="text-xs font-semibold text-slate-500">
+            Inventory Officer / Stock Management
+          </span>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+            Inventory Management
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Track and manage your disaster relief supplies
+          </p>
+        </div>
+      </section>
 
       {/* STATS */}
       <div className="inventory-stats">

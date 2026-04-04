@@ -79,8 +79,8 @@ const ResourceRequestPage = () => {
             <span className="text-xs font-semibold text-slate-500">
               Inventory Officer / Resource Management
             </span>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              Smart Disaster Relief System - Resource Request
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              Resource Request
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-600">
               Request essential resources from partner NGOs when inventory is insufficient

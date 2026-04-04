@@ -185,6 +185,45 @@ export default function AllocationPage() {
     setExistingAllocation(null);
   };
 
+  const finalizeAllocation = (eventId) => {
+    const event = disasterEvents.find(e => e.id === eventId);
+    if (!event || !event.allocatedResources) return;
+
+    // Create finalized allocation plan
+    const allocationPlan = {
+      id: `PLAN-${Date.now()}`,
+      allocationRef: `ALLOC-${event.id}-${Date.now()}`,
+      eventTitle: event.disasterType,
+      eventLocation: event.location,
+      eventDate: event.eventDate,
+      priority: event.priority,
+      allocatedItems: Object.entries(event.allocatedResources.quantities).map(([name, quantity]) => ({
+        name,
+        quantity
+      })),
+      transportDetails: event.allocatedResources.message || 'Standard Transport Required',
+      status: 'finalized',
+      createdAt: new Date().toISOString(),
+      finalizedBy: 'Allocation Officer',
+      eventId: event.id
+    };
+
+    // Save to localStorage
+    const existingPlans = JSON.parse(localStorage.getItem('allocationPlans') || '[]');
+    const updatedPlans = [...existingPlans, allocationPlan];
+    localStorage.setItem('allocationPlans', JSON.stringify(updatedPlans));
+
+    // Update event status to finalized
+    const updatedEvents = disasterEvents.map(e => 
+      e.id === eventId 
+        ? { ...e, status: "finalized" }
+        : e
+    );
+    setDisasterEvents(updatedEvents);
+
+    alert(`Allocation plan ${allocationPlan.allocationRef} has been finalized and is ready for dispatch!`);
+  };
+
   const updateAllocation = () => {
     if (!selectedEvent || !existingAllocation) return;
     
@@ -266,11 +305,19 @@ export default function AllocationPage() {
 
   return (
     <div className="allocation-page">
-      {/* HEADER */}
-      <div className="allocation-header">
-        <h1>Resource Allocation</h1>
-        <p>Manage and allocate resources to DMC officer requests based on available inventory</p>
-      </div>
+      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span className="text-xs font-semibold text-slate-500">
+            Allocation Officer / Resource Planning
+          </span>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            Resource Allocation
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Manage and allocate resources to DMC officer requests based on available inventory
+          </p>
+        </div>
+      </section>
 
       {/* STATS CARDS */}
       <div className="allocation-stats">
@@ -467,11 +514,28 @@ export default function AllocationPage() {
                                 <ArrowRight size={14} /> Update
                               </button>
                               <button 
+                                className="finalize-btn"
+                                onClick={() => finalizeAllocation(event.id)}
+                              >
+                                <CheckCircle size={14} /> Finalize
+                              </button>
+                              <button 
                                 className="delete-btn"
                                 onClick={() => handleAllocate(event.id)}
                               >
                                 Delete
                               </button>
+                            </div>
+                          )}
+                          {event.status === "finalized" && (
+                            <div className="finalized-status">
+                              <span className="finalized-text">✅ Finalized for Dispatch</span>
+                              <Link 
+                                to="/distribution-tracking"
+                                className="view-dispatch-btn"
+                              >
+                                <Truck size={14} /> View Dispatch
+                              </Link>
                             </div>
                           )}
                           {event.status === "monitoring" && (

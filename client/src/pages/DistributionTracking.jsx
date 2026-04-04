@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Calendar, MapPin } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Package, Calendar, MapPin, Truck, Users, AlertCircle, CheckCircle, Clock, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ROLES } from '../utils/constants';
 import './Pages.css';
 
 const DistributionTracking = () => {
+  const { user } = useAuth();
   const [dispatchRecords, setDispatchRecords] = useState([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -11,6 +15,11 @@ const DistributionTracking = () => {
   
   // State for finalized allocation plans
   const [readyAllocations, setReadyAllocations] = useState([]);
+
+  // Role-based permissions
+  const canCreateDispatch = user?.role === ROLES.TRACKING_OFFICER || user?.role === ROLES.ADMIN;
+  const canEditDispatch = user?.role === ROLES.TRACKING_OFFICER || user?.role === ROLES.ADMIN;
+  const isReadOnly = !canCreateDispatch && !canEditDispatch;
 
   // Fetch data from localStorage
   useEffect(() => {
@@ -24,10 +33,9 @@ const DistributionTracking = () => {
     const savedAllocationPlans = localStorage.getItem('allocationPlans');
     if (savedAllocationPlans) {
       const plans = JSON.parse(savedAllocationPlans);
-      // Filter for finalized plans that are ready for dispatch
+      // Filter for finalized plans that are ready for dispatch (not yet dispatched)
       const readyPlans = plans.filter(plan => 
-        plan.status === 'finalized' && 
-        (!plan.distributionInfo || Object.keys(plan.distributionInfo).length === 0)
+        plan.status === 'finalized' && !plan.dispatchCreated
       );
       setReadyAllocations(readyPlans);
     }
@@ -64,12 +72,22 @@ const DistributionTracking = () => {
       currentLocation: allocation.eventLocation || 'Distribution Center',
       status: 'prepared',
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      allocatedItems: allocation.allocatedItems || []
     };
     
     const newDispatchRecords = [...dispatchRecords, dispatchRecord];
     setDispatchRecords(newDispatchRecords);
-    setShowCreateForm(false);
+    localStorage.setItem('dispatchRecords', JSON.stringify(newDispatchRecords));
+    
+    // Update allocation plan to mark as dispatched
+    const existingPlans = JSON.parse(localStorage.getItem('allocationPlans') || '[]');
+    const updatedPlans = existingPlans.map(plan => 
+      plan.id === allocation.id 
+        ? { ...plan, status: 'dispatched', dispatchCreated: true }
+        : plan
+    );
+    localStorage.setItem('allocationPlans', JSON.stringify(updatedPlans));
     
     // Optional: Show success message
     alert(`Dispatch record created successfully from allocation plan ${allocation.allocationRef}!`);
@@ -85,21 +103,40 @@ const DistributionTracking = () => {
       updatedAt: new Date().toISOString()
     };
 
-    setDispatchRecords([...dispatchRecords, record]);
+    const updatedRecords = [...dispatchRecords, record];
+    setDispatchRecords(updatedRecords);
+    localStorage.setItem('dispatchRecords', JSON.stringify(updatedRecords));
     setShowCreateForm(false);
   };
 
   const handleUpdateStatus = (recordId, newStatus) => {
-    setDispatchRecords(dispatchRecords.map(record => 
+    const updatedRecords = dispatchRecords.map(record => 
       record.id === recordId 
-        ? { ...record, status: newStatus, updatedAt: new Date().toISOString() }
+        ? { 
+            ...record, 
+            status: newStatus, 
+            updatedAt: new Date().toISOString(),
+            currentLocation: newStatus === 'dispatched' ? 'In Transit' : 
+                           newStatus === 'in_transit' ? 'En Route to DMC Office' :
+                           newStatus === 'delivered' ? 'DMC Office' : record.currentLocation
+          }
         : record
-    ));
+    );
+    setDispatchRecords(updatedRecords);
+    localStorage.setItem('dispatchRecords', JSON.stringify(updatedRecords));
+    
+    // Trigger storage event for real-time sync
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'dispatchRecords',
+      newValue: JSON.stringify(updatedRecords)
+    }));
   };
 
   const handleDeleteRecord = (recordId) => {
     if (window.confirm('Are you sure you want to delete this dispatch record?')) {
-      setDispatchRecords(dispatchRecords.filter(record => record.id !== recordId));
+      const updatedRecords = dispatchRecords.filter(record => record.id !== recordId);
+      setDispatchRecords(updatedRecords);
+      localStorage.setItem('dispatchRecords', JSON.stringify(updatedRecords));
     }
   };
 
@@ -109,16 +146,16 @@ const DistributionTracking = () => {
   };
 
   const handleUpdateRecord = (updatedRecord) => {
-    setDispatchRecords(dispatchRecords.map(record => 
+    const updatedRecords = dispatchRecords.map(record => 
       record.id === updatedRecord.id 
         ? { ...updatedRecord, updatedAt: new Date().toISOString() }
         : record
-
-    ));
-
+    );
+    
+    setDispatchRecords(updatedRecords);
+    localStorage.setItem('dispatchRecords', JSON.stringify(updatedRecords));
     setShowCreateForm(false);
     setEditingRecord(null);
-
   };
 
   // View Functions for Distribution Tracking
@@ -243,13 +280,32 @@ suitable for download and import into spreadsheet applications.
 
   return (
     <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)]">
+      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <span className="text-xs font-semibold text-slate-500">Dispatch Management / Distribution Tracking</span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">Distribution Tracking</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">Manage and monitor relief supply dispatch records with partner and event integration.</p>
+          <span className="text-xs font-semibold text-slate-500">
+            {user?.role === ROLES.TRACKING_OFFICER ? 'Tracking Officer / Dispatch Management' : 
+             user?.role === ROLES.CHARITY ? 'Charity Staff / Delivery Tracking' :
+             user?.role === ROLES.ADMIN ? 'Admin / Dispatch Management' :
+             'Delivery Tracking'}
+          </span>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+            Distribution Tracking
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            {canCreateDispatch ? 'Manage and monitor relief supply dispatch records with partner and event integration' :
+             'View and track relief supply dispatch records and delivery status'}
+          </p>
+          {isReadOnly && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-50 text-amber-700 px-3 py-1 text-sm font-medium">
+              <AlertCircle className="w-4 h-4" />
+              Read-Only Access
+            </div>
+          )}
         </div>
+      </section>
 
+      {/* Filter Section */}
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)]">
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex gap-3 items-center">
             <label className="text-sm font-medium text-slate-700" htmlFor="status-filter">Filter by Status:</label>
@@ -267,23 +323,23 @@ suitable for download and import into spreadsheet applications.
               ))}
             </select>
           </div>
-          <button 
-            className="btn-primary"
-            onClick={() => {
-              setEditingRecord(null);
-              setShowCreateForm(true);
-            }}
-          >
-            + Create Dispatch Record
-
-          </button>
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              {filteredRecords.length} total records
+            </span>
+          </div>
         </div>
       </section>
 
-      {/* Finalized Allocation Plans Section */}
-      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+      {/* Finalized Allocation Plans Section - Only for tracking officers */}
+      {canCreateDispatch && (
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">Finalized Allocation Plans</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">📋 Finalized Allocation Plans</h2>
+            <p className="text-sm text-slate-600">Allocation plans ready for dispatch. Create dispatch records to begin tracking.</p>
+          </div>
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -309,9 +365,8 @@ suitable for download and import into spreadsheet applications.
           </div>
         ) : (
           <div className="space-y-4">
-            {readyAllocations.map(allocation => {
-              return (
-                <div key={allocation.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+            {readyAllocations.map(allocation => (
+              <div key={allocation.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-start gap-4">
                     <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-semibold text-lg border-2 border-blue-200">
@@ -366,100 +421,156 @@ suitable for download and import into spreadsheet applications.
                     </button>
                   </div>
                 </div>
-            </div>
-              )
-            }
-          )
-        }
-      </div>
-    )}
-          </section>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+      )}
 
-        {/* Records List */}
-      <div className="records-container">
+      {/* Records List */}
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">🚚 Dispatch Records</h2>
         {filteredRecords.length === 0 ? (
-          <div className="no-records">
-            <p>No dispatch records found</p>
+          <div className="text-center py-12 border border-slate-200 rounded-2xl bg-white">
+            <Truck className="w-16 h-16 mx-auto mb-4 text-slate-400" />
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No dispatch records found</h3>
+            <p className="text-slate-600 max-w-md mx-auto">
+              {canCreateDispatch ? 
+                'Create dispatch records from finalized allocation plans to begin tracking deliveries.' :
+                'No dispatch records are available at this time.'
+              }
+            </p>
           </div>
         ) : (
-          <div className="records-grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredRecords.map(record => (
-              <div key={record.id} className="record-card">
-                <div className="record-header">
-                  <h3>{record.allocationRef}</h3>
-                  <span 
-                    className="status-badge"
-                    style={{ backgroundColor: getStatusColor(record.status) }}
-                  >
+              <div key={record.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center text-white font-semibold text-sm ${
+                      record.status === 'verified' ? 'bg-emerald-500' :
+                      record.status === 'delivered' ? 'bg-green-500' :
+                      record.status === 'in_transit' ? 'bg-amber-500' :
+                      record.status === 'dispatched' ? 'bg-purple-500' :
+                      'bg-blue-500'
+                    }`}>
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{record.allocationRef}</h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {new Date(record.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                    record.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                    record.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                    record.status === 'in_transit' ? 'bg-amber-100 text-amber-700' :
+                    record.status === 'dispatched' ? 'bg-purple-100 text-purple-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      record.status === 'verified' ? 'bg-emerald-500' :
+                      record.status === 'delivered' ? 'bg-green-500' :
+                      record.status === 'in_transit' ? 'bg-amber-500' :
+                      record.status === 'dispatched' ? 'bg-purple-500' :
+                      'bg-blue-500'
+                    }`}></span>
                     {getStatusLabel(record.status)}
                   </span>
                 </div>
 
-                <div className="record-details">
-                  <div className="detail-row">
-                    <span className="label">Dispatch Date:</span>
-                    <span className="value">{new Date(record.dispatchDate).toLocaleDateString()}</span>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-500">Dispatch:</span>
+                    <span className="font-medium text-slate-900">{new Date(record.dispatchDate).toLocaleDateString()}</span>
                   </div>
-
-                  <div className="detail-row">
-                    <span className="label">Transport:</span>
-                    <span className="value">{record.transportDetails}</span>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-slate-400" />
+                    <span className="text-slate-500">Location:</span>
+                    <span className="font-medium text-slate-900">{record.currentLocation}</span>
                   </div>
-                  <div className="detail-row">
-                    <span className="label">Current Location:</span>
-                    <span className="value">{record.currentLocation}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Last Updated:</span>
-                    <span className="value">
-                      {new Date(record.updatedAt).toLocaleString()}
-                    </span>
+                  <div className="flex items-start gap-2">
+                    <Truck className="w-4 h-4 text-slate-400 mt-0.5" />
+                    <span className="text-slate-500">Transport:</span>
+                    <span className="font-medium text-slate-900 text-xs leading-tight">{record.transportDetails}</span>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="record-actions">
-                  <div className="action-buttons">
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <div className="flex flex-wrap gap-2">
                     <button 
-                      className="btn-view"
+                      className="inline-flex items-center gap-1 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-xs font-medium hover:bg-slate-200 transition-colors"
                       onClick={() => viewDispatchReport(record)}
                       title="View dispatch report"
                     >
-                      📄 Dispatch
+                      📄 Report
                     </button>
                     {record.status === 'delivered' && (
+                      <button 
+                        className="inline-flex items-center gap-1 rounded-lg bg-green-50 text-green-700 px-3 py-2 text-xs font-medium hover:bg-green-100 transition-colors"
+                        onClick={() => viewDeliveryConfirmation(record)}
+                        title="View delivery confirmation"
+                      >
+                        ✅ Confirmation
+                      </button>
+                    )}
+                    {record.status === 'delivered' && (
+                      <button 
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-50 text-blue-700 px-3 py-2 text-xs font-medium hover:bg-blue-100 transition-colors"
+                        onClick={() => viewExportSummary(record)}
+                        title="View CSV export data"
+                      >
+                        📊 Export
+                      </button>
+                    )}
+                    
+                    {/* Status Update Buttons - Only for tracking officers */}
+                    {canEditDispatch && (
                       <>
-                        <button 
-                          className="btn-view"
-                          onClick={() => viewDeliveryConfirmation(record)}
-                          title="View delivery confirmation"
-                        >
-                          ✅ Delivery
-                        </button>
-                        <button 
-                          className="btn-view"
-                          onClick={() => viewExportSummary(record)}
-                          title="View CSV export data"
-                        >
-                          📊 Export Summary
-                        </button>
+                        {record.status === 'prepared' && (
+                          <button 
+                            className="inline-flex items-center gap-1 rounded-lg bg-purple-50 text-purple-700 px-3 py-2 text-xs font-medium hover:bg-purple-100 transition-colors"
+                            onClick={() => handleUpdateStatus(record.id, 'dispatched')}
+                            title="Mark as dispatched"
+                          >
+                            🚚 Dispatch
+                          </button>
+                        )}
+                        {record.status === 'dispatched' && (
+                          <button 
+                            className="inline-flex items-center gap-1 rounded-lg bg-amber-50 text-amber-700 px-3 py-2 text-xs font-medium hover:bg-amber-100 transition-colors"
+                            onClick={() => handleUpdateStatus(record.id, 'in_transit')}
+                            title="Mark as in transit"
+                          >
+                            🚛 In Transit
+                          </button>
+                        )}
+                        {record.status === 'in_transit' && (
+                          <button 
+                            className="inline-flex items-center gap-1 rounded-lg bg-green-50 text-green-700 px-3 py-2 text-xs font-medium hover:bg-green-100 transition-colors"
+                            onClick={() => handleUpdateStatus(record.id, 'delivered')}
+                            title="Mark as delivered"
+                          >
+                            📦 Delivered
+                          </button>
+                        )}
                       </>
                     )}
-                  </div>
-                  
-                  <div className="action-buttons secondary">
-                    <button 
-                      className="btn-edit"
-                      onClick={() => handleEditRecord(record)}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      className="btn-delete"
-                      onClick={() => handleDeleteRecord(record.id)}
-                    >
-                      Delete
-                    </button>
+                    
+                    {record.status === 'delivered' && (
+                      <Link 
+                        to="/dmc-delivery-verification"
+                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 text-emerald-700 px-3 py-2 text-xs font-medium hover:bg-emerald-100 transition-colors"
+                        title="Go to DMC verification"
+                      >
+                        ✅ DMC Verify
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>
@@ -468,39 +579,28 @@ suitable for download and import into spreadsheet applications.
         )}
       </div>
 
-      {/* Create/Edit Modal */}
-      {showCreateForm && (
-        <DispatchRecordForm 
-          record={editingRecord}
-          onSave={editingRecord ? handleUpdateRecord : handleCreateRecord}
-          onCancel={() => {
-            setShowCreateForm(false);
-            setEditingRecord(null);
-          }}
-        />
-      )}
       {/* View Modal */}
       {viewModal.show && (
-        <div className="modal-overlay view-modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h2>{viewModal.title}</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-slate-900">{viewModal.title}</h2>
               <button 
-                className="modal-close"
+                className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
                 onClick={() => setViewModal({ show: false, type: null, content: null, title: null })}
               >
                 ×
               </button>
             </div>
-            <div className="modal-body">
-              <div className="document-content">
+            <div className="p-6">
+              <pre className="whitespace-pre-wrap text-sm text-slate-700 font-mono bg-slate-50 p-4 rounded-lg">
                 {viewModal.content}
-              </div>
+              </pre>
             </div>
-            <div className="modal-footer">
+            <div className="flex justify-end gap-3 p-6 border-t border-slate-200">
               {viewModal.type === 'export-summary' && (
                 <button 
-                  className="btn-primary"
+                  className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"
                   onClick={() => {
                     const blob = new Blob([viewModal.content], { type: 'text/csv' });
                     const url = window.URL.createObjectURL(blob);
@@ -515,10 +615,10 @@ suitable for download and import into spreadsheet applications.
                 </button>
               )}
               <button 
-                className="btn-secondary"
+                className="px-6 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
                 onClick={() => setViewModal({ show: false, type: null, content: null, title: null })}
               >
-                Cancel
+                Close
               </button>
             </div>
           </div>
@@ -528,98 +628,4 @@ suitable for download and import into spreadsheet applications.
   );
 };
 
-// Dispatch Record Form Component
-const DispatchRecordForm = ({ record, onSave, onCancel }) => {
-  const [formData, setFormData] = useState({
-    allocationRef: record?.allocationRef || '',
-    dispatchDate: record?.dispatchDate || new Date().toISOString().split('T')[0],
-    transportDetails: record?.transportDetails || '',
-    currentLocation: record?.currentLocation || 'Warehouse'
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (record) {
-      onSave({ ...record, ...formData });
-    } else {
-      onSave(formData);
-    }
-  };
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <div className="modal-header">
-          <h2>{record ? 'Edit Dispatch Record' : 'Create Dispatch Record'}</h2>
-          <button className="close-btn" onClick={onCancel}>×</button>
-       </div>
-        <form onSubmit={handleSubmit} className="dispatch-form">
-          <div className="form-group">
-            <label htmlFor="allocationRef">Allocation Reference *</label>
-            <input
-              type="text"
-              id="allocationRef"
-              name="allocationRef"
-              value={formData.allocationRef}
-              onChange={handleChange}
-              required
-              placeholder="e.g., ALLOC-2024-001"
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="dispatchDate">Dispatch Date *</label>
-            <input
-              type="date"
-              id="dispatchDate"
-              name="dispatchDate"
-              value={formData.dispatchDate}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="transportDetails">Transport Details *</label>
-            <textarea
-              id="transportDetails"
-              name="transportDetails"
-              value={formData.transportDetails}
-              onChange={handleChange}
-              required
-              placeholder="e.g., Vehicle #123 - Driver: John Silva"
-              rows="3"
-           />
-          </div>
-          <div className="form-group">
-            <label htmlFor="currentLocation">Current Location</label>
-            <input
-              type="text"
-              id="currentLocation"
-              name="currentLocation"
-              value={formData.currentLocation}
-              onChange={handleChange}
-              placeholder="e.g., Colombo Warehouse"
-            />
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={onCancel}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary">
-              {record ? 'Update Record' : 'Create Record'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 export default DistributionTracking;
-
