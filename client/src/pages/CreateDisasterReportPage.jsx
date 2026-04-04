@@ -13,13 +13,66 @@ const QUICK_NEEDS = [
   "Baby Supplies",
 ];
 
+const ALLOWED_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
+const ALLOWED_PRIORITIES = new Set(["critical", "high", "medium", "low"]);
+const MIN_DISASTER_TYPE_LENGTH = 3;
+const MAX_DISASTER_TYPE_LENGTH = 80;
+const MIN_LOCATION_LENGTH = 3;
+const MAX_LOCATION_LENGTH = 120;
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_IMMEDIATE_NEEDS = 12;
+const MAX_IMMEDIATE_NEED_LENGTH = 60;
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
+const MAX_AFFECTED_POPULATION_DIGITS = String(MAX_AFFECTED_POPULATION).length;
+
+function normalizeImmediateNeeds(needs = []) {
+  const seen = new Set();
+
+  return needs
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
+function parseImmediateNeedsInput(value) {
+  return normalizeImmediateNeeds(String(value || "").split(","));
+}
+
+function sanitizePopulationInput(value) {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!digitsOnly) {
+    return "";
+  }
+
+  const parsed = Number(digitsOnly);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "";
+  }
+
+  return String(Math.min(parsed, MAX_AFFECTED_POPULATION));
+}
+
+function preventInvalidPopulationKey(event) {
+  if (["e", "E", "+", "-", ".", ","].includes(event.key)) {
+    event.preventDefault();
+  }
+}
+
 function CreateDisasterReportPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     disasterType: "",
     location: "",
     severity: "high",
-    affectedPopulation: 0,
+    affectedPopulation: "",
     eventDate: "",
     priority: "critical",
     description: "",
@@ -36,22 +89,35 @@ function CreateDisasterReportPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleAffectedPopulationChange = (value) => {
+    const sanitizedPopulation = sanitizePopulationInput(value);
+    handleInputChange("affectedPopulation", sanitizedPopulation);
+  };
+
   const handleNeedsChange = (value) => {
     setLastEditedAt(new Date());
-    const needs = value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const needs = parseImmediateNeedsInput(value);
     setFormData((prev) => ({ ...prev, immediateNeeds: needs }));
   };
 
   const handleQuickNeedToggle = (need) => {
     setLastEditedAt(new Date());
+
+    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+    const hasNeed = normalizedNeeds.includes(need);
+
+    if (!hasNeed && normalizedNeeds.length >= MAX_IMMEDIATE_NEEDS) {
+      setFormError(`You can add up to ${MAX_IMMEDIATE_NEEDS} immediate needs.`);
+      return;
+    }
+
+    setFormError("");
+
     setFormData((prev) => {
-      const hasNeed = prev.immediateNeeds.includes(need);
+      const currentNeeds = normalizeImmediateNeeds(prev.immediateNeeds);
       const immediateNeeds = hasNeed
-        ? prev.immediateNeeds.filter((item) => item !== need)
-        : [...prev.immediateNeeds, need];
+        ? currentNeeds.filter((item) => item !== need)
+        : [...currentNeeds, need];
       return { ...prev, immediateNeeds };
     });
   };
@@ -93,13 +159,15 @@ function CreateDisasterReportPage() {
   }, [formData.affectedPopulation]);
 
   const completion = useMemo(() => {
+    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+
     const checks = [
       Boolean(formData.disasterType?.trim()),
       Boolean(formData.location?.trim()),
       Boolean(formData.eventDate),
       Number(formData.affectedPopulation) > 0,
       Boolean(formData.description?.trim()),
-      formData.immediateNeeds.length > 0,
+      normalizedNeeds.length > 0,
     ];
 
     const done = checks.filter(Boolean).length;
@@ -154,16 +222,110 @@ function CreateDisasterReportPage() {
     };
   }, [completion, formData.immediateNeeds.length]);
 
-  const fieldErrors = useMemo(
-    () => ({
-      disasterType: !formData.disasterType.trim(),
-      location: !formData.location.trim(),
-      eventDate: !formData.eventDate,
-      affectedPopulation: Number(formData.affectedPopulation) <= 0,
-      description: !formData.description.trim(),
-    }),
-    [formData]
-  );
+  const fieldErrors = useMemo(() => {
+    const disasterType = formData.disasterType.trim();
+    const location = formData.location.trim();
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+    const parsedEventDate = formData.eventDate ? new Date(formData.eventDate) : null;
+
+    return {
+      disasterType:
+        !disasterType ||
+        disasterType.length < MIN_DISASTER_TYPE_LENGTH ||
+        disasterType.length > MAX_DISASTER_TYPE_LENGTH,
+      location:
+        !location ||
+        location.length < MIN_LOCATION_LENGTH ||
+        location.length > MAX_LOCATION_LENGTH,
+      eventDate:
+        !formData.eventDate ||
+        !parsedEventDate ||
+        Number.isNaN(parsedEventDate.getTime()) ||
+        parsedEventDate.getTime() > Date.now() + 60000,
+      affectedPopulation:
+        !Number.isInteger(affectedPopulation) ||
+        affectedPopulation < MIN_AFFECTED_POPULATION ||
+        affectedPopulation > MAX_AFFECTED_POPULATION,
+      description:
+        !formData.description.trim() ||
+        formData.description.trim().length > MAX_DESCRIPTION_LENGTH,
+      immediateNeeds:
+        normalizedNeeds.length > MAX_IMMEDIATE_NEEDS ||
+        normalizedNeeds.some((item) => item.length > MAX_IMMEDIATE_NEED_LENGTH),
+    };
+  }, [formData]);
+
+  const validateBeforeSubmit = (actionType) => {
+    const disasterType = formData.disasterType.trim();
+    const location = formData.location.trim();
+    const description = formData.description.trim();
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+    const eventDate = formData.eventDate ? new Date(formData.eventDate) : null;
+
+    if (!ALLOWED_SEVERITIES.has(formData.severity)) {
+      return "Selected severity level is invalid.";
+    }
+
+    if (!ALLOWED_PRIORITIES.has(formData.priority)) {
+      return "Selected priority level is invalid.";
+    }
+
+    if (!disasterType || disasterType.length < MIN_DISASTER_TYPE_LENGTH) {
+      return `Disaster type must be at least ${MIN_DISASTER_TYPE_LENGTH} characters.`;
+    }
+
+    if (disasterType.length > MAX_DISASTER_TYPE_LENGTH) {
+      return `Disaster type cannot exceed ${MAX_DISASTER_TYPE_LENGTH} characters.`;
+    }
+
+    if (!location || location.length < MIN_LOCATION_LENGTH) {
+      return `Location must be at least ${MIN_LOCATION_LENGTH} characters.`;
+    }
+
+    if (location.length > MAX_LOCATION_LENGTH) {
+      return `Location cannot exceed ${MAX_LOCATION_LENGTH} characters.`;
+    }
+
+    if (!eventDate || Number.isNaN(eventDate.getTime())) {
+      return "Reported date/time is required and must be valid.";
+    }
+
+    if (eventDate.getTime() > Date.now() + 60000) {
+      return "Reported date/time cannot be in the future.";
+    }
+
+    if (
+      !Number.isInteger(affectedPopulation) ||
+      affectedPopulation < MIN_AFFECTED_POPULATION ||
+      affectedPopulation > MAX_AFFECTED_POPULATION
+    ) {
+      return `Affected population must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`;
+    }
+
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      return `Situation summary cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`;
+    }
+
+    if (actionType !== "draft" && !description) {
+      return "Please provide a situation summary before submission.";
+    }
+
+    if (normalizedNeeds.length > MAX_IMMEDIATE_NEEDS) {
+      return `You can add up to ${MAX_IMMEDIATE_NEEDS} immediate needs.`;
+    }
+
+    if (normalizedNeeds.some((item) => item.length > MAX_IMMEDIATE_NEED_LENGTH)) {
+      return `Each immediate need must be ${MAX_IMMEDIATE_NEED_LENGTH} characters or less.`;
+    }
+
+    if (actionType === "allocation" && normalizedNeeds.length === 0) {
+      return "Add at least one immediate need before sending to allocation.";
+    }
+
+    return "";
+  };
 
   const formatNumber = (value) => new Intl.NumberFormat("en-IN").format(value);
   const formatDateTime = (value) =>
@@ -196,15 +358,13 @@ function CreateDisasterReportPage() {
     setFormError("");
     setFormSuccess("");
 
-    if (!formData.disasterType || !formData.location || !formData.eventDate) {
-      setFormError("Please fill disaster type, location, and reported date/time.");
+    const validationError = validateBeforeSubmit(actionType);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
 
-    if (Number(formData.affectedPopulation) <= 0) {
-      setFormError("Affected population must be greater than 0.");
-      return;
-    }
+    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
 
     setSubmitAction(actionType);
     setIsSubmitting(true);
@@ -212,6 +372,11 @@ function CreateDisasterReportPage() {
     try {
       await createDisasterReport({
         ...formData,
+        disasterType: formData.disasterType.trim(),
+        location: formData.location.trim(),
+        affectedPopulation: Number(formData.affectedPopulation),
+        description: formData.description.trim(),
+        immediateNeeds: normalizedNeeds,
         status,
         reportedBy: "DMC Officer",
       });
@@ -226,7 +391,7 @@ function CreateDisasterReportPage() {
         disasterType: "",
         location: "",
         severity: "high",
-        affectedPopulation: 0,
+        affectedPopulation: "",
         eventDate: "",
         priority: "critical",
         description: "",
@@ -329,6 +494,7 @@ function CreateDisasterReportPage() {
                     placeholder="Flood"
                     value={formData.disasterType}
                     onChange={(e) => handleInputChange("disasterType", e.target.value)}
+                    maxLength={MAX_DISASTER_TYPE_LENGTH}
                   />
                   <p className="text-[11px] font-medium text-slate-500">
                     Example: Flood, Landslide, Earthquake, Cyclone
@@ -343,6 +509,7 @@ function CreateDisasterReportPage() {
                     placeholder="Gampaha / Biyagama"
                     value={formData.location}
                     onChange={(e) => handleInputChange("location", e.target.value)}
+                    maxLength={MAX_LOCATION_LENGTH}
                   />
                 </label>
 
@@ -364,11 +531,18 @@ function CreateDisasterReportPage() {
                   Affected population
                   <input
                     className={getFieldClass(fieldErrors.affectedPopulation)}
-                    type="number"
+                    type="text"
                     placeholder="18500"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={MAX_AFFECTED_POPULATION_DIGITS}
                     value={formData.affectedPopulation}
-                    onChange={(e) => handleInputChange("affectedPopulation", Number(e.target.value))}
+                    onKeyDown={preventInvalidPopulationKey}
+                    onChange={(e) => handleAffectedPopulationChange(e.target.value)}
                   />
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Enter a whole number between {MIN_AFFECTED_POPULATION} and {MAX_AFFECTED_POPULATION}.
+                  </p>
                 </label>
 
                 <label className="space-y-1 text-xs font-semibold text-slate-600">
@@ -426,18 +600,23 @@ function CreateDisasterReportPage() {
                     placeholder="Floodwater has entered low-lying residential zones..."
                     value={formData.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
+                    maxLength={MAX_DESCRIPTION_LENGTH}
                   />
                 </label>
 
                 <label className="block space-y-1 text-xs font-semibold text-slate-600">
                   Initial required resources (manual notes)
                   <textarea
-                    className={`${inputBaseClass} min-h-20 resize-y`}
+                    className={`${getFieldClass(fieldErrors.immediateNeeds)} min-h-20 resize-y`}
                     rows={2}
                     placeholder="Bottled water, dry rations, blankets, tents..."
                     value={formData.immediateNeeds.join(", ")}
                     onChange={(e) => handleNeedsChange(e.target.value)}
+                    maxLength={500}
                   />
+                  <p className="text-[11px] font-medium text-slate-500">
+                    Up to {MAX_IMMEDIATE_NEEDS} needs, each max {MAX_IMMEDIATE_NEED_LENGTH} characters.
+                  </p>
                 </label>
 
                 <div>

@@ -16,6 +16,8 @@ import { fetchDisasterReports, updateDisasterReport } from "../services/disaster
 import { fetchInventoryItems, adjustInventoryStock } from "../services/inventoryService";
 import "./Pages.css";
 
+const MAX_ALLOCATION_NOTE_LENGTH = 500;
+
 function getStatus(stock, min) {
   const ratio = min > 0 ? stock / min : 1;
   if (ratio >= 1) return { label: "Good", color: "#16a34a", bg: "#dcfce7" };
@@ -259,8 +261,22 @@ export default function AllocationPage() {
   };
 
   const handleAllocate = (eventId) => {
+    setActionError("");
+    setActionMessage("");
+
     const event = disasterEvents.find((candidate) => candidate.id === eventId);
     if (!event) {
+      setActionError("Selected report was not found.");
+      return;
+    }
+
+    if (!["pending_inventory", "allocated"].includes(event.status)) {
+      setActionError("Only pending or allocated reports can be managed in allocation.");
+      return;
+    }
+
+    if (!inventory.length) {
+      setActionError("Inventory data is not available. Refresh and try again.");
       return;
     }
 
@@ -290,11 +306,27 @@ export default function AllocationPage() {
   };
 
   const validateAllocation = () => {
+    if (!selectedEvent) {
+      return "No disaster report selected for allocation.";
+    }
+
+    if (!["pending_inventory", "allocated"].includes(selectedEvent.status)) {
+      return "This report can no longer be processed for allocation. Refresh and try again.";
+    }
+
+    if (!inventory.length) {
+      return "Inventory data is not loaded. Please refresh before allocating.";
+    }
+
+    if (allocationMessage.trim().length > MAX_ALLOCATION_NOTE_LENGTH) {
+      return `Allocation notes cannot exceed ${MAX_ALLOCATION_NOTE_LENGTH} characters.`;
+    }
+
     let selectedCount = 0;
 
     for (const item of inventory) {
       const qty = Number(allocationQuantities[item.id] || 0);
-      if (!Number.isFinite(qty) || qty < 0) {
+      if (!Number.isInteger(qty) || qty < 0) {
         return `Invalid quantity for ${item.name}.`;
       }
 
@@ -478,6 +510,12 @@ export default function AllocationPage() {
 
   const deleteAllocationForEvent = async (eventToDelete, closeModalAfter = false) => {
     if (!eventToDelete || !eventToDelete.allocatedResources) {
+      setActionError("No allocation data found for this report.");
+      return;
+    }
+
+    if (eventToDelete.status !== "allocated") {
+      setActionError("Only allocated reports can be deleted.");
       return;
     }
 
@@ -550,6 +588,12 @@ export default function AllocationPage() {
   const handleDeleteAllocationFromTable = async (eventId) => {
     const event = disasterEvents.find((candidate) => candidate.id === eventId);
     if (!event || !event.allocatedResources) {
+      setActionError("Allocation record was not found for this report.");
+      return;
+    }
+
+    if (event.status !== "allocated") {
+      setActionError("Only allocated reports can be deleted.");
       return;
     }
 
@@ -557,6 +601,17 @@ export default function AllocationPage() {
   };
 
   const finalizeAllocation = async (eventId) => {
+    const event = disasterEvents.find((candidate) => candidate.id === eventId);
+    if (!event) {
+      setActionError("Selected report was not found.");
+      return;
+    }
+
+    if (event.status !== "allocated") {
+      setActionError("Only allocated reports can be moved to monitoring.");
+      return;
+    }
+
     setActionError("");
     setActionMessage("");
     setIsProcessing(true);
@@ -953,6 +1008,7 @@ export default function AllocationPage() {
                   placeholder="Add handling notes, handover instructions, or location specific details..."
                   className="message-textarea"
                   rows="4"
+                  maxLength={MAX_ALLOCATION_NOTE_LENGTH}
                 />
               </div>
 

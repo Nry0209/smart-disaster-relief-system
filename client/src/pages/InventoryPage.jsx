@@ -30,6 +30,11 @@ const DEFAULT_ACTION_FORM = {
   note: "",
 };
 
+const MAX_ITEM_NAME_LENGTH = 80;
+const MAX_WAREHOUSE_LENGTH = 60;
+const MAX_UNIT_LENGTH = 20;
+const MAX_ACTION_NOTE_LENGTH = 300;
+
 function getStatus(stock, min) {
   if (min <= 0) {
     return { label: "Good", color: "#16a34a", bg: "#dcfce7" };
@@ -201,14 +206,57 @@ export default function InventoryPage() {
     const normalizedName = itemForm.name.trim();
     const stock = Number(itemForm.stock);
     const min = Number(itemForm.min);
+    const normalizedWarehouse = itemForm.warehouse.trim();
+    const normalizedUnit = itemForm.unit.trim();
+
+    const duplicateName = items.find(
+      (item) =>
+        item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
+        String(item.id) !== String(itemForm.id || "")
+    );
 
     if (!normalizedName) {
       setError("Item name is required.");
       return;
     }
 
-    if (!Number.isFinite(stock) || stock < 0 || !Number.isFinite(min) || min < 0) {
-      setError("Stock and minimum values must be non-negative numbers.");
+    if (normalizedName.length < 2) {
+      setError("Item name must be at least 2 characters.");
+      return;
+    }
+
+    if (normalizedName.length > MAX_ITEM_NAME_LENGTH) {
+      setError(`Item name cannot exceed ${MAX_ITEM_NAME_LENGTH} characters.`);
+      return;
+    }
+
+    if (duplicateName) {
+      setError("An inventory item with this name already exists.");
+      return;
+    }
+
+    if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
+      setError("Stock and minimum values must be whole numbers (0 or greater).");
+      return;
+    }
+
+    if (!normalizedWarehouse) {
+      setError("Warehouse is required.");
+      return;
+    }
+
+    if (normalizedWarehouse.length > MAX_WAREHOUSE_LENGTH) {
+      setError(`Warehouse cannot exceed ${MAX_WAREHOUSE_LENGTH} characters.`);
+      return;
+    }
+
+    if (!normalizedUnit) {
+      setError("Unit is required.");
+      return;
+    }
+
+    if (normalizedUnit.length > MAX_UNIT_LENGTH) {
+      setError(`Unit cannot exceed ${MAX_UNIT_LENGTH} characters.`);
       return;
     }
 
@@ -220,8 +268,8 @@ export default function InventoryPage() {
         category: itemForm.category,
         stock,
         min,
-        warehouse: itemForm.warehouse.trim() || "Warehouse 1",
-        unit: itemForm.unit.trim() || "units",
+        warehouse: normalizedWarehouse,
+        unit: normalizedUnit,
       };
 
       if (modal === "edit") {
@@ -270,19 +318,45 @@ export default function InventoryPage() {
 
   async function handleApplyAction() {
     const quantity = Number(actionForm.quantity);
+    const selectedItem = items.find((item) => item.id === actionForm.itemId);
+    const normalizedNote = actionForm.note.trim();
+    const normalizedDestination = actionForm.destinationWarehouse.trim();
 
     if (!actionForm.itemId) {
       setError("Please select an inventory item.");
       return;
     }
 
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setError("Quantity must be greater than zero.");
+    if (!selectedItem) {
+      setError("Selected inventory item is no longer available. Refresh and try again.");
       return;
     }
 
-    if (modal === "transfer" && !actionForm.destinationWarehouse.trim()) {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      setError("Quantity must be a whole number greater than zero.");
+      return;
+    }
+
+    if (normalizedNote.length > MAX_ACTION_NOTE_LENGTH) {
+      setError(`Notes cannot exceed ${MAX_ACTION_NOTE_LENGTH} characters.`);
+      return;
+    }
+
+    if (modal === "adjust" && quantity > Number(selectedItem.stock || 0)) {
+      setError(`Cannot adjust ${quantity}. Available stock for ${selectedItem.name} is ${selectedItem.stock}.`);
+      return;
+    }
+
+    if (modal === "transfer" && !normalizedDestination) {
       setError("Destination warehouse is required for transfer.");
+      return;
+    }
+
+    if (
+      modal === "transfer" &&
+      normalizedDestination.toLowerCase() === String(selectedItem.warehouse || "").trim().toLowerCase()
+    ) {
+      setError("Destination warehouse must be different from current warehouse.");
       return;
     }
 
@@ -291,7 +365,7 @@ export default function InventoryPage() {
     try {
       const payload = {
         quantity,
-        note: actionForm.note.trim() || undefined,
+        note: normalizedNote || undefined,
         performedBy: "Inventory Officer",
       };
 
@@ -305,7 +379,7 @@ export default function InventoryPage() {
 
       if (modal === "transfer") {
         payload.actionType = "transfer";
-        payload.destinationWarehouse = actionForm.destinationWarehouse.trim();
+        payload.destinationWarehouse = normalizedDestination;
       }
 
       await adjustInventoryStock(actionForm.itemId, payload);
@@ -625,6 +699,7 @@ export default function InventoryPage() {
                         <input
                           type="number"
                           min="1"
+                          step="1"
                           value={actionForm.quantity}
                           onChange={(event) => setActionForm((prev) => ({ ...prev, quantity: event.target.value }))}
                         />
@@ -648,6 +723,7 @@ export default function InventoryPage() {
                           placeholder="Optional notes for audit trail"
                           value={actionForm.note}
                           onChange={(event) => setActionForm((prev) => ({ ...prev, note: event.target.value }))}
+                          maxLength={MAX_ACTION_NOTE_LENGTH}
                         />
                       </div>
 

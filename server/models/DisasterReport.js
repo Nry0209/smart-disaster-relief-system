@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
+
 const allocationLineItemSchema = new mongoose.Schema(
   {
     itemId: {
@@ -79,7 +82,12 @@ const disasterReportSchema = new mongoose.Schema(
     affectedPopulation: {
       type: Number,
       required: true,
-      min: 0,
+      min: MIN_AFFECTED_POPULATION,
+      max: MAX_AFFECTED_POPULATION,
+      validate: {
+        validator: Number.isInteger,
+        message: "affectedPopulation must be a whole number.",
+      },
     },
     eventDate: {
       type: Date,

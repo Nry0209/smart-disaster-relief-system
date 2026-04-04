@@ -2,6 +2,8 @@ const DisasterReport = require("../models/DisasterReport");
 const mongoose = require("mongoose");
 
 const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
 const UPDATABLE_FIELDS = [
   "disasterType",
   "location",
@@ -24,6 +26,20 @@ function toIsoDateOrNull(value) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseAffectedPopulation(value) {
+  const population = Number(value);
+
+  if (
+    !Number.isInteger(population) ||
+    population < MIN_AFFECTED_POPULATION ||
+    population > MAX_AFFECTED_POPULATION
+  ) {
+    return null;
+  }
+
+  return population;
 }
 
 function normalizeAllocatedResources(value) {
@@ -155,6 +171,13 @@ async function createDisasterReport(req, res) {
       return res.status(400).json({ message: "disasterType, location, and eventDate are required." });
     }
 
+    const parsedPopulation = parseAffectedPopulation(affectedPopulation);
+    if (parsedPopulation === null) {
+      return res.status(400).json({
+        message: `affectedPopulation must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`,
+      });
+    }
+
     if (status && !ALLOWED_STATUSES.includes(status)) {
       return res.status(400).json({ message: "Invalid status value." });
     }
@@ -169,7 +192,7 @@ async function createDisasterReport(req, res) {
       disasterType,
       location,
       severity,
-      affectedPopulation,
+      affectedPopulation: parsedPopulation,
       eventDate,
       priority,
       description,
@@ -279,9 +302,11 @@ async function updateDisasterReport(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "affectedPopulation")) {
-      const population = Number(updates.affectedPopulation);
-      if (!Number.isFinite(population) || population <= 0) {
-        return res.status(400).json({ message: "affectedPopulation must be greater than 0." });
+      const population = parseAffectedPopulation(updates.affectedPopulation);
+      if (population === null) {
+        return res.status(400).json({
+          message: `affectedPopulation must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`,
+        });
       }
       updates.affectedPopulation = population;
     }

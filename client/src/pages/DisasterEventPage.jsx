@@ -33,6 +33,50 @@ const INITIAL_FORM = {
   immediateNeedsText: "",
 };
 
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_IMMEDIATE_NEEDS = 12;
+const MAX_IMMEDIATE_NEED_LENGTH = 60;
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
+const MAX_AFFECTED_POPULATION_DIGITS = String(MAX_AFFECTED_POPULATION).length;
+
+function parseImmediateNeedsFromText(rawText) {
+  const seen = new Set();
+
+  return String(rawText || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
+function sanitizePopulationInput(value) {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!digitsOnly) {
+    return "";
+  }
+
+  const parsed = Number(digitsOnly);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "";
+  }
+
+  return String(Math.min(parsed, MAX_AFFECTED_POPULATION));
+}
+
+function preventInvalidPopulationKey(event) {
+  if (["e", "E", "+", "-", ".", ","].includes(event.key)) {
+    event.preventDefault();
+  }
+}
+
 const DisasterEventPage = () => {
   const navigate = useNavigate();
   const [disasterEvents, setDisasterEvents] = useState([]);
@@ -70,6 +114,8 @@ const DisasterEventPage = () => {
   };
 
   const openEditModal = (event) => {
+    const populationValue = Number(event.affectedPopulation || 0);
+
     setErrorMessage("");
     setActionMessage("");
     setEditingId(event.id);
@@ -77,7 +123,10 @@ const DisasterEventPage = () => {
       disasterType: event.disasterType || "",
       location: event.location || "",
       severity: event.severity || "high",
-      affectedPopulation: String(Number(event.affectedPopulation || 0)),
+      affectedPopulation:
+        Number.isInteger(populationValue) && populationValue >= MIN_AFFECTED_POPULATION
+          ? String(Math.min(populationValue, MAX_AFFECTED_POPULATION))
+          : "",
       eventDate: toDateTimeLocal(event.eventDate),
       priority: event.priority || "high",
       status: event.status || "active",
@@ -198,15 +247,73 @@ const DisasterEventPage = () => {
   };
 
   const handleFormInput = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    const nextValue = field === "affectedPopulation" ? sanitizePopulationInput(value) : value;
+    setFormData((prev) => ({ ...prev, [field]: nextValue }));
+  };
+
+  const validateReportForm = () => {
+    const disasterType = formData.disasterType.trim();
+    const location = formData.location.trim();
+    const description = formData.description.trim();
+    const immediateNeeds = parseImmediateNeedsFromText(formData.immediateNeedsText);
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const eventDate = new Date(formData.eventDate);
+
+    if (!disasterType || disasterType.length < 3) {
+      return "Disaster type must be at least 3 characters.";
+    }
+
+    if (disasterType.length > 80) {
+      return "Disaster type cannot exceed 80 characters.";
+    }
+
+    if (!location || location.length < 3) {
+      return "Location must be at least 3 characters.";
+    }
+
+    if (location.length > 120) {
+      return "Location cannot exceed 120 characters.";
+    }
+
+    if (
+      !Number.isInteger(affectedPopulation) ||
+      affectedPopulation < MIN_AFFECTED_POPULATION ||
+      affectedPopulation > MAX_AFFECTED_POPULATION
+    ) {
+      return `Affected population must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`;
+    }
+
+    if (Number.isNaN(eventDate.getTime())) {
+      return "Event date and time is invalid.";
+    }
+
+    if (eventDate.getTime() > Date.now() + 60000) {
+      return "Event date cannot be in the future.";
+    }
+
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      return `Description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`;
+    }
+
+    if (immediateNeeds.length > MAX_IMMEDIATE_NEEDS) {
+      return `Immediate needs cannot exceed ${MAX_IMMEDIATE_NEEDS} items.`;
+    }
+
+    const longNeed = immediateNeeds.find((item) => item.length > MAX_IMMEDIATE_NEED_LENGTH);
+    if (longNeed) {
+      return `Each immediate need must be ${MAX_IMMEDIATE_NEED_LENGTH} characters or less.`;
+    }
+
+    if (["pending_inventory", "allocated"].includes(formData.status) && immediateNeeds.length === 0) {
+      return "Add at least one immediate need before setting Pending Inventory or Allocated status.";
+    }
+
+    return "";
   };
 
   const getPayloadFromForm = () => {
     const affectedPopulation = Number(formData.affectedPopulation);
-    const immediateNeeds = formData.immediateNeedsText
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const immediateNeeds = parseImmediateNeedsFromText(formData.immediateNeedsText);
 
     return {
       disasterType: formData.disasterType.trim(),
@@ -227,14 +334,9 @@ const DisasterEventPage = () => {
     setErrorMessage("");
     setActionMessage("");
 
-    if (!formData.disasterType.trim() || !formData.location.trim() || !formData.eventDate) {
-      setErrorMessage("Disaster type, location, and event date are required.");
-      return;
-    }
-
-    const affectedPopulation = Number(formData.affectedPopulation);
-    if (!Number.isFinite(affectedPopulation) || affectedPopulation <= 0) {
-      setErrorMessage("Affected population must be greater than 0.");
+    const validationError = validateReportForm();
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
 
@@ -278,6 +380,26 @@ const DisasterEventPage = () => {
   };
 
   const handleSendToAllocation = async (id) => {
+    const report = disasterEvents.find((event) => event.id === id);
+    if (!report) {
+      setErrorMessage("Disaster report not found.");
+      return;
+    }
+
+    if (["pending_inventory", "allocated", "monitoring", "resolved"].includes(report.status)) {
+      setErrorMessage("This report cannot be sent to allocation from its current status.");
+      return;
+    }
+
+    const immediateNeeds = Array.isArray(report.immediateNeeds)
+      ? report.immediateNeeds.map((item) => String(item).trim()).filter(Boolean)
+      : [];
+
+    if (!immediateNeeds.length) {
+      setErrorMessage("Add at least one immediate need before sending to allocation.");
+      return;
+    }
+
     setErrorMessage("");
     setActionMessage("");
     setActiveAllocationId(id);
@@ -582,6 +704,7 @@ const DisasterEventPage = () => {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   value={formData.disasterType}
                   onChange={(e) => handleFormInput("disasterType", e.target.value)}
+                  maxLength={80}
                   required
                 />
               </label>
@@ -592,6 +715,7 @@ const DisasterEventPage = () => {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   value={formData.location}
                   onChange={(e) => handleFormInput("location", e.target.value)}
+                  maxLength={120}
                   required
                 />
               </label>
@@ -627,10 +751,13 @@ const DisasterEventPage = () => {
               <label className="text-sm text-slate-700">
                 Affected population
                 <input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={MAX_AFFECTED_POPULATION_DIGITS}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   value={formData.affectedPopulation}
+                  onKeyDown={preventInvalidPopulationKey}
                   onChange={(e) => handleFormInput("affectedPopulation", e.target.value)}
                   required
                 />
@@ -670,6 +797,7 @@ const DisasterEventPage = () => {
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   value={formData.description}
                   onChange={(e) => handleFormInput("description", e.target.value)}
+                  maxLength={MAX_DESCRIPTION_LENGTH}
                 />
               </label>
 
@@ -680,6 +808,7 @@ const DisasterEventPage = () => {
                   value={formData.immediateNeedsText}
                   onChange={(e) => handleFormInput("immediateNeedsText", e.target.value)}
                   placeholder="Water, Meal Packs, Medical Kits"
+                  maxLength={500}
                 />
               </label>
 
