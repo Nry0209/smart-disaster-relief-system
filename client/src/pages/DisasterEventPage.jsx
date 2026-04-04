@@ -1,19 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
-  AlertCircle,
   AlertTriangle,
   Calendar,
   CheckCircle2,
-  Clock3,
+  MapPin,
   Pencil,
+  Plus,
   RefreshCcw,
   Search,
-  Trash2,
-  X,
-  Users,
-  MapPin,
   ShieldAlert,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import {
   deleteDisasterReport,
@@ -21,70 +21,34 @@ import {
   updateDisasterReport,
 } from "../services/disasterReportService";
 
-const DisasterEventPage = () => {
-  const [disasterEvents, setDisasterEvents] = useState([
-    {
-      id: "DIS-001",
-      disasterType: "Flood",
-      severity: "critical",
-      location: "Mumbai, Maharashtra",
-      affectedPopulation: 15000,
-      eventDate: "2026-03-28",
-      reportedBy: "Rajesh Kumar",
-      designation: "DMC Officer",
-      contactPhone: "+91 98765 43210",
-      contactEmail: "rajesh.kumar@dmc.gov.in",
-      description: "Severe flooding in low-lying areas due to heavy rainfall. Multiple evacuation centers established.",
-      coordinates: { lat: 19.0760, lng: 72.8777 },
-      estimatedDuration: "5-7 days",
-      immediateNeeds: ["Water", "Food", "Medical Supplies", "Shelter"],
-      status: "active",
-      priority: "high",
-      lastUpdated: "2026-03-28T14:30:00Z"
-    },
-    {
-      id: "DIS-002",
-      disasterType: "Earthquake",
-      severity: "high",
-      location: "Gujarat, Kutch District",
-      affectedPopulation: 8500,
-      eventDate: "2026-03-27",
-      reportedBy: "Priya Sharma",
-      designation: "DMC Officer",
-      contactPhone: "+91 87654 32109",
-      contactEmail: "priya.sharma@dmc.gov.in",
-      description: "Magnitude 6.2 earthquake caused structural damage to buildings. Rescue operations ongoing.",
-      coordinates: { lat: 23.8315, lng: 69.6637 },
-      estimatedDuration: "2-3 weeks",
-      immediateNeeds: ["Tents", "Medical Kits", "Dry Food", "Rescue Equipment"],
-      status: "active",
-      priority: "critical",
-      lastUpdated: "2026-03-27T09:15:00Z"
-    },
-    {
-      id: "DIS-003",
-      disasterType: "Cyclone",
-      severity: "medium",
-      location: "Chennai, Tamil Nadu",
-      affectedPopulation: 5000,
-      eventDate: "2026-03-26",
-      reportedBy: "Anand Verma",
-      designation: "DMC Officer",
-      contactPhone: "+91 76543 21098",
-      contactEmail: "anand.verma@dmc.gov.in",
-      description: "Coastal cyclone with wind speeds up to 120 km/h. Power outages reported in affected areas.",
-      coordinates: { lat: 13.0827, lng: 80.2707 },
-      estimatedDuration: "3-4 days",
-      immediateNeeds: ["Emergency Kits", "Water Purification Tablets", "Blankets"],
-      status: "monitoring",
-      priority: "medium",
-      lastUpdated: "2026-03-26T16:45:00Z"
-    }
-  ]);
+const INITIAL_FORM = {
+  disasterType: "",
+  location: "",
+  severity: "high",
+  affectedPopulation: "",
+  eventDate: "",
+  priority: "high",
+  status: "active",
+  description: "",
+  immediateNeedsText: "",
+};
 
-  const [selectedEvent, setSelectedEvent] = useState(null);
+const DisasterEventPage = () => {
+  const navigate = useNavigate();
+  const [disasterEvents, setDisasterEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [activeActionId, setActiveActionId] = useState("");
+  const [activeAllocationId, setActiveAllocationId] = useState("");
+  const [formData, setFormData] = useState(INITIAL_FORM);
 
   const toDateTimeLocal = (value) => {
     if (!value) return "";
@@ -99,6 +63,30 @@ const DisasterEventPage = () => {
       .filter(Boolean)
       .join(", ");
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId("");
+    setFormData(INITIAL_FORM);
+  };
+
+  const openEditModal = (event) => {
+    setErrorMessage("");
+    setActionMessage("");
+    setEditingId(event.id);
+    setFormData({
+      disasterType: event.disasterType || "",
+      location: event.location || "",
+      severity: event.severity || "high",
+      affectedPopulation: String(Number(event.affectedPopulation || 0)),
+      eventDate: toDateTimeLocal(event.eventDate),
+      priority: event.priority || "high",
+      status: event.status || "active",
+      description: event.description || "",
+      immediateNeedsText: normalizeNeedsText(event.immediateNeeds),
+    });
+    setIsModalOpen(true);
+  };
+
   const loadReports = async () => {
     setIsLoading(true);
     setErrorMessage("");
@@ -107,6 +95,7 @@ const DisasterEventPage = () => {
       const reports = await fetchDisasterReports();
       setDisasterEvents(Array.isArray(reports) ? reports : []);
     } catch (error) {
+      setDisasterEvents([]);
       setErrorMessage(error.message || "Failed to load disaster reports.");
     } finally {
       setIsLoading(false);
@@ -117,97 +106,159 @@ const DisasterEventPage = () => {
     loadReports();
   }, []);
 
-  const handleRefresh = async () => {
-    setActionMessage("");
-    await loadReports();
-  };
+  const filteredEvents = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
 
-  const openEditModal = (event) => {
-    setActionMessage("");
-    setErrorMessage("");
-    setEditingReportId(event.id);
-    setEditForm({
-      disasterType: event.disasterType || "",
-      location: event.location || "",
-      severity: event.severity || "high",
-      priority: event.priority || "high",
-      status: event.status || "active",
-      affectedPopulation: Number(event.affectedPopulation) || 0,
-      eventDate: toDateTimeLocal(event.eventDate),
-      description: event.description || "",
-      immediateNeedsText: normalizeNeedsText(event.immediateNeeds),
+    return disasterEvents.filter((event) => {
+      const matchesSearch =
+        !query ||
+        event.location?.toLowerCase().includes(query) ||
+        event.disasterType?.toLowerCase().includes(query) ||
+        event.reportedBy?.toLowerCase().includes(query);
+
+      const matchesStatus = filterStatus === "all" || event.status === filterStatus;
+      const matchesPriority =
+        filterPriority === "all" || event.priority === filterPriority;
+
+      return matchesSearch && matchesStatus && matchesPriority;
     });
-    setIsEditOpen(true);
+  }, [disasterEvents, filterPriority, filterStatus, searchTerm]);
+
+  const stats = useMemo(
+    () => ({
+      totalEvents: disasterEvents.length,
+      activeEvents: disasterEvents.filter((e) => e.status === "active").length,
+      criticalEvents: disasterEvents.filter((e) => e.priority === "critical").length,
+      totalAffected: disasterEvents.reduce(
+        (sum, e) => sum + Number(e.affectedPopulation || 0),
+        0
+      ),
+    }),
+    [disasterEvents]
+  );
+
+  const getSeverityStyle = (severity) => {
+    switch (severity) {
+      case "critical":
+        return { color: "#be123c", bg: "#ffe4e6", icon: ShieldAlert };
+      case "high":
+        return { color: "#c2410c", bg: "#ffedd5", icon: AlertTriangle };
+      case "medium":
+        return { color: "#b45309", bg: "#fef3c7", icon: AlertTriangle };
+      case "low":
+        return { color: "#047857", bg: "#d1fae5", icon: CheckCircle2 };
+      default:
+        return { color: "#334155", bg: "#e2e8f0", icon: Activity };
+    }
   };
 
-  const closeEditModal = () => {
-    setIsEditOpen(false);
-    setEditingReportId("");
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "draft":
+        return { color: "#334155", bg: "#e2e8f0" };
+      case "active":
+        return { color: "#047857", bg: "#d1fae5" };
+      case "pending_inventory":
+        return { color: "#4338ca", bg: "#e0e7ff" };
+      case "monitoring":
+        return { color: "#b45309", bg: "#fef3c7" };
+      case "resolved":
+        return { color: "#0c4a6e", bg: "#e0f2fe" };
+      default:
+        return { color: "#334155", bg: "#e2e8f0" };
+    }
   };
 
-  const handleEditInputChange = (field, value) => {
-    setEditForm((prev) => ({ ...prev, [field]: value }));
+  const getPriorityStyle = (priority) => {
+    switch (priority) {
+      case "critical":
+        return { color: "#be123c", bg: "#ffe4e6" };
+      case "high":
+        return { color: "#c2410c", bg: "#ffedd5" };
+      case "medium":
+        return { color: "#b45309", bg: "#fef3c7" };
+      case "low":
+        return { color: "#047857", bg: "#d1fae5" };
+      default:
+        return { color: "#334155", bg: "#e2e8f0" };
+    }
   };
 
-  const handleUpdateReport = async () => {
+  const formatPopulation = (num = 0) => new Intl.NumberFormat("en-IN").format(num);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const handleFormInput = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const getPayloadFromForm = () => {
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const immediateNeeds = formData.immediateNeedsText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    return {
+      disasterType: formData.disasterType.trim(),
+      location: formData.location.trim(),
+      severity: formData.severity,
+      affectedPopulation,
+      eventDate: formData.eventDate,
+      priority: formData.priority,
+      status: formData.status,
+      description: formData.description.trim(),
+      immediateNeeds,
+      reportedBy: "DMC Officer",
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setErrorMessage("");
     setActionMessage("");
 
-    if (!editingReportId) {
-      return;
-    }
-
-    if (!editForm.disasterType.trim() || !editForm.location.trim() || !editForm.eventDate) {
+    if (!formData.disasterType.trim() || !formData.location.trim() || !formData.eventDate) {
       setErrorMessage("Disaster type, location, and event date are required.");
       return;
     }
 
-    const affectedPopulation = Number(editForm.affectedPopulation);
+    const affectedPopulation = Number(formData.affectedPopulation);
     if (!Number.isFinite(affectedPopulation) || affectedPopulation <= 0) {
       setErrorMessage("Affected population must be greater than 0.");
       return;
     }
 
-    const immediateNeeds = editForm.immediateNeedsText
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    setActiveActionId(editingReportId);
+    const payload = getPayloadFromForm();
+    setIsSubmitting(true);
 
     try {
-      const updated = await updateDisasterReport(editingReportId, {
-        disasterType: editForm.disasterType.trim(),
-        location: editForm.location.trim(),
-        severity: editForm.severity,
-        priority: editForm.priority,
-        status: editForm.status,
-        affectedPopulation,
-        eventDate: editForm.eventDate,
-        description: editForm.description.trim(),
-        immediateNeeds,
-      });
-
+      const updated = await updateDisasterReport(editingId, payload);
       setDisasterEvents((prev) =>
         prev.map((item) => (item.id === updated.id ? updated : item))
       );
       setActionMessage("Disaster report updated successfully.");
-      closeEditModal();
+
+      closeModal();
     } catch (error) {
-      setErrorMessage(error.message || "Failed to update disaster report.");
+      setErrorMessage(error.message || "Failed to save disaster report.");
     } finally {
-      setActiveActionId("");
+      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteReport = async (id) => {
+  const handleDelete = async (id) => {
     const shouldDelete = window.confirm(
-      "Are you sure you want to delete this disaster report? This action cannot be undone."
+      "Are you sure you want to delete this disaster report?"
     );
-
-    if (!shouldDelete) {
-      return;
-    }
+    if (!shouldDelete) return;
 
     setErrorMessage("");
     setActionMessage("");
@@ -224,172 +275,74 @@ const DisasterEventPage = () => {
     }
   };
 
-  const getSeverityStyle = (severity) => {
-    switch (severity) {
-      case "critical":
-        return { className: "bg-rose-100 text-rose-700", icon: ShieldAlert };
-      case "high":
-        return { className: "bg-orange-100 text-orange-700", icon: AlertTriangle };
-      case "medium":
-        return { className: "bg-amber-100 text-amber-700", icon: AlertCircle };
-      case "low":
-        return { className: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 };
-      default:
-        return { className: "bg-slate-100 text-slate-700", icon: AlertCircle };
+  const handleSendToAllocation = async (id) => {
+    setErrorMessage("");
+    setActionMessage("");
+    setActiveAllocationId(id);
+
+    try {
+      const updated = await updateDisasterReport(id, {
+        status: "pending_inventory",
+      });
+
+      setDisasterEvents((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+
+      setActionMessage("Report sent to allocation queue. Allocation officer will process it.");
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to send report to allocation.");
+    } finally {
+      setActiveAllocationId("");
     }
   };
-
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case "draft":
-        return "bg-slate-100 text-slate-700";
-      case "active":
-        return "bg-emerald-100 text-emerald-700";
-      case "pending_inventory":
-        return "bg-indigo-100 text-indigo-700";
-      case "monitoring":
-        return "bg-amber-100 text-amber-700";
-      case "resolved":
-        return "bg-blue-100 text-blue-700";
-      default:
-        return "bg-slate-100 text-slate-700";
-    }
-  };
-
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case "critical":
-        return "bg-rose-100 text-rose-700";
-      case "high":
-        return "bg-orange-100 text-orange-700";
-      case "medium":
-        return "bg-amber-100 text-amber-700";
-      case "low":
-        return "bg-emerald-100 text-emerald-700";
-      default:
-        return "bg-slate-100 text-slate-700";
-    }
-  };
-
-  const filteredEvents = useMemo(
-    () =>
-      disasterEvents.filter((event) => {
-        const query = searchTerm.toLowerCase();
-        const matchesSearch =
-          event.location?.toLowerCase().includes(query) ||
-          event.disasterType?.toLowerCase().includes(query) ||
-          event.reportedBy?.toLowerCase().includes(query);
-        const matchesStatus = filterStatus === "all" || event.status === filterStatus;
-        const matchesPriority = filterPriority === "all" || event.priority === filterPriority;
-        return matchesSearch && matchesStatus && matchesPriority;
-      }),
-    [disasterEvents, filterPriority, filterStatus, searchTerm]
-  );
-
-  const stats = {
-    totalEvents: disasterEvents.length,
-    activeEvents: disasterEvents.filter(e => e.status === "active").length,
-    criticalEvents: disasterEvents.filter(e => e.priority === "critical").length,
-    totalAffected: disasterEvents.reduce((sum, e) => sum + e.affectedPopulation, 0)
-  };
-
-  const formatPopulation = (num = 0) => {
-    return new Intl.NumberFormat("en-IN").format(num);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "Not specified";
-    return new Date(dateString).toLocaleDateString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
-  };
-
-  const formatDateTime = (dateString) => {
-    if (!dateString) return "Not available";
-    return new Date(dateString).toLocaleString("en-IN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const formatEnumLabel = (value = "unknown") => {
-    return String(value)
-      .split("_")
-      .filter(Boolean)
-      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-      .join(" ");
-  };
-
-  const statCards = [
-    {
-      label: "Total Events",
-      value: stats.totalEvents,
-      icon: Activity,
-      iconClass: "bg-sky-100 text-sky-600",
-    },
-    {
-      label: "Active Events",
-      value: stats.activeEvents,
-      icon: CheckCircle2,
-      iconClass: "bg-emerald-100 text-emerald-600",
-    },
-    {
-      label: "Critical Events",
-      value: stats.criticalEvents,
-      icon: AlertTriangle,
-      iconClass: "bg-rose-100 text-rose-600",
-    },
-    {
-      label: "Total Affected",
-      value: formatPopulation(stats.totalAffected),
-      icon: Users,
-      iconClass: "bg-amber-100 text-amber-600",
-    },
-  ];
 
   return (
     <div className="disaster-event-page">
-
-      {/* HEADER */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <AlertTriangle size={32} color="#dc2626" />
-          </div>
-          <div>
-            <h1>Disaster Events</h1>
-            <p>Monitor and manage disaster events reported by DMC officers</p>
-          </div>
+      {actionMessage && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          {actionMessage}
         </div>
+      )}
+
+      {errorMessage && (
+        <div style={{ marginBottom: 16 }} className="no-events">
+          <AlertTriangle size={28} color="#dc2626" />
+          <h3>Could not complete action</h3>
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <button className="btn-primary" type="button" onClick={() => navigate("/disaster-report/create")}>
+          <Plus size={14} /> Create Report
+        </button>
+        <button className="btn-light" type="button" onClick={loadReports}>
+          <RefreshCcw size={14} /> Refresh
+        </button>
       </div>
 
-      {/* STATS CARDS */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#eff6ff" }}>
-            <FileText size={24} color="#2563eb" />
+            <Activity size={24} color="#2563eb" />
           </div>
           <div className="stat-content">
             <h3>Total Events</h3>
             <p>{stats.totalEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#dcfce7" }}>
-            <CheckCircle size={24} color="#16a34a" />
+            <CheckCircle2 size={24} color="#16a34a" />
           </div>
           <div className="stat-content">
             <h3>Active Events</h3>
             <p>{stats.activeEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#fee2e2" }}>
             <AlertTriangle size={24} color="#dc2626" />
@@ -399,7 +352,7 @@ const DisasterEventPage = () => {
             <p>{stats.criticalEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#fef3c7" }}>
             <Users size={24} color="#d97706" />
@@ -411,10 +364,9 @@ const DisasterEventPage = () => {
         </div>
       </div>
 
-      {/* FILTERS AND SEARCH */}
       <div className="filters-section">
         <div className="search-bar">
-          <MapPin size={18} />
+          <Search size={18} />
           <input
             type="text"
             placeholder="Search by location, disaster type, or reporting officer..."
@@ -423,19 +375,22 @@ const DisasterEventPage = () => {
           />
         </div>
         <div className="filter-buttons">
-          <select 
-            className="filter-select" 
-            value={filterStatus} 
+          <select
+            className="filter-select"
+            value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="all">All Status</option>
+            <option value="draft">Draft</option>
             <option value="active">Active</option>
+            <option value="pending_inventory">Pending Inventory</option>
             <option value="monitoring">Monitoring</option>
             <option value="resolved">Resolved</option>
           </select>
-          <select 
-            className="filter-select" 
-            value={filterPriority} 
+
+          <select
+            className="filter-select"
+            value={filterPriority}
             onChange={(e) => setFilterPriority(e.target.value)}
           >
             <option value="all">All Priority</option>
@@ -447,21 +402,29 @@ const DisasterEventPage = () => {
         </div>
       </div>
 
-      {/* DISASTER EVENTS GRID */}
       <div className="events-grid">
-        {filteredEvents.length === 0 ? (
+        {isLoading ? (
+          <div className="no-events">
+            <Activity size={48} color="#94a3b8" />
+            <h3>Loading reports...</h3>
+            <p>Please wait while we fetch disaster events.</p>
+          </div>
+        ) : filteredEvents.length === 0 ? (
           <div className="no-events">
             <AlertTriangle size={48} color="#94a3b8" />
             <h3>No events found</h3>
             <p>No disaster events match your current filters.</p>
           </div>
         ) : (
-          filteredEvents.map(event => {
-            const severityStyle = getSeverityColor(event.severity);
-            const statusStyle = getStatusColor(event.status);
-            const priorityStyle = getPriorityColor(event.priority);
+          filteredEvents.map((event) => {
+            const severityStyle = getSeverityStyle(event.severity);
+            const statusStyle = getStatusStyle(event.status);
+            const priorityStyle = getPriorityStyle(event.priority);
             const SeverityIcon = severityStyle.icon;
-            
+            const immediateNeeds = Array.isArray(event.immediateNeeds)
+              ? event.immediateNeeds
+              : [];
+
             return (
               <div key={event.id} className="event-card">
                 <div className="event-header">
@@ -470,25 +433,25 @@ const DisasterEventPage = () => {
                     <span className="event-id">{event.id}</span>
                   </div>
                   <div className="event-badges">
-                    <span 
-                      className="severity-badge" 
+                    <span
+                      className="severity-badge"
                       style={{ color: severityStyle.color, background: severityStyle.bg }}
                     >
                       <SeverityIcon size={12} />
-                      {event.severity.toUpperCase()}
+                      {String(event.severity || "unknown").toUpperCase()}
                     </span>
-                    <span 
+                    <span
                       className="priority-badge"
                       style={{ color: priorityStyle.color, background: priorityStyle.bg }}
                     >
-                      {event.priority.toUpperCase()}
+                      {String(event.priority || "unknown").toUpperCase()}
                     </span>
                   </div>
                 </div>
 
                 <div className="event-location">
                   <MapPin size={16} />
-                  <span>{event.location}</span>
+                  <span>{event.location || "Location not specified"}</span>
                 </div>
 
                 <div className="event-details">
@@ -500,52 +463,229 @@ const DisasterEventPage = () => {
                     <Calendar size={16} />
                     <span>{formatDate(event.eventDate)}</span>
                   </div>
-                  <div className="detail-item">
-                    <Clock size={16} />
-                    <span>Est. {event.estimatedDuration}</span>
-                  </div>
                 </div>
 
                 <div className="event-description">
-                  <p>{event.description}</p>
+                  <p>{event.description || "No description provided."}</p>
                 </div>
 
                 <div className="event-needs">
                   <h4>Immediate Needs:</h4>
                   <div className="needs-tags">
-                    {event.immediateNeeds.map((need, index) => (
-                      <span key={index} className="need-tag">{need}</span>
-                    ))}
+                    {immediateNeeds.length === 0 ? (
+                      <span className="need-tag">No needs listed</span>
+                    ) : (
+                      immediateNeeds.map((need, index) => (
+                        <span key={`${event.id}-need-${index}`} className="need-tag">
+                          {need}
+                        </span>
+                      ))
+                    )}
                   </div>
                 </div>
 
                 <div className="event-footer">
                   <div className="event-contact">
                     <div className="contact-info">
-                      <span className="contact-name">{event.reportedBy}</span>
-                      <span className="contact-designation">{event.designation}</span>
-                    </div>
-                    <div className="contact-details">
-                      <span className="contact-phone">{event.contactPhone}</span>
-                      <span className="contact-email">{event.contactEmail}</span>
+                      <span className="contact-name">{event.reportedBy || "DMC Officer"}</span>
                     </div>
                   </div>
                   <div className="event-status">
-                    <span 
+                    <span
                       className="status-badge"
                       style={{ color: statusStyle.color, background: statusStyle.bg }}
                     >
-                      {event.status.toUpperCase()}
+                      {String(event.status || "unknown").toUpperCase()}
                     </span>
                   </div>
+                </div>
+
+                <div className="event-actions">
+                  {event.status === "pending_inventory" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Sent to Allocation
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      onClick={() => handleSendToAllocation(event.id)}
+                      disabled={activeAllocationId === event.id || event.status === "resolved"}
+                    >
+                      {activeAllocationId === event.id ? "Sending..." : "Send to Allocation"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="event-action-btn edit"
+                    onClick={() => openEditModal(event)}
+                  >
+                    <Pencil size={12} /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="event-action-btn delete"
+                    onClick={() => handleDelete(event.id)}
+                    disabled={activeActionId === event.id}
+                  >
+                    <Trash2 size={12} />
+                    {activeActionId === event.id ? "Deleting..." : "Delete"}
+                  </button>
                 </div>
               </div>
             );
           })
         )}
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                onClick={closeModal}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm text-slate-700">
+                Disaster type
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.disasterType}
+                  onChange={(e) => handleFormInput("disasterType", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Location
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.location}
+                  onChange={(e) => handleFormInput("location", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Severity
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.severity}
+                  onChange={(e) => handleFormInput("severity", e.target.value)}
+                >
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Priority
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.priority}
+                  onChange={(e) => handleFormInput("priority", e.target.value)}
+                >
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Affected population
+                <input
+                  type="number"
+                  min="1"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.affectedPopulation}
+                  onChange={(e) => handleFormInput("affectedPopulation", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Event date and time
+                <input
+                  type="datetime-local"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.eventDate}
+                  onChange={(e) => handleFormInput("eventDate", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Status
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.status}
+                  onChange={(e) => handleFormInput("status", e.target.value)}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="pending_inventory">Pending Inventory</option>
+                  <option value="monitoring">Monitoring</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Description
+                <textarea
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.description}
+                  onChange={(e) => handleFormInput("description", e.target.value)}
+                />
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Immediate needs (comma-separated)
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.immediateNeedsText}
+                  onChange={(e) => handleFormInput("immediateNeedsText", e.target.value)}
+                  placeholder="Water, Meal Packs, Medical Kits"
+                />
+              </label>
+
+              <div className="mt-2 flex justify-end gap-2 md:col-span-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                  onClick={closeModal}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Saving..." : "Update Report"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
 
 export default DisasterEventPage;

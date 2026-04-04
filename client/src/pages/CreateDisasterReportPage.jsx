@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { createDisasterReport } from "../services/disasterReportService";
 
 const QUICK_NEEDS = [
@@ -13,6 +14,7 @@ const QUICK_NEEDS = [
 ];
 
 function CreateDisasterReportPage() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     disasterType: "",
     location: "",
@@ -213,6 +215,11 @@ function CreateDisasterReportPage() {
         status,
         reportedBy: "DMC Officer",
       });
+
+      if (actionType === "save" || actionType === "allocation") {
+        navigate("/disaster-events");
+        return;
+      }
 
       setFormSuccess(successMessage);
       setFormData({
