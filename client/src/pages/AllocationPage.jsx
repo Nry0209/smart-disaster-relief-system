@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
 import { Link } from 'react-router-dom';
+import PageHeader from "../components/PageHeader";
+import { fetchDisasterReports } from "../services/disasterReportService";
 import './Pages.css';
 
 // Mock inventory data (same as InventoryPage)

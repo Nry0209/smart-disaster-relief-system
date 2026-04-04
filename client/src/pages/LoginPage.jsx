@@ -9,7 +9,7 @@ const ROLE_REDIRECT_PATHS = {
   admin: "/dashboard",
   dmc_officer: "/dmc-dashboard",
   inventory_officer: "/inventory",
-  allocation_officer: "/allocations",
+  allocation_officer: "/allocation-dashboard",
   tracking_officer: "/distribution-tracking",
   charity_staff: "/distribution-tracking",
 };
