@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Search, CheckCircle, XCircle, Clock, AlertCircle, Package, Users, Calendar, TrendingUp } from "lucide-react";
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 const DonationVerificationPage = () => {
@@ -122,11 +123,11 @@ const DonationVerificationPage = () => {
   return (
     <div className="donation-verification-page">
 
-      {/* HEADER */}
-      <div className="tracking-header">
-        <h1>Donation Verification</h1>
-        <p>Review and verify incoming donations from various sources</p>
-      </div>
+      <PageHeader 
+        role="Charity Staff / Donation Verification"
+        title="Donation Verification"
+        description="Review and verify incoming donations from various sources"
+      />
 
       {/* STATS */}
       <div className="donation-stats">

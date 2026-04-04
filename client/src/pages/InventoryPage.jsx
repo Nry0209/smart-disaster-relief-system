@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Package, AlertTriangle, Warehouse, RefreshCw, Search } from "lucide-react";
+import { Search, Plus, Package, AlertTriangle, TrendingUp, ArrowUpDown, Warehouse, RefreshCw } from "lucide-react";
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 const initialItems = [
@@ -70,20 +71,11 @@ export default function InventoryPage() {
   return (
     <div className="inventory-page">
 
-      {/* HEADER */}
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            Inventory Officer / Stock Management
-          </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Inventory Management
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Track and manage your disaster relief supplies
-          </p>
-        </div>
-      </section>
+      <PageHeader 
+        role="Inventory Officer / Stock Management"
+        title="Inventory Management"
+        description="Track and manage your disaster relief supplies"
+      />
 
       {/* STATS */}
       <div className="inventory-stats">
