@@ -25,6 +25,11 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.DMC],
   },
   {
+    label: "Delivery Verification",
+    path: "/dmc-delivery-verification",
+    roles: [ROLES.DMC],
+  },
+  {
     label: "Create Disaster Report",
     path: "/disaster-report/create",
     roles: [ROLES.DMC],
@@ -57,7 +62,7 @@ export const SIDEBAR_ITEMS = [
   {
     label: "Distribution Tracking",
     path: "/distribution-tracking",
-    roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.DMC],
+    roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.CHARITY],
   },
   {
     label: "User Management",
