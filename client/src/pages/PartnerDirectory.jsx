@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
 const PartnerDirectory = () => {
+  const { user } = useAuth();
   const [partners, setPartners] = useState([]);
+  const [filterStatus, setFilterStatus] = useState('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingPartner, setEditingPartner] = useState(null);
-  const [filterStatus, setFilterStatus] = useState('all');
+
+  // Check if user is inventory officer (read-only access)
+  const isInventoryOfficer = user?.role === 'inventory_officer';
+  const canEdit = user?.role === 'admin';
 
   // Mock data - in real app, this would come from API
   useEffect(() => {
@@ -85,6 +92,8 @@ const PartnerDirectory = () => {
   });
 
   const handleCreatePartner = (partnerData) => {
+    if (!canEdit) return;
+    
     const newPartner = {
       id: partners.length + 1,
       ...partnerData,
@@ -98,6 +107,8 @@ const PartnerDirectory = () => {
   };
 
   const handleUpdatePartner = (partnerId, updates) => {
+    if (!canEdit) return;
+    
     setPartners(partners.map(partner => 
       partner.id === partnerId ? { ...partner, ...updates } : partner
     ));
@@ -105,12 +116,16 @@ const PartnerDirectory = () => {
   };
 
   const handleDeletePartner = (partnerId) => {
+    if (!canEdit) return;
+    
     if (window.confirm('Are you sure you want to delete this NGO partner?')) {
       setPartners(partners.filter(partner => partner.id !== partnerId));
     }
   };
 
   const handleToggleStatus = (partnerId) => {
+    if (!canEdit) return;
+    
     setPartners(partners.map(partner => 
       partner.id === partnerId 
         ? { ...partner, status: partner.status === 'active' ? 'inactive' : 'active' }
@@ -275,134 +290,157 @@ const PartnerDirectory = () => {
   };
 
   return (
-    <div className="partner-directory">
-      <div className="tracking-header">
-        <h1>Partner/NGO Directory</h1>
-        <p>Manage NGO contacts and partner organizations for donation notifications</p>
-      </div>
+    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
+      <PageHeader 
+        role={isInventoryOfficer ? 'Inventory Officer / NGO Directory' : 'Admin / Partner Management'}
+        title="Partner Directory"
+        description={isInventoryOfficer 
+          ? "View and search registered NGO partners and their contact information" 
+          : "Manage NGO partner organizations and their contact details"}
+        showReadOnlyBadge={isInventoryOfficer}
+      />
 
-      <div className="tracking-actions">
-        <div className="filter-controls">
-          <label>Filter by Status:</label>
-          <select 
-            className="filter-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+      {/* Partner Directory Content */}
+      {canEdit && (
+        <div className="flex flex-wrap gap-3">
+          <button 
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
+            onClick={() => setShowCreateForm(true)}
           >
-            {statusOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            Add New Partner
+          </button>
         </div>
-        <button 
-          className="btn-primary"
-          onClick={() => setShowCreateForm(true)}
-        >
-          Add New Partner
-        </button>
-      </div>
+      )}
 
-      <div className="records-container">
+      {/* Filters */}
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex gap-3">
+            <label className="text-sm font-medium text-slate-700">Filter by Status:</label>
+            <select 
+              className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+            >
+              {statusOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Partners List */}
+      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">
+          NGO Partners ({filteredPartners.length})
+        </h2>
+        
         {filteredPartners.length === 0 ? (
-          <div className="no-records">
-            <p>No NGO partners found</p>
+          <div className="text-center py-12 text-slate-500">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <span className="text-2xl">🏢</span>
+            </div>
+            <p className="text-lg font-medium">No NGO partners found</p>
+            <p className="text-sm">Try adjusting your filters</p>
           </div>
         ) : (
-          <div className="records-grid">
+          <div className="grid gap-4 lg:grid-cols-2">
             {filteredPartners.map(partner => (
-              <div key={partner.id} className="record-card">
-                <div className="record-header">
-                  <div className="user-info">
-                    <div className="user-avatar">
+              <div key={partner.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100">
                       {partner.profilePicture ? (
                         <img 
                           src={partner.profilePicture} 
                           alt={partner.name} 
-                          className="avatar-image"
+                          className="h-8 w-8 rounded-lg object-cover"
                         />
                       ) : (
-                        <span className="avatar-text">{partner.name.charAt(0).toUpperCase()}</span>
+                        <span className="text-lg">{partner.name.charAt(0).toUpperCase()}</span>
                       )}
                     </div>
-                    <div className="user-details">
-                      <h3>{partner.name}</h3>
-                      <span className="user-email">{partner.contactPerson}</span>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-slate-900">{partner.name}</h3>
+                      <p className="text-sm text-slate-600">{partner.contactPerson}</p>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium mt-2 ${
+                        partner.status === 'active' 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          partner.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`}></span>
+                        {partner.status}
+                      </span>
                     </div>
                   </div>
-                  <span className={`status-badge ${partner.status === 'active' ? 'active' : 'inactive'}`}>
-                    {partner.status}
-                  </span>
                 </div>
                 
-                <div className="record-details">
-                  <div className="detail-row">
-                    <span className="label">Email:</span>
-                    <span className="value">{partner.email}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-slate-500">Email:</span>
+                    <span className="text-slate-900">{partner.email}</span>
                   </div>
-                  <div className="detail-row">
-                    <span className="label">Phone:</span>
-                    <span className="value">{partner.phone}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-slate-500">Phone:</span>
+                    <span className="text-slate-900">{partner.phone}</span>
                   </div>
-                  <div className="detail-row">
-                    <span className="label">Specialization:</span>
-                    <span className="value">{partner.specialization}</span>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="text-slate-500">Specialization:</span>
+                    <span className="text-slate-900">{partner.specialization}</span>
                   </div>
-                  <div className="detail-row">
-                    <span className="label">Address:</span>
-                    <span className="value">{partner.address}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Created:</span>
-                    <span className="value">{new Date(partner.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="label">Last Contact:</span>
-                    <span className="value">
-                      {partner.lastContact ? new Date(partner.lastContact).toLocaleDateString() : 'Never'}
-                    </span>
+                  <div className="flex items-start gap-3 text-sm">
+                    <span className="text-slate-500">Address:</span>
+                    <span className="text-slate-900">{partner.address}</span>
                   </div>
                 </div>
 
-                <div className="record-actions">
-                  <div className="status-actions">
+                {/* Action buttons - only for admin */}
+                {canEdit && (
+                  <div className="flex gap-3 mt-4 pt-4 border-t border-slate-200">
                     <button 
-                      className={`btn-secondary ${partner.status === 'active' ? 'btn-edit' : 'btn-delete'}`}
-                      onClick={() => handleToggleStatus(partner.id)}
-                    >
-                      {partner.status === 'active' ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </div>
-                  <div className="action-buttons">
-                    <button 
-                      className="btn-edit"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:-translate-y-0.5"
                       onClick={() => setEditingPartner(partner)}
                     >
                       Edit
                     </button>
                     <button 
-                      className="btn-delete"
+                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-medium transition hover:-translate-y-0.5 ${
+                        partner.status === 'active' 
+                          ? 'border border-amber-200 bg-amber-50 text-amber-700' 
+                          : 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                      }`}
+                      onClick={() => handleToggleStatus(partner.id)}
+                    >
+                      {partner.status === 'active' ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button 
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:-translate-y-0.5"
                       onClick={() => handleDeletePartner(partner.id)}
                     >
                       Delete
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {showCreateForm && (
+      {/* Forms - only for admin */}
+      {canEdit && showCreateForm && (
         <PartnerForm 
           onSubmit={handleCreatePartner}
           onCancel={() => setShowCreateForm(false)}
         />
       )}
 
-      {editingPartner && (
+      {canEdit && editingPartner && (
         <PartnerForm 
           partner={editingPartner}
           onSubmit={handleUpdatePartner}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
-import { fetchDisasterReports } from "../services/disasterReportService";
-import "./Pages.css";
+import { Link } from 'react-router-dom';
+import './Pages.css';
 
 // Mock inventory data (same as InventoryPage)
 const initialInventory = [
@@ -186,6 +186,45 @@ export default function AllocationPage() {
     setExistingAllocation(null);
   };
 
+  const finalizeAllocation = (eventId) => {
+    const event = disasterEvents.find(e => e.id === eventId);
+    if (!event || !event.allocatedResources) return;
+
+    // Create finalized allocation plan
+    const allocationPlan = {
+      id: `PLAN-${Date.now()}`,
+      allocationRef: `ALLOC-${event.id}-${Date.now()}`,
+      eventTitle: event.disasterType,
+      eventLocation: event.location,
+      eventDate: event.eventDate,
+      priority: event.priority,
+      allocatedItems: Object.entries(event.allocatedResources.quantities).map(([name, quantity]) => ({
+        name,
+        quantity
+      })),
+      transportDetails: event.allocatedResources.message || 'Standard Transport Required',
+      status: 'finalized',
+      createdAt: new Date().toISOString(),
+      finalizedBy: 'Allocation Officer',
+      eventId: event.id
+    };
+
+    // Save to localStorage
+    const existingPlans = JSON.parse(localStorage.getItem('allocationPlans') || '[]');
+    const updatedPlans = [...existingPlans, allocationPlan];
+    localStorage.setItem('allocationPlans', JSON.stringify(updatedPlans));
+
+    // Update event status to finalized
+    const updatedEvents = disasterEvents.map(e => 
+      e.id === eventId 
+        ? { ...e, status: "finalized" }
+        : e
+    );
+    setDisasterEvents(updatedEvents);
+
+    alert(`Allocation plan ${allocationPlan.allocationRef} has been finalized and is ready for dispatch!`);
+  };
+
   const updateAllocation = () => {
     if (!selectedEvent || !existingAllocation) return;
     
@@ -267,11 +306,11 @@ export default function AllocationPage() {
 
   return (
     <div className="allocation-page">
-      {/* HEADER */}
-      <div className="allocation-header">
-        <h1>Resource Allocation</h1>
-        <p>Manage and allocate resources to DMC officer requests based on available inventory</p>
-      </div>
+      <PageHeader 
+        role="Allocation Officer / Resource Planning"
+        title="Resource Allocation"
+        description="Manage and allocate resources to DMC officer requests based on available inventory"
+      />
 
       {/* STATS CARDS */}
       <div className="allocation-stats">
@@ -485,6 +524,12 @@ export default function AllocationPage() {
                                 <ArrowRight size={14} /> Update
                               </button>
                               <button 
+                                className="finalize-btn"
+                                onClick={() => finalizeAllocation(event.id)}
+                              >
+                                <CheckCircle size={14} /> Finalize
+                              </button>
+                              <button 
                                 className="delete-btn"
                                 onClick={() => handleAllocate(event.id)}
                               >
@@ -492,7 +537,7 @@ export default function AllocationPage() {
                               </button>
                             </div>
                           )}
-                          {!canAllocate && event.status === "monitoring" && (
+                          {event.status === "monitoring" && (
                             <span className="monitoring-text">📋 Monitoring</span>
                           )}
                         </div>

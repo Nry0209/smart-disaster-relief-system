@@ -73,39 +73,61 @@ const ResourceRequestPage = () => {
 
   if (submitted) {
     return (
-      <div className="resource-request-page">
-        <div className="success-container">
-          <div className="success-card">
-            <div className="success-icon">
-              <CheckCircle size={48} color="#16a34a" />
+      <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
+        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <span className="text-xs font-semibold text-slate-500">
+              Inventory Officer / Resource Management
+            </span>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
+              Resource Request
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+              Request essential resources from partner NGOs when inventory is insufficient
+            </p>
+          </div>
+        </section>
+
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+          <div className="text-center py-12">
+            <div className="flex justify-center mb-6">
+              <CheckCircle size={64} className="text-emerald-600" />
             </div>
-            <h1>Request Submitted!</h1>
-            <p>Your resource request has been sent to partner NGOs. You'll receive updates on the status.</p>
+            <h1 className="text-2xl font-bold text-slate-900 mb-4">Request Submitted!</h1>
+            <p className="text-slate-600 mb-8">Your resource request has been sent to partner NGOs. You'll receive updates on the status.</p>
             
-            <div className="success-summary">
-              <div className="summary-item">
-                <span>Request ID:</span>
-                <strong>REQ-{Date.now()}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Disaster:</span>
-                <strong>{formData.disasterType}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Location:</span>
-                <strong>{formData.location}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Items:</span>
-                <strong>{formData.items.filter(item => item.name).length} requested</strong>
+            <div className="bg-slate-50 rounded-2xl p-6 mb-8 max-w-md mx-auto">
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Request ID:</span>
+                  <strong className="text-slate-900">REQ-{Date.now()}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Disaster:</span>
+                  <strong className="text-slate-900">{formData.disasterType}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Location:</span>
+                  <strong className="text-slate-900">{formData.location}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Items:</span>
+                  <strong className="text-slate-900">{formData.items.filter(item => item.name).length} requested</strong>
+                </div>
               </div>
             </div>
 
-            <div className="success-actions">
-              <button className="btn-primary" onClick={resetForm}>
+            <div className="flex justify-center gap-4">
+              <button 
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
+                onClick={resetForm}
+              >
                 New Request
               </button>
-              <button className="btn-secondary" onClick={() => window.location.href = "/inventory"}>
+              <button 
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
+                onClick={() => window.location.href = "/inventory"}
+              >
                 Back to Inventory
               </button>
             </div>
@@ -116,23 +138,23 @@ const ResourceRequestPage = () => {
   }
 
   return (
-    <div className="resource-request-page">
-      
-      {/* HEADER */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <Package size={32} color="#2563eb" />
-          </div>
-          <div>
-            <h1>Resource Request</h1>
-            <p>Request essential resources from partner NGOs when inventory is insufficient</p>
-          </div>
+    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
+      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span className="text-xs font-semibold text-slate-500">
+            Inventory Officer / Resource Management
+          </span>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+            Smart Disaster Relief System - Resource Request
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Request essential resources from partner NGOs when inventory is insufficient
+          </p>
         </div>
-      </div>
+      </section>
 
       {/* FORM */}
-      <div className="form-container">
+      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
         <form onSubmit={handleSubmit} className="request-form">
           
           {/* EMERGENCY INFO */}

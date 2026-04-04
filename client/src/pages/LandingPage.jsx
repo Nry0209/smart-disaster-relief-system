@@ -96,7 +96,7 @@ function LandingPage() {
 
             <button
               className="btn-base btn-light"
-              onClick={() => navigate("/ngo-donate")}
+              onClick={() => navigate("/public-donation")}
             >
               Donate Now
             </button>

@@ -8,6 +8,9 @@ import {
   CheckCircle2,
   Clock,
   ArrowUpRight,
+  Package,
+  CheckCircle,
+  CheckSquare,
   TrendingUp,
 } from "lucide-react";
 
@@ -85,12 +88,11 @@ function DmcDashboardPage() {
           <span className="text-xs font-semibold text-slate-500">
             DMC Officer / Command Center
           </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
             Disaster Command Dashboard
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Track disaster reports, confirm deliveries, and monitor predictive
-            estimates in real time.
+            Track disaster reports, confirm deliveries, and monitor predictive estimates in real time
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -102,9 +104,9 @@ function DmcDashboardPage() {
           </button>
           <button
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
-            onClick={() => navigate("/distribution-tracking")}
+            onClick={() => navigate("/dmc-delivery-verification")}
           >
-            View delivery tracking
+            Verify Deliveries
           </button>
         </div>
       </section>
@@ -291,6 +293,55 @@ function DmcDashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Delivery Verification Section */}
+        <section className="mt-6 flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Delivery Verification Center</h2>
+              <p className="text-sm text-slate-600">Verify and confirm receipt of disaster relief supplies</p>
+            </div>
+            <button 
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(16,185,129,0.2)] transition hover:-translate-y-0.5"
+              onClick={() => navigate("/dmc-delivery-verification")}
+            >
+              <CheckSquare size={18} />
+              Open Verification Portal
+            </button>
+          </div>
+          
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                <Package size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-500">In Transit</p>
+                <strong className="text-xl font-semibold text-slate-900">3</strong>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <CheckCircle size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-500">Pending Verification</p>
+                <strong className="text-xl font-semibold text-slate-900">2</strong>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
+                <CheckSquare size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-slate-500">Verified Today</p>
+                <strong className="text-xl font-semibold text-slate-900">5</strong>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
     </div>
   );

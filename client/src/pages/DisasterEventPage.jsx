@@ -22,29 +22,69 @@ import {
 } from "../services/disasterReportService";
 
 const DisasterEventPage = () => {
-  const [disasterEvents, setDisasterEvents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [actionMessage, setActionMessage] = useState("");
-  const [activeActionId, setActiveActionId] = useState("");
+  const [disasterEvents, setDisasterEvents] = useState([
+    {
+      id: "DIS-001",
+      disasterType: "Flood",
+      severity: "critical",
+      location: "Mumbai, Maharashtra",
+      affectedPopulation: 15000,
+      eventDate: "2026-03-28",
+      reportedBy: "Rajesh Kumar",
+      designation: "DMC Officer",
+      contactPhone: "+91 98765 43210",
+      contactEmail: "rajesh.kumar@dmc.gov.in",
+      description: "Severe flooding in low-lying areas due to heavy rainfall. Multiple evacuation centers established.",
+      coordinates: { lat: 19.0760, lng: 72.8777 },
+      estimatedDuration: "5-7 days",
+      immediateNeeds: ["Water", "Food", "Medical Supplies", "Shelter"],
+      status: "active",
+      priority: "high",
+      lastUpdated: "2026-03-28T14:30:00Z"
+    },
+    {
+      id: "DIS-002",
+      disasterType: "Earthquake",
+      severity: "high",
+      location: "Gujarat, Kutch District",
+      affectedPopulation: 8500,
+      eventDate: "2026-03-27",
+      reportedBy: "Priya Sharma",
+      designation: "DMC Officer",
+      contactPhone: "+91 87654 32109",
+      contactEmail: "priya.sharma@dmc.gov.in",
+      description: "Magnitude 6.2 earthquake caused structural damage to buildings. Rescue operations ongoing.",
+      coordinates: { lat: 23.8315, lng: 69.6637 },
+      estimatedDuration: "2-3 weeks",
+      immediateNeeds: ["Tents", "Medical Kits", "Dry Food", "Rescue Equipment"],
+      status: "active",
+      priority: "critical",
+      lastUpdated: "2026-03-27T09:15:00Z"
+    },
+    {
+      id: "DIS-003",
+      disasterType: "Cyclone",
+      severity: "medium",
+      location: "Chennai, Tamil Nadu",
+      affectedPopulation: 5000,
+      eventDate: "2026-03-26",
+      reportedBy: "Anand Verma",
+      designation: "DMC Officer",
+      contactPhone: "+91 76543 21098",
+      contactEmail: "anand.verma@dmc.gov.in",
+      description: "Coastal cyclone with wind speeds up to 120 km/h. Power outages reported in affected areas.",
+      coordinates: { lat: 13.0827, lng: 80.2707 },
+      estimatedDuration: "3-4 days",
+      immediateNeeds: ["Emergency Kits", "Water Purification Tablets", "Blankets"],
+      status: "monitoring",
+      priority: "medium",
+      lastUpdated: "2026-03-26T16:45:00Z"
+    }
+  ]);
 
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingReportId, setEditingReportId] = useState("");
-  const [editForm, setEditForm] = useState({
-    disasterType: "",
-    location: "",
-    severity: "high",
-    priority: "high",
-    status: "active",
-    affectedPopulation: 0,
-    eventDate: "",
-    description: "",
-    immediateNeedsText: "",
-  });
-
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
-  const [searchTerm, setSearchTerm] = useState("");
 
   const toDateTimeLocal = (value) => {
     if (!value) return "";
@@ -246,17 +286,12 @@ const DisasterEventPage = () => {
     [disasterEvents, filterPriority, filterStatus, searchTerm]
   );
 
-  const stats = useMemo(
-    () => ({
-      totalEvents: disasterEvents.length,
-      activeEvents: disasterEvents.filter((e) => e.status === "active").length,
-      criticalEvents: disasterEvents.filter(
-        (e) => e.priority === "critical" || e.severity === "critical"
-      ).length,
-      totalAffected: disasterEvents.reduce((sum, e) => sum + (Number(e.affectedPopulation) || 0), 0),
-    }),
-    [disasterEvents]
-  );
+  const stats = {
+    totalEvents: disasterEvents.length,
+    activeEvents: disasterEvents.filter(e => e.status === "active").length,
+    criticalEvents: disasterEvents.filter(e => e.priority === "critical").length,
+    totalAffected: disasterEvents.reduce((sum, e) => sum + e.affectedPopulation, 0)
+  };
 
   const formatPopulation = (num = 0) => {
     return new Intl.NumberFormat("en-IN").format(num);
@@ -318,409 +353,199 @@ const DisasterEventPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_45%),radial-gradient(circle_at_85%_20%,rgba(16,185,129,0.1),transparent_40%)] px-4 py-4 md:px-6 md:py-5">
-      <div className="mx-auto max-w-7xl">
-        <section className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              Disaster Events
-            </h1>
+    <div className="disaster-event-page">
+
+      {/* HEADER */}
+      <div className="page-header">
+        <div className="header-content">
+          <div className="header-icon">
+            <AlertTriangle size={32} color="#dc2626" />
           </div>
+          <div>
+            <h1>Disaster Events</h1>
+            <p>Monitor and manage disaster events reported by DMC officers</p>
+          </div>
+        </div>
+      </div>
 
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
+      {/* STATS CARDS */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: "#eff6ff" }}>
+            <FileText size={24} color="#2563eb" />
+          </div>
+          <div className="stat-content">
+            <h3>Total Events</h3>
+            <p>{stats.totalEvents}</p>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: "#dcfce7" }}>
+            <CheckCircle size={24} color="#16a34a" />
+          </div>
+          <div className="stat-content">
+            <h3>Active Events</h3>
+            <p>{stats.activeEvents}</p>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: "#fee2e2" }}>
+            <AlertTriangle size={24} color="#dc2626" />
+          </div>
+          <div className="stat-content">
+            <h3>Critical Priority</h3>
+            <p>{stats.criticalEvents}</p>
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: "#fef3c7" }}>
+            <Users size={24} color="#d97706" />
+          </div>
+          <div className="stat-content">
+            <h3>Total Affected</h3>
+            <p>{formatPopulation(stats.totalAffected)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* FILTERS AND SEARCH */}
+      <div className="filters-section">
+        <div className="search-bar">
+          <MapPin size={18} />
+          <input
+            type="text"
+            placeholder="Search by location, disaster type, or reporting officer..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="filter-buttons">
+          <select 
+            className="filter-select" 
+            value={filterStatus} 
+            onChange={(e) => setFilterStatus(e.target.value)}
           >
-            <RefreshCcw size={15} className={isLoading ? "animate-spin" : ""} />
-            Refresh
-          </button>
-        </section>
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <select 
+            className="filter-select" 
+            value={filterPriority} 
+            onChange={(e) => setFilterPriority(e.target.value)}
+          >
+            <option value="all">All Priority</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
 
-        <section>
-          {actionMessage && (
-            <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-              {actionMessage}
-            </div>
-          )}
-
-          {errorMessage && (
-            <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-              {errorMessage}
-            </div>
-          )}
-        </section>
-
-        <section className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {statCards.map((item) => {
-            const Icon = item.icon;
+      {/* DISASTER EVENTS GRID */}
+      <div className="events-grid">
+        {filteredEvents.length === 0 ? (
+          <div className="no-events">
+            <AlertTriangle size={48} color="#94a3b8" />
+            <h3>No events found</h3>
+            <p>No disaster events match your current filters.</p>
+          </div>
+        ) : (
+          filteredEvents.map(event => {
+            const severityStyle = getSeverityColor(event.severity);
+            const statusStyle = getStatusColor(event.status);
+            const priorityStyle = getPriorityColor(event.priority);
+            const SeverityIcon = severityStyle.icon;
+            
             return (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`rounded-xl p-2 ${item.iconClass}`}>
-                    <Icon size={20} />
+              <div key={event.id} className="event-card">
+                <div className="event-header">
+                  <div className="event-title">
+                    <h3>{event.disasterType}</h3>
+                    <span className="event-id">{event.id}</span>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">{item.label}</p>
-                    <p className="text-xl font-semibold text-slate-900">{item.value}</p>
+                  <div className="event-badges">
+                    <span 
+                      className="severity-badge" 
+                      style={{ color: severityStyle.color, background: severityStyle.bg }}
+                    >
+                      <SeverityIcon size={12} />
+                      {event.severity.toUpperCase()}
+                    </span>
+                    <span 
+                      className="priority-badge"
+                      style={{ color: priorityStyle.color, background: priorityStyle.bg }}
+                    >
+                      {event.priority.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="event-location">
+                  <MapPin size={16} />
+                  <span>{event.location}</span>
+                </div>
+
+                <div className="event-details">
+                  <div className="detail-item">
+                    <Users size={16} />
+                    <span>{formatPopulation(event.affectedPopulation)} affected</span>
+                  </div>
+                  <div className="detail-item">
+                    <Calendar size={16} />
+                    <span>{formatDate(event.eventDate)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <Clock size={16} />
+                    <span>Est. {event.estimatedDuration}</span>
+                  </div>
+                </div>
+
+                <div className="event-description">
+                  <p>{event.description}</p>
+                </div>
+
+                <div className="event-needs">
+                  <h4>Immediate Needs:</h4>
+                  <div className="needs-tags">
+                    {event.immediateNeeds.map((need, index) => (
+                      <span key={index} className="need-tag">{need}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="event-footer">
+                  <div className="event-contact">
+                    <div className="contact-info">
+                      <span className="contact-name">{event.reportedBy}</span>
+                      <span className="contact-designation">{event.designation}</span>
+                    </div>
+                    <div className="contact-details">
+                      <span className="contact-phone">{event.contactPhone}</span>
+                      <span className="contact-email">{event.contactEmail}</span>
+                    </div>
+                  </div>
+                  <div className="event-status">
+                    <span 
+                      className="status-badge"
+                      style={{ color: statusStyle.color, background: statusStyle.bg }}
+                    >
+                      {event.status.toUpperCase()}
+                    </span>
                   </div>
                 </div>
               </div>
             );
-          })}
-        </section>
-
-        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-          <div className="grid gap-3 lg:grid-cols-[1.3fr_1fr_1fr]">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search by location, disaster type, or reporting officer..."
-                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <select
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="pending_inventory">Pending Inventory</option>
-              <option value="monitoring">Monitoring</option>
-              <option value="resolved">Resolved</option>
-            </select>
-
-            <select
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-            >
-              <option value="all">All Priority</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-        </section>
-
-        <section className="mt-4">
-          {isLoading ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-              <Clock3 size={38} className="mx-auto animate-pulse text-slate-400" />
-              <h3 className="mt-3 text-lg font-semibold text-slate-900">Loading disaster events</h3>
-              <p className="mt-1 text-sm text-slate-500">Fetching latest records from the database.</p>
-            </div>
-          ) : filteredEvents.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-              <AlertTriangle size={42} className="mx-auto text-slate-400" />
-              <h3 className="mt-3 text-lg font-semibold text-slate-900">No events found</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {disasterEvents.length === 0
-                  ? "No reports available yet. Create a disaster report to see live events here."
-                  : "No disaster events match your current filters."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {filteredEvents.map((event) => {
-                const severityStyle = getSeverityStyle(event.severity);
-                const statusStyle = getStatusStyle(event.status);
-                const priorityStyle = getPriorityStyle(event.priority);
-                const SeverityIcon = severityStyle.icon;
-                const eventId = event.id ? String(event.id) : "N/A";
-
-                return (
-                  <article
-                    key={event.id}
-                    className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_22px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(15,23,42,0.09)]"
-                  >
-                    <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 opacity-90" />
-
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-900">
-                          {event.disasterType || "Unspecified Incident"}
-                        </h3>
-                        <p className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                          ID: {eventId}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${severityStyle.className}`}
-                        >
-                          <SeverityIcon size={12} />
-                          {formatEnumLabel(event.severity)}
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${priorityStyle}`}
-                        >
-                          {formatEnumLabel(event.priority)} Priority
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusStyle}`}
-                        >
-                          {formatEnumLabel(event.status)}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(event)}
-                          disabled={activeActionId === event.id}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                          aria-label="Edit report"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteReport(event.id)}
-                          disabled={activeActionId === event.id}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          aria-label="Delete report"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-slate-700">
-                      <MapPin size={16} className="text-sky-600" />
-                      <span>{event.location || "Location not specified"}</span>
-                    </div>
-
-                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Affected</p>
-                        <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-800">
-                          <Users size={14} className="text-amber-600" />
-                          {formatPopulation(event.affectedPopulation)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Event Date</p>
-                        <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-800">
-                          <Calendar size={14} className="text-emerald-600" />
-                          {formatDate(event.eventDate)}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Last Updated</p>
-                        <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-800">
-                          <Clock3 size={14} className="text-violet-600" />
-                          {formatDate(event.updatedAt || event.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {event.description && (
-                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                          Situation Summary
-                        </p>
-                        <p className="mt-1 text-sm leading-relaxed text-slate-600">{event.description}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-4">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Immediate needs
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {event.immediateNeeds?.length ? (
-                          event.immediateNeeds.map((need, index) => (
-                            <span
-                              key={`${event.id}-${index}`}
-                              className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800"
-                            >
-                              {need}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
-                            No specific needs listed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-4">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                          Reported by
-                        </p>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {event.reportedBy || "DMC Officer"}
-                        </p>
-                        <p className="text-xs text-slate-500">Created: {formatDateTime(event.createdAt)}</p>
-                      </div>
-                      <p className="text-xs text-slate-500">Ref: {eventId}</p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {isEditOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-[1px]">
-            <div className="w-full max-w-3xl rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.25)]">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-semibold text-slate-900">Edit Disaster Report</h3>
-                  <p className="mt-1 text-sm text-slate-500">Update details and save changes to the database.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100"
-                  aria-label="Close edit dialog"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="text-xs font-semibold text-slate-600">
-                  Disaster type
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.disasterType}
-                    onChange={(e) => handleEditInputChange("disasterType", e.target.value)}
-                  />
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600">
-                  Location
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.location}
-                    onChange={(e) => handleEditInputChange("location", e.target.value)}
-                  />
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600">
-                  Severity
-                  <select
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.severity}
-                    onChange={(e) => handleEditInputChange("severity", e.target.value)}
-                  >
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600">
-                  Priority
-                  <select
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.priority}
-                    onChange={(e) => handleEditInputChange("priority", e.target.value)}
-                  >
-                    <option value="critical">Critical</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600">
-                  Status
-                  <select
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.status}
-                    onChange={(e) => handleEditInputChange("status", e.target.value)}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                    <option value="pending_inventory">Pending Inventory</option>
-                    <option value="monitoring">Monitoring</option>
-                    <option value="resolved">Resolved</option>
-                  </select>
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600">
-                  Affected population
-                  <input
-                    type="number"
-                    min="1"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.affectedPopulation}
-                    onChange={(e) => handleEditInputChange("affectedPopulation", e.target.value)}
-                  />
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-                  Event date and time
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.eventDate}
-                    onChange={(e) => handleEditInputChange("eventDate", e.target.value)}
-                  />
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-                  Description
-                  <textarea
-                    rows={3}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.description}
-                    onChange={(e) => handleEditInputChange("description", e.target.value)}
-                  />
-                </label>
-
-                <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-                  Immediate needs (comma separated)
-                  <input
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                    value={editForm.immediateNeedsText}
-                    onChange={(e) => handleEditInputChange("immediateNeedsText", e.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUpdateReport}
-                  disabled={activeActionId === editingReportId}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {activeActionId === editingReportId ? "Saving..." : "Save changes"}
-                </button>
-              </div>
-            </div>
-          </div>
+          })
         )}
       </div>
     </div>
   );
-};
+}
 
 export default DisasterEventPage;
