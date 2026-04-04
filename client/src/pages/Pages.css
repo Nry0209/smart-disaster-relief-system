@@ -997,6 +997,7 @@
 
 @media (max-width: 1200px) {
 
+ 
   .landing-hero,
 
   .landing-feature-grid,
@@ -1997,7 +1998,7 @@
 
 .record-card {
 
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+ background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
 
   border: 1px solid #e2e8f0;
 
@@ -3499,8 +3500,6 @@
   border: 3px solid #e5e7eb;
 
 }
-
-
 
 .profile-icon {
 
@@ -6996,6 +6995,7 @@
 
 
 
+
 .detail-section {
 
   background: #f8fafc;
@@ -9993,6 +9993,7 @@
     padding: 0 16px;
 
   }
+
 
   
 

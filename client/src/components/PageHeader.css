@@ -1,0 +1,78 @@
+.page-header {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.page-header-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.page-header-title {
+  margin: 8px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+}
+
+.page-header-title {
+  margin: 8px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.025em;
+}
+
+@media (min-width: 768px) {
+  .page-header-title {
+    font-size: 30px;
+  }
+}
+
+.page-header-description {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.page-header-badge {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #b45309;
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.page-header-badge .w-4 {
+  width: 16px;
+  height: 16px;
+}
+
+.page-header-badge .h-4 {
+  width: 16px;
+  height: 16px;
+}
