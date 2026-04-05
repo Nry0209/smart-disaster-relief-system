@@ -1,87 +1,74 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Search, CheckCircle, XCircle, Clock, AlertCircle, Package, Users, Calendar, TrendingUp } from "lucide-react";
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
+import { fetchDonations, fetchResourceRequests, verifyDonation, rejectDonation } from '../services/reliefApi';
 
 const DonationVerificationPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDonation, setSelectedDonation] = useState(null);
+  const [donations, setDonations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // Mock donation data
-  const donations = [
-    {
-      id: "DON001",
-      donorName: "John Smith",
-      donorType: "Individual",
-      items: ["Water Bottles (500)", "Food Packages (100)"],
-      date: "2024-03-15",
-      status: "pending",
-      value: "$2,500",
-      contact: "+1 234-567-8900",
-      email: "john.smith@email.com",
-      notes: "Emergency relief supplies for flood victims"
-    },
-    {
-      id: "DON002",
-      donorName: "ABC Corporation",
-      donorType: "Corporate",
-      items: ["Medical Supplies (200)", "Blankets (300)"],
-      date: "2024-03-14",
-      status: "verified",
-      value: "$15,000",
-      contact: "+1 234-567-8901",
-      email: "donations@abccorp.com",
-      notes: "Corporate social responsibility initiative"
-    },
-    {
-      id: "DON003",
-      donorName: "Red Cross Foundation",
-      donorType: "Organization",
-      items: ["Emergency Kits (150)", "Tents (50)"],
-      date: "2024-03-13",
-      status: "rejected",
-      value: "$8,000",
-      contact: "+1 234-567-8902",
-      email: "info@redcross.org",
-      notes: "Items did not meet quality standards"
-    },
-    {
-      id: "DON004",
-      donorName: "Sarah Johnson",
-      donorType: "Individual",
-      items: ["Clothing (200)", "Toys (100)"],
-      date: "2024-03-12",
-      status: "pending",
-      value: "$3,200",
-      contact: "+1 234-567-8903",
-      email: "sarah.j@email.com",
-      notes: "Donation for children affected by disaster"
-    },
-    {
-      id: "DON005",
-      donorName: "Tech Solutions Inc",
-      donorType: "Corporate",
-      items: ["Communication Devices (50)", "Power Banks (100)"],
-      date: "2024-03-11",
-      status: "verified",
-      value: "$12,000",
-      contact: "+1 234-567-8904",
-      email: "support@techsolutions.com",
-      notes: "Technology equipment for emergency response"
+  const loadDonations = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const [donationResponse, requestResponse] = await Promise.all([
+        fetchDonations(),
+        fetchResourceRequests(),
+      ]);
+
+      const donationRows = donationResponse.data || [];
+      const requestRows = (requestResponse.data || []).map((request) => {
+        const requestItems = Array.isArray(request.items) ? request.items : [];
+        const normalizedStatus = String(request.status || "pending").toLowerCase();
+
+        let status = "pending";
+        if (["approved", "fulfilled", "partially_fulfilled"].includes(normalizedStatus)) {
+          status = "verified";
+        } else if (normalizedStatus === "rejected") {
+          status = "rejected";
+        }
+
+        return {
+          id: request.requestCode || request.id,
+          donorName: request.organization || request.requesterName || "Resource Request",
+          donorType: "Resource Request",
+          items: requestItems.map((item) => `${item.itemName} (${item.quantityRequested})`),
+          date: request.neededBy || "-",
+          status,
+          value: "N/A",
+          contact: request.requesterPhone || "-",
+          email: request.requesterEmail || "-",
+          notes: request.description || "Submitted from Resource Request form.",
+          source: "resource-request",
+        };
+      });
+
+      setDonations([...donationRows, ...requestRows]);
+    } catch (err) {
+      setError(err.message || "Failed to load donations.");
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  // Filter donations based on search and status
-  const filteredDonations = donations.filter(donation => {
-    const matchesSearch = donation.donorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         donation.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         donation.donorType.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    loadDonations();
+  }, []);
+
+  const filteredDonations = useMemo(() => donations.filter(donation => {
+    const matchesSearch = String(donation.donorName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         String(donation.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         String(donation.donorType || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = selectedStatus === "all" || donation.status === selectedStatus;
     return matchesSearch && matchesStatus;
-  });
+  }), [donations, searchTerm, selectedStatus]);
 
-  // Statistics
   const stats = {
     total: donations.length,
     pending: donations.filter(d => d.status === "pending").length,
@@ -110,14 +97,14 @@ const DonationVerificationPage = () => {
     return statusClasses[status] || "status-badge pending";
   };
 
-  const handleVerify = (donationId) => {
-    // In a real app, this would update the backend
-    alert(`Donation ${donationId} verified successfully!`);
+  const handleVerify = async (donationId) => {
+    await verifyDonation(donationId, { verifiedBy: null });
+    await loadDonations();
   };
 
-  const handleReject = (donationId) => {
-    // In a real app, this would update the backend
-    alert(`Donation ${donationId} rejected!`);
+  const handleReject = async (donationId) => {
+    await rejectDonation(donationId, { verifiedBy: null });
+    await loadDonations();
   };
 
   return (
@@ -128,6 +115,12 @@ const DonationVerificationPage = () => {
         title="Donation Verification"
         description="Review and verify incoming donations from various sources"
       />
+
+      {error && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", borderRadius: 8 }}>
+          {error}
+        </div>
+      )}
 
       {/* STATS */}
       <div className="donation-stats">
@@ -146,6 +139,11 @@ const DonationVerificationPage = () => {
           </div>
         ))}
       </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>Loading donations...</div>
+      ) : (
+        <>
 
       {/* FILTERS AND SEARCH */}
       <div className="tracking-actions">
@@ -231,7 +229,7 @@ const DonationVerificationPage = () => {
                       >
                         View
                       </button>
-                      {donation.status === "pending" && (
+                      {donation.status === "pending" && donation.source !== "resource-request" && (
                         <>
                           <button 
                             className="btn-verify"
@@ -327,13 +325,13 @@ const DonationVerificationPage = () => {
             
             <div className="donation-modal-footer">
               <button className="btn-cancel" onClick={() => setSelectedDonation(null)}>Close</button>
-              {selectedDonation.status === "pending" && (
+              {selectedDonation.status === "pending" && selectedDonation.source !== "resource-request" && (
                 <>
                   <button 
                     className="btn-verify"
                     onClick={() => {
-                      handleVerify(selectedDonation.id);
-                      setSelectedDonation(null);
+                        handleVerify(selectedDonation.id);
+                        setSelectedDonation(null);
                     }}
                   >
                     Verify Donation
@@ -341,8 +339,8 @@ const DonationVerificationPage = () => {
                   <button 
                     className="btn-reject"
                     onClick={() => {
-                      handleReject(selectedDonation.id);
-                      setSelectedDonation(null);
+                        handleReject(selectedDonation.id);
+                        setSelectedDonation(null);
                     }}
                   >
                     Reject Donation
@@ -352,6 +350,8 @@ const DonationVerificationPage = () => {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

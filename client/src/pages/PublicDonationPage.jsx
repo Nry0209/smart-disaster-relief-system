@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Heart, Package, Users, DollarSign, CheckCircle, AlertCircle, CreditCard, Smartphone, Building, User, ArrowLeft, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { createDonation } from '../services/reliefApi';
 import './Pages.css';
 
 const PublicDonationPage = () => {
@@ -36,6 +37,7 @@ const PublicDonationPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const predefinedAmounts = [500, 1000, 2500, 5000, 10000];
 
@@ -127,11 +129,49 @@ const PublicDonationPage = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      setSubmitError('');
+
+      const isMoneyDonation = donationType === 'money';
+      const selectedAmount = Number(customAmount || donationAmount || 0);
+      const quantityFromText = Number.parseInt(String(itemDonation.quantity || '').replace(/[^0-9]/g, ''), 10);
+
+      const payload = {
+        donorName: donorInfo.anonymous
+          ? 'Anonymous Donor'
+          : donorType === 'organization'
+            ? (donorInfo.organizationName || donorInfo.contactPerson || 'Organization Donor')
+            : (donorInfo.name || 'Individual Donor'),
+        donorType: donorType === 'organization' ? 'Organization' : 'Individual',
+        donorEmail: donorInfo.anonymous ? undefined : (donorInfo.email || undefined),
+        donorPhone: donorInfo.anonymous ? undefined : (donorInfo.phone || undefined),
+        donationType: isMoneyDonation ? 'Monetary' : 'In-Kind',
+        amount: isMoneyDonation ? selectedAmount : undefined,
+        status: 'Pending',
+        notes: isMoneyDonation
+          ? `Public portal donation via ${paymentMethod}.`
+          : `Pickup: ${itemDonation.pickupAddress || '-'} on ${itemDonation.pickupDate || '-'} ${itemDonation.pickupTime || ''}`,
+        items: isMoneyDonation
+          ? []
+          : [{
+              itemName: itemDonation.items || 'Donated Items',
+              category: itemDonation.category || 'Other',
+              quantity: Number.isFinite(quantityFromText) && quantityFromText > 0 ? quantityFromText : 1,
+              unit: 'units',
+              condition: itemDonation.condition
+                ? String(itemDonation.condition).charAt(0).toUpperCase() + String(itemDonation.condition).slice(1)
+                : 'Good',
+              estimatedValue: 0,
+            }],
+      };
+
+      await createDonation(payload);
       setShowSuccess(true);
-    }, 2000);
+    } catch (error) {
+      setSubmitError(error.message || 'Failed to submit donation. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const resetForm = () => {
@@ -165,6 +205,7 @@ const PublicDonationPage = () => {
     });
     setCurrentStep(1);
     setShowSuccess(false);
+    setSubmitError('');
   };
 
   if (showSuccess) {
@@ -247,6 +288,12 @@ const PublicDonationPage = () => {
       </div>
 
       <div className="donation-container">
+        {submitError && (
+          <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
+            {submitError}
+          </div>
+        )}
+
         <div className="donation-progress">
           <div className="progress-steps">
             <div className={`step ${currentStep >= 1 ? 'active' : ''}`}>

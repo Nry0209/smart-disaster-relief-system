@@ -1,136 +1,152 @@
-import React, { useState } from "react";
-import { Package, Send, CheckCircle, Plus, Trash2, AlertTriangle } from "lucide-react";
-import './Pages.css';
+import React, { useMemo, useState } from "react";
+import {
+  Package,
+  Send,
+  CheckCircle,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  MapPin,
+  Calendar,
+  Building2,
+} from "lucide-react";
+import { createResourceRequest } from "../services/reliefApi";
+import "./Pages.css";
 
-const ResourceRequestPage = () => {
+const EMPTY_ITEM = { name: "", quantity: "", category: "water" };
+
+export default function ResourceRequestPage() {
   const [formData, setFormData] = useState({
-    disasterType: "",
-    location: "",
-    urgency: "high",
+    organization: "",
     contactName: "",
     contactEmail: "",
     contactPhone: "",
+    disasterType: "",
+    urgency: "high",
+    location: "",
     deliveryDate: "",
     deliveryAddress: "",
-    items: [
-      { name: "", quantity: "", category: "water" }
-    ]
+    items: [EMPTY_ITEM],
   });
-
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [error, setError] = useState("");
 
-  const categories = ["water", "food", "medical", "shelter", "clothing", "other"];
-  const disasters = ["Flood", "Earthquake", "Hurricane", "Wildfire", "Other"];
+  const categories = useMemo(() => ["water", "food", "medical", "shelter", "clothing", "other"], []);
+  const disasters = useMemo(() => ["Flood", "Earthquake", "Hurricane", "Wildfire", "Landslide", "Other"], []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((previous) => ({ ...previous, [name]: value }));
   };
 
   const handleItemChange = (index, field, value) => {
-    const updatedItems = [...formData.items];
-    updatedItems[index][field] = value;
-    setFormData(prev => ({ ...prev, items: updatedItems }));
+    setFormData((previous) => {
+      const items = [...previous.items];
+      items[index] = { ...items[index], [field]: value };
+      return { ...previous, items };
+    });
   };
 
   const addItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, { name: "", quantity: "", category: "water" }]
-    }));
+    setFormData((previous) => ({ ...previous, items: [...previous.items, EMPTY_ITEM] }));
   };
 
   const removeItem = (index) => {
-    const updatedItems = formData.items.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, items: updatedItems }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitted(true);
-    }, 1500);
+    setFormData((previous) => ({
+      ...previous,
+      items: previous.items.filter((_, itemIndex) => itemIndex !== index),
+    }));
   };
 
   const resetForm = () => {
+    setSubmittedRequest(null);
+    setError("");
     setFormData({
-      disasterType: "",
-      location: "",
-      urgency: "high",
+      organization: "",
       contactName: "",
       contactEmail: "",
       contactPhone: "",
+      disasterType: "",
+      urgency: "high",
+      location: "",
       deliveryDate: "",
       deliveryAddress: "",
-      items: [{ name: "", quantity: "", category: "water" }]
+      items: [EMPTY_ITEM],
     });
-    setSubmitted(false);
   };
 
-  if (submitted) {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+
+      const payload = {
+        organization: formData.organization,
+        contactName: formData.contactName,
+        contactEmail: formData.contactEmail,
+        contactPhone: formData.contactPhone,
+        disasterType: formData.disasterType,
+        priority: formData.urgency,
+        urgency: formData.urgency,
+        location: formData.location,
+        deliveryDate: formData.deliveryDate,
+        deliveryAddress: formData.deliveryAddress,
+        requestType: "NGO_Request",
+        items: formData.items
+          .filter((item) => item.name && item.quantity)
+          .map((item) => ({
+            itemName: item.name,
+            quantityRequested: Number(item.quantity),
+            category: item.category,
+          })),
+      };
+
+      const response = await createResourceRequest(payload);
+      setSubmittedRequest(response.data);
+    } catch (err) {
+      setError(err.message || "Failed to submit resource request.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (submittedRequest) {
     return (
-      <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <span className="text-xs font-semibold text-slate-500">
-              Inventory Officer / Resource Management
-            </span>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-              Resource Request
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600">
-              Request essential resources from partner NGOs when inventory is insufficient
+      <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: 24 }}>
+        <div style={{ maxWidth: 760, margin: "0 auto", backgroundColor: "white", borderRadius: 16, border: "1px solid #e2e8f0", padding: 32, boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
+          <div style={{ textAlign: "center", marginBottom: 32 }}>
+            <div style={{ display: "inline-flex", width: 80, height: 80, borderRadius: "50%", alignItems: "center", justifyContent: "center", backgroundColor: "#dcfce7", marginBottom: 24 }}>
+              <CheckCircle size={40} style={{ color: "#16a34a" }} />
+            </div>
+            <h1 style={{ margin: "0 0 12px", fontSize: 28, fontWeight: 700, color: "#1f2937" }}>Request Sent Successfully</h1>
+            <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.5 }}>
+              Your resource request has been saved to the backend and is now available for approval and follow-up.
             </p>
           </div>
-        </section>
 
-        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div className="text-center py-12">
-            <div className="flex justify-center mb-6">
-              <CheckCircle size={64} className="text-emerald-600" />
+          <div style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: 24, marginBottom: 24 }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 600, color: "#1f2937" }}>Request Details</h3>
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Request Code</span><strong>{submittedRequest.requestCode}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Organization</span><strong>{submittedRequest.organization || "-"}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Disaster Type</span><strong>{submittedRequest.disasterType || "-"}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Location</span><strong>{submittedRequest.location || "-"}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Items Requested</span><strong>{submittedRequest.totalItemsRequested}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6b7280" }}>Email</span><strong>{submittedRequest.requesterEmail || "-"}</strong></div>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-4">Request Submitted!</h1>
-            <p className="text-slate-600 mb-8">Your resource request has been sent to partner NGOs. You'll receive updates on the status.</p>
-            
-            <div className="bg-slate-50 rounded-2xl p-6 mb-8 max-w-md mx-auto">
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Request ID:</span>
-                  <strong className="text-slate-900">REQ-{Date.now()}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Disaster:</span>
-                  <strong className="text-slate-900">{formData.disasterType}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Location:</span>
-                  <strong className="text-slate-900">{formData.location}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Items:</span>
-                  <strong className="text-slate-900">{formData.items.filter(item => item.name).length} requested</strong>
-                </div>
-              </div>
-            </div>
+          </div>
 
-            <div className="flex justify-center gap-4">
-              <button 
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
-                onClick={resetForm}
-              >
-                New Request
-              </button>
-              <button 
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
-                onClick={() => window.location.href = "/inventory"}
-              >
-                Back to Inventory
-              </button>
-            </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <button onClick={resetForm} style={{ backgroundColor: "#1f2937", color: "white", padding: "12px 24px", borderRadius: 8, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+              <Plus size={16} />
+              New Request
+            </button>
+            <button onClick={() => window.location.href = "/inventory"} style={{ backgroundColor: "white", color: "#374151", padding: "12px 24px", borderRadius: 8, border: "1px solid #d1d5db", cursor: "pointer" }}>
+              Back to Inventory
+            </button>
           </div>
         </div>
       </div>
@@ -138,42 +154,76 @@ const ResourceRequestPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
+    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", padding: 24 }}>
+      <div style={{ backgroundColor: "white", borderRadius: 16, border: "1px solid #e2e8f0", padding: 32, boxShadow: "0 4px 6px rgba(0,0,0,0.05)", marginBottom: 24 }}>
+        <div style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: 0.5 }}>
             Inventory Officer / Resource Management
           </span>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-            Smart Disaster Relief System - Resource Request
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Request essential resources from partner NGOs when inventory is insufficient
-          </p>
         </div>
-      </section>
+        <h1 style={{ margin: "0 0 8px", fontSize: 32, fontWeight: 700, color: "#1f2937" }}>Resource Request Form</h1>
+        <p style={{ margin: 0, color: "#6b7280", lineHeight: 1.5 }}>
+          Send resource requests to partner NGOs when inventory is insufficient. This form now saves requests to the backend.
+        </p>
+      </div>
 
-      {/* FORM */}
-      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-        <form onSubmit={handleSubmit} className="request-form">
-          
-          {/* EMERGENCY INFO */}
-          <div className="form-section">
-            <h2>Emergency Information</h2>
-            
-            <div className="form-grid">
+      {error && (
+        <div style={{ marginBottom: 16, padding: 12, borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ backgroundColor: "white", borderRadius: 16, border: "1px solid #e2e8f0", padding: 32, boxShadow: "0 4px 6px rgba(0,0,0,0.05)" }}>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ backgroundColor: "#dbeafe", padding: 8, borderRadius: 8 }}>
+                <Building2 size={20} style={{ color: "#2563eb" }} />
+              </div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#1f2937" }}>Organization Details</h2>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div className="form-group">
+                <label>NGO Organization *</label>
+                <input name="organization" value={formData.organization} onChange={handleInputChange} placeholder="Organization name" required />
+              </div>
+              <div className="form-group">
+                <label>Contact Name *</label>
+                <input name="contactName" value={formData.contactName} onChange={handleInputChange} placeholder="Full name" required />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div className="form-group">
+                <label>Email *</label>
+                <input name="contactEmail" type="email" value={formData.contactEmail} onChange={handleInputChange} placeholder="name@organization.org" required />
+              </div>
+              <div className="form-group">
+                <label>Phone *</label>
+                <input name="contactPhone" value={formData.contactPhone} onChange={handleInputChange} placeholder="+1 234 567 8900" required />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ backgroundColor: "#fee2e2", padding: 8, borderRadius: 8 }}>
+                <AlertTriangle size={20} style={{ color: "#dc2626" }} />
+              </div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#1f2937" }}>Emergency Information</h2>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div className="form-group">
                 <label>Disaster Type *</label>
                 <select name="disasterType" value={formData.disasterType} onChange={handleInputChange} required>
                   <option value="">Select disaster type</option>
-                  {disasters.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
+                  {disasters.map((disaster) => <option key={disaster} value={disaster}>{disaster}</option>)}
                 </select>
               </div>
-              
               <div className="form-group">
-                <label>Urgency *</label>
+                <label>Urgency Level *</label>
                 <select name="urgency" value={formData.urgency} onChange={handleInputChange}>
                   <option value="critical">Critical - Life threatening</option>
                   <option value="high">High - Urgent need</option>
@@ -184,162 +234,83 @@ const ResourceRequestPage = () => {
             </div>
 
             <div className="form-group">
-              <label>Location *</label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                placeholder="City, State, Country"
-                required
-              />
+              <label><MapPin size={16} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />Location *</label>
+              <input name="location" value={formData.location} onChange={handleInputChange} placeholder="City, State, Country" required />
             </div>
           </div>
 
-          {/* CONTACT INFO */}
-          <div className="form-section">
-            <h2>Contact Information</h2>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Your Name *</label>
-                <input
-                  type="text"
-                  name="contactName"
-                  value={formData.contactName}
-                  onChange={handleInputChange}
-                  placeholder="Full name"
-                  required
-                />
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ backgroundColor: "#f0fdf4", padding: 8, borderRadius: 8 }}>
+                <Package size={20} style={{ color: "#16a34a" }} />
               </div>
-              
-              <div className="form-group">
-                <label>Email *</label>
-                <input
-                  type="email"
-                  name="contactEmail"
-                  value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  placeholder="your.email@organization.com"
-                  required
-                />
-              </div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#1f2937" }}>Requested Items</h2>
             </div>
 
-            <div className="form-group">
-              <label>Phone *</label>
-              <input
-                type="tel"
-                name="contactPhone"
-                value={formData.contactPhone}
-                onChange={handleInputChange}
-                placeholder="+1 (555) 123-4567"
-                required
-              />
-            </div>
-          </div>
-
-          {/* REQUESTED ITEMS */}
-          <div className="form-section">
-            <h2>Requested Items</h2>
-            
             {formData.items.map((item, index) => (
-              <div key={index} className="item-row">
-                <div className="item-grid">
+              <div key={index} style={{ backgroundColor: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16, marginBottom: 12, position: "relative" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 12 }}>
                   <div className="form-group">
                     <label>Category</label>
-                    <select 
-                      value={item.category} 
-                      onChange={(e) => handleItemChange(index, "category", e.target.value)}
-                    >
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                      ))}
+                    <select value={item.category} onChange={(event) => handleItemChange(index, "category", event.target.value)}>
+                      {categories.map((category) => <option key={category} value={category}>{category.charAt(0).toUpperCase() + category.slice(1)}</option>)}
                     </select>
                   </div>
-                  
                   <div className="form-group">
                     <label>Item Name *</label>
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => handleItemChange(index, "name", e.target.value)}
-                      placeholder="e.g., Water Bottles, Medical Kits"
-                    />
+                    <input value={item.name} onChange={(event) => handleItemChange(index, "name", event.target.value)} placeholder="e.g. Water Bottles" />
                   </div>
-                  
                   <div className="form-group">
                     <label>Quantity *</label>
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-                      placeholder="0"
-                    />
+                    <input type="number" min="1" value={item.quantity} onChange={(event) => handleItemChange(index, "quantity", event.target.value)} placeholder="0" />
                   </div>
                 </div>
-                
+
                 {formData.items.length > 1 && (
-                  <button 
-                    type="button" 
-                    className="btn-remove"
-                    onClick={() => removeItem(index)}
-                  >
-                    <Trash2 size={16} />
+                  <button type="button" onClick={() => removeItem(index)} style={{ position: "absolute", top: 12, right: 12, backgroundColor: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: 6, cursor: "pointer" }}>
+                    <Trash2 size={14} />
                   </button>
                 )}
               </div>
             ))}
-            
-            <button type="button" className="btn-add" onClick={addItem}>
-              <Plus size={16} /> Add Another Item
+
+            <button type="button" onClick={addItem} style={{ backgroundColor: "#f0f9ff", color: "#0284c7", border: "1px dashed #bae6fd", borderRadius: 8, padding: "12px 16px", fontSize: 14, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "center" }}>
+              <Plus size={16} />
+              Add Another Item
             </button>
           </div>
 
-          {/* DELIVERY INFO */}
-          <div className="form-section">
-            <h2>Delivery Information</h2>
-            
-            <div className="form-grid">
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ backgroundColor: "#fef3c7", padding: 8, borderRadius: 8 }}>
+                <Calendar size={20} style={{ color: "#d97706" }} />
+              </div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: "#1f2937" }}>Delivery Information</h2>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
               <div className="form-group">
-                <label>Delivery Date *</label>
-                <input
-                  type="date"
-                  name="deliveryDate"
-                  value={formData.deliveryDate}
-                  onChange={handleInputChange}
-                  min={new Date().toISOString().split('T')[0]}
-                  required
-                />
+                <label><Calendar size={16} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />Delivery Date *</label>
+                <input type="date" name="deliveryDate" value={formData.deliveryDate} onChange={handleInputChange} min={new Date().toISOString().split("T")[0]} required />
+              </div>
+              <div className="form-group">
+                <label><MapPin size={16} style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }} />Delivery Address *</label>
+                <input name="deliveryAddress" value={formData.deliveryAddress} onChange={handleInputChange} placeholder="Complete delivery address" required />
               </div>
             </div>
-
-            <div className="form-group">
-              <label>Delivery Address *</label>
-              <textarea
-                name="deliveryAddress"
-                value={formData.deliveryAddress}
-                onChange={handleInputChange}
-                placeholder="Complete delivery address"
-                rows={3}
-                required
-              />
-            </div>
           </div>
 
-          {/* SUBMIT */}
-          <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={resetForm}>
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
+            <button type="button" onClick={resetForm} style={{ backgroundColor: "white", color: "#374151", padding: "12px 24px", borderRadius: 8, border: "1px solid #d1d5db", cursor: "pointer" }}>
               Clear Form
             </button>
-            <button type="submit" className="btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit Request"} <Send size={16} />
+            <button type="submit" disabled={isSubmitting} style={{ backgroundColor: isSubmitting ? "#9ca3af" : "#1f2937", color: "white", padding: "12px 24px", borderRadius: 8, border: "none", cursor: isSubmitting ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+              {isSubmitting ? "Sending Request..." : "Send Request to Backend"}
+              <Send size={16} />
             </button>
           </div>
         </form>
       </div>
     </div>
   );
-};
-
-export default ResourceRequestPage;
+}

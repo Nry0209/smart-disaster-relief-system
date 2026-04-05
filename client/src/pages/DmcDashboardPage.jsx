@@ -54,19 +54,6 @@ function DmcDashboardPage() {
     },
   ];
 
-  const deliveryQueue = [
-    {
-      title: "Kandy Shelter Zone",
-      status: "Awaiting confirmation",
-      eta: "ETA 45 mins",
-    },
-    {
-      title: "Colombo Coastal Relief",
-      status: "On route",
-      eta: "ETA 1h 20m",
-    },
-  ];
-
   const predictiveSnapshot = [
     { label: "Water (L)", value: "4,800" },
     { label: "Meal packs", value: "3,400" },
@@ -74,275 +61,264 @@ function DmcDashboardPage() {
     { label: "Shelter kits", value: "410" },
   ];
 
-  const toneStyles = {
-    danger: "bg-rose-50 text-rose-600",
-    info: "bg-sky-50 text-sky-600",
-    warning: "bg-amber-50 text-amber-600",
-    success: "bg-emerald-50 text-emerald-600",
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'Active': return 'bg-blue-100 text-blue-700';
+      case 'Monitoring': return 'bg-orange-100 text-orange-700';
+      case 'Critical': return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getIconColor = (tone) => {
+    switch(tone) {
+      case 'danger': return 'bg-red-50 text-red-600';
+      case 'info': return 'bg-blue-50 text-blue-600';
+      case 'warning': return 'bg-yellow-50 text-yellow-600';
+      case 'success': return 'bg-green-50 text-green-600';
+      default: return 'bg-gray-50 text-gray-600';
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            DMC Officer / Command Center
-          </span>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Disaster Command Dashboard
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Track disaster reports, confirm deliveries, and monitor predictive estimates in real time
-          </p>
+    <div style={{ backgroundColor: '#f9fafb', padding: '24px', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ fontSize: '14px', color: '#6b7280', fontWeight: '500', marginBottom: '8px' }}>
+          DMC Officer / Command Center
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
-            onClick={() => navigate("/disaster-report/create")}
-          >
-            Create disaster report
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
-            onClick={() => navigate("/dmc-delivery-verification")}
-          >
-            Verify Deliveries
-          </button>
-        </div>
-      </section>
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827', marginBottom: '8px', margin: '0 0 8px 0' }}>
+          Disaster Command Dashboard
+        </h1>
+        <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+          Track disaster reports, confirm deliveries, and monitor predictive estimates in real time
+        </p>
+      </div>
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+        <button
+          onClick={() => navigate("/disaster-report/create")}
+          style={{
+            backgroundColor: '#111827',
+            color: 'white',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          Create disaster report
+        </button>
+        <button
+          onClick={() => navigate("/dmc-delivery-verification")}
+          style={{
+            backgroundColor: 'white',
+            color: '#374151',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: '1px solid #d1d5db',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          Verify Deliveries
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+        gap: '16px', 
+        marginBottom: '24px' 
+      }}>
         {stats.map((item) => {
           const Icon = item.icon;
           return (
             <div
               key={item.label}
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]"
+              style={{
+                backgroundColor: 'white',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '16px',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+              }}
             >
-              <div
-                className={`flex h-10 w-10 items-center justify-center rounded-xl ${toneStyles[item.tone]}`}
-              >
-                <Icon size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500">
-                  {item.label}
-                </p>
-                <strong className="text-xl font-semibold text-slate-900">
-                  {item.value}
-                </strong>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  ...getIconColor(item.tone)
+                }}>
+                  <Icon size={20} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827' }}>
+                    {item.value}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                    {item.label}
+                  </div>
+                </div>
               </div>
             </div>
           );
         })}
-      </section>
+      </div>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Main Content Grid */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', 
+        gap: '24px' 
+      }}>
+        {/* Recent Disaster Reports */}
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
                 Recent disaster reports
               </h2>
-              <p className="text-xs text-slate-500">
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
                 Newest incidents logged by field officers.
               </p>
             </div>
             <button
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
               onClick={() => navigate("/disaster-events")}
+              style={{
+                fontSize: '14px',
+                color: '#2563eb',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: '500'
+              }}
             >
               View all
-              <ArrowUpRight size={14} />
-            </button>
-          </div>
-          <div className="space-y-3">
-            {recentReports.map((report) => (
-              <div
-                key={report.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">
-                    {report.type} - {report.location}
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    {report.id} · {report.severity} · {report.time}
-                  </span>
-                </div>
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-600">
-                  {report.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Predictive resource snapshot
-              </h2>
-              <p className="text-xs text-slate-500">
-                Auto-generated estimates for the next 24 hours.
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600">
-              <TrendingUp size={14} />
-              +6% demand
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {predictiveSnapshot.map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
-                <span className="text-xs text-slate-500">{item.label}</span>
-                <strong className="mt-2 block text-lg font-semibold text-slate-900">
-                  {item.value}
-                </strong>
-              </div>
-            ))}
-          </div>
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-            Forecast refreshes every 30 minutes based on historical disaster data.
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Delivery confirmations
-              </h2>
-              <p className="text-xs text-slate-500">
-                Dispatches requiring DMC verification.
-              </p>
-            </div>
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600">
-              2 pending
-            </span>
-          </div>
-          <div className="space-y-3">
-            {deliveryQueue.map((item) => (
-              <div
-                key={item.title}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                  <Clock size={18} />
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900">
-                    {item.title}
-                  </h4>
-                  <p className="text-xs text-slate-500">{item.status}</p>
-                </div>
-                <span className="ml-auto text-xs text-slate-500">
-                  {item.eta}
-                </span>
-              </div>
-            ))}
-          </div>
-          <button
-            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5"
-            onClick={() => navigate("/distribution-tracking")}
-          >
-            Open tracking workspace
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">
-              Operational signals
-            </h2>
-            <p className="text-xs text-slate-500">Live status from field command.</p>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <Activity size={18} className="text-emerald-600" />
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900">
-                  Flood response on track
-                </h4>
-                <p className="text-xs text-slate-500">Updated 10 mins ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <AlertTriangle size={18} className="text-rose-600" />
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900">
-                  Medical supplies below threshold
-                </h4>
-                <p className="text-xs text-slate-500">
-                  Immediate procurement required
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <ClipboardList size={18} className="text-sky-600" />
-              <div>
-                <h4 className="text-sm font-semibold text-slate-900">
-                  3 reports awaiting review
-                </h4>
-                <p className="text-xs text-slate-500">Assign verification team</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Delivery Verification Section */}
-        <section className="mt-6 flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Delivery Verification Center</h2>
-              <p className="text-sm text-slate-600">Verify and confirm receipt of disaster relief supplies</p>
-            </div>
-            <button 
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_18px_rgba(16,185,129,0.2)] transition hover:-translate-y-0.5"
-              onClick={() => navigate("/dmc-delivery-verification")}
-            >
-              <CheckSquare size={18} />
-              Open Verification Portal
+              <ArrowUpRight size={16} />
             </button>
           </div>
           
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                <Package size={20} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {recentReports.map((report) => (
+              <div
+                key={report.id}
+                style={{
+                  backgroundColor: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  padding: '12px'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#111827', marginBottom: '4px' }}>
+                      {report.type} - {report.location}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                      {report.id} · {report.severity} · {report.time}
+                    </div>
+                  </div>
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    ...getStatusColor(report.status)
+                  }}>
+                    {report.status}
+                  </span>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500">In Transit</p>
-                <strong className="text-xl font-semibold text-slate-900">3</strong>
-              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Predictive Resource Snapshot */}
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          padding: '20px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: '0 0 4px 0' }}>
+                Predictive resource snapshot
+              </h2>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>
+                Auto-generated estimates for the next 24 hours.
+              </p>
             </div>
-            
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <CheckCircle size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500">Pending Verification</p>
-                <strong className="text-xl font-semibold text-slate-900">2</strong>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600">
-                <CheckSquare size={20} />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500">Verified Today</p>
-                <strong className="text-xl font-semibold text-slate-900">5</strong>
-              </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#dcfce7',
+              color: '#166534',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>
+              <TrendingUp size={16} />
+              +6% demand
             </div>
           </div>
-        </section>
-      </section>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(2, 1fr)', 
+            gap: '12px', 
+            marginBottom: '16px' 
+          }}>
+            {predictiveSnapshot.map((item) => (
+              <div
+                key={item.label}
+                style={{
+                  backgroundColor: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  padding: '12px'
+                }}
+              >
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#111827' }}>
+                  {item.value}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{
+            backgroundColor: '#f9fafb',
+            border: '1px dashed #e5e7eb',
+            borderRadius: '8px',
+            padding: '12px',
+            fontSize: '14px',
+            color: '#6b7280'
+          }}>
+            Forecast refreshes every 30 minutes based on historical disaster data.
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

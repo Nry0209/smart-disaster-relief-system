@@ -5,18 +5,11 @@ import LandingPage from "./pages/LandingPage";
 import DistributionTracking from "./pages/DistributionTracking";
 import UserManagement from "./pages/UserManagement";
 import DashboardLayout from "./components/layout/DashboardLayout";
-import DmcDashboardPage from "./pages/DmcDashboardPage";
-import DmcDeliveryVerificationPage from "./pages/DmcDeliveryVerificationPage";
-import PublicDonationPage from "./pages/PublicDonationPage";
 
 import InventoryPage from "./pages/InventoryPage";
-import DonationVerificationPage from "./pages/DonationVerificationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
-import AllocationPage from "./pages/AllocationPage";
-import DisasterEventPage from "./pages/DisasterEventPage";
-import CreateDisasterReportPage from "./pages/CreateDisasterReportPage";
-import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
-import AuditLogsPage from "./pages/AuditLogsPage";
+import DonationVerificationPage from "./pages/DonationVerificationPage";
+import PublicDonationPage from "./pages/PublicDonationPage";
 import "./App.css";
 
 function App() {
@@ -28,16 +21,6 @@ function App() {
       <Route path="/dashboard" element={
         <DashboardLayout>
           <DashboardPage />
-        </DashboardLayout>
-      } />
-      <Route path="/dmc-dashboard" element={
-        <DashboardLayout>
-          <DmcDashboardPage />
-        </DashboardLayout>
-      } />
-      <Route path="/dmc-delivery-verification" element={
-        <DashboardLayout>
-          <DmcDeliveryVerificationPage />
         </DashboardLayout>
       } />
       <Route path="/inventory" element={
@@ -63,31 +46,6 @@ function App() {
       <Route path="/users" element={
         <DashboardLayout>
           <UserManagement />
-        </DashboardLayout>
-      } />
-      <Route path="/allocations" element={
-        <DashboardLayout>
-          <AllocationPage />
-        </DashboardLayout>
-      } />
-      <Route path="/disaster-events" element={
-        <DashboardLayout>
-          <DisasterEventPage />
-        </DashboardLayout>
-      } />
-      <Route path="/disaster-report/create" element={
-        <DashboardLayout>
-          <CreateDisasterReportPage />
-        </DashboardLayout>
-      } />
-      <Route path="/reports-analytics" element={
-        <DashboardLayout>
-          <ReportsAnalyticsPage />
-        </DashboardLayout>
-      } />
-      <Route path="/audit-logs" element={
-        <DashboardLayout>
-          <AuditLogsPage />
         </DashboardLayout>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
