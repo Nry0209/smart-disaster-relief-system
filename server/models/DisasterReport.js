@@ -57,9 +57,13 @@ const disasterReportSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    allocatedResources: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     status: {
       type: String,
-      enum: ["draft", "active", "pending_inventory", "monitoring", "resolved"],
+      enum: ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"],
       default: "active",
     },
     reportedBy: {

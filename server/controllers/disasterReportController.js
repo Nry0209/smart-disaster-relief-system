@@ -1,7 +1,7 @@
 const DisasterReport = require("../models/DisasterReport");
 const mongoose = require("mongoose");
 
-const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "monitoring", "resolved"];
+const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
 const UPDATABLE_FIELDS = [
   "disasterType",
   "location",
@@ -12,6 +12,7 @@ const UPDATABLE_FIELDS = [
   "description",
   "immediateNeeds",
   "resourceRequirements",
+  "allocatedResources",
   "status",
   "reportedBy",
   "contactPhone",
@@ -91,6 +92,7 @@ function formatReport(report) {
     description: report.description,
     immediateNeeds: report.immediateNeeds,
     resourceRequirements: report.resourceRequirements,
+    allocatedResources: report.allocatedResources,
     status: report.status,
     reportedBy: report.reportedBy,
     contactPhone: report.contactPhone,
@@ -112,6 +114,7 @@ async function createDisasterReport(req, res) {
       description,
       immediateNeeds,
       resourceRequirements,
+      allocatedResources,
       status,
       reportedBy,
       contactPhone,
@@ -132,6 +135,14 @@ async function createDisasterReport(req, res) {
 
     if (resourceRequirements !== undefined && !Array.isArray(resourceRequirements)) {
       return res.status(400).json({ message: "resourceRequirements must be an array." });
+    }
+
+    if (
+      allocatedResources !== undefined &&
+      allocatedResources !== null &&
+      (typeof allocatedResources !== "object" || Array.isArray(allocatedResources))
+    ) {
+      return res.status(400).json({ message: "allocatedResources must be an object or null." });
     }
 
     const normalizedReporter = String(reportedBy || "").trim();
@@ -173,6 +184,7 @@ async function createDisasterReport(req, res) {
       description,
       immediateNeeds: syncedNeedsAndRequirements.immediateNeeds,
       resourceRequirements: syncedNeedsAndRequirements.resourceRequirements,
+      allocatedResources: allocatedResources ?? null,
       status,
       reportedBy: normalizedReporter,
       contactPhone: normalizedPhone,
@@ -301,6 +313,15 @@ async function updateDisasterReport(req, res) {
         return res.status(400).json({ message: "resourceRequirements must be an array." });
       }
       updates.resourceRequirements = sanitizeResourceRequirements(updates.resourceRequirements);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "allocatedResources")) {
+      if (
+        updates.allocatedResources !== null &&
+        (typeof updates.allocatedResources !== "object" || Array.isArray(updates.allocatedResources))
+      ) {
+        return res.status(400).json({ message: "allocatedResources must be an object or null." });
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "reportedBy")) {
