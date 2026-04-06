@@ -1,4 +1,10 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").trim();
+const API_BASE_URL = rawBaseUrl.replace(/\/+$/, "");
+
+function buildApiUrl(path) {
+  // Use same-origin by default (works with Vite proxy in development).
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 
 async function apiRequest(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -7,10 +13,15 @@ async function apiRequest(path, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(buildApiUrl(path), {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error("Failed to reach the API server. Ensure backend is running and Vite proxy/base URL is configured.");
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json")
@@ -65,7 +76,12 @@ export function deleteInventoryItem(itemId) {
 }
 
 export async function downloadInventoryCsv() {
-  const response = await fetch(`${API_BASE_URL}/api/inventory/export`);
+  let response;
+  try {
+    response = await fetch(buildApiUrl("/api/inventory/export"));
+  } catch {
+    throw new Error("Failed to reach the API server. Ensure backend is running and Vite proxy/base URL is configured.");
+  }
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
