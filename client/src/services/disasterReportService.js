@@ -1,20 +1,46 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-export async function createDisasterReport(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/disaster-reports`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+async function requestJson(url, options = {}, fallbackMessage = "Request failed.") {
+  try {
+    const response = await fetch(url, options);
+    const rawText = await response.text();
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to create disaster report.");
+    let data = {};
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = {};
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(data.message || fallbackMessage);
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(
+        "Unable to connect to API server. Start backend server on http://localhost:5000 and try again."
+      );
+    }
+    throw error;
   }
+}
 
-  return data;
+export async function createDisasterReport(payload) {
+  return requestJson(
+    `${API_BASE_URL}/api/disaster-reports`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+    "Failed to create disaster report."
+  );
 }
 
 export async function fetchDisasterReports(params = {}) {
@@ -31,53 +57,37 @@ export async function fetchDisasterReports(params = {}) {
     ? `${API_BASE_URL}/api/disaster-reports?${query}`
     : `${API_BASE_URL}/api/disaster-reports`;
 
-  const response = await fetch(endpoint);
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch disaster reports.");
-  }
-
-  return data;
+  return requestJson(endpoint, {}, "Failed to fetch disaster reports.");
 }
 
 export async function fetchDisasterReportById(id) {
-  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`);
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch disaster report.");
-  }
-
-  return data;
+  return requestJson(
+    `${API_BASE_URL}/api/disaster-reports/${id}`,
+    {},
+    "Failed to fetch disaster report."
+  );
 }
 
 export async function updateDisasterReport(id, payload) {
-  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
+  return requestJson(
+    `${API_BASE_URL}/api/disaster-reports/${id}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
     },
-    body: JSON.stringify(payload),
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to update disaster report.");
-  }
-
-  return data;
+    "Failed to update disaster report."
+  );
 }
 
 export async function deleteDisasterReport(id) {
-  const response = await fetch(`${API_BASE_URL}/api/disaster-reports/${id}`, {
-    method: "DELETE",
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to delete disaster report.");
-  }
-
-  return data;
+  return requestJson(
+    `${API_BASE_URL}/api/disaster-reports/${id}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete disaster report."
+  );
 }

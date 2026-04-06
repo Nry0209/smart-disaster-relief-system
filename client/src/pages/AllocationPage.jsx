@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
 import { fetchDisasterReports } from "../services/disasterReportService";
 import "./Pages.css";
@@ -59,6 +59,34 @@ function formatEventDate(value) {
   return date.toLocaleDateString("en-IN");
 }
 
+function normalizeRequestedResources(event) {
+  const requirements = Array.isArray(event?.resourceRequirements) ? event.resourceRequirements : [];
+
+  if (requirements.length > 0) {
+    return requirements
+      .map((item) => ({
+        name: String(item?.name || "").trim(),
+        quantity: Number(item?.quantity) > 0 ? Math.round(Number(item.quantity)) : 0,
+      }))
+      .filter((item) => item.name);
+  }
+
+  const immediateNeeds = Array.isArray(event?.immediateNeeds) ? event.immediateNeeds : [];
+  return immediateNeeds
+    .map((need) => String(need).trim())
+    .filter(Boolean)
+    .map((name) => ({ name, quantity: 0 }));
+}
+
+function buildInitialAllocationQuantities(event) {
+  return normalizeRequestedResources(event).reduce((acc, item) => {
+    if (item.quantity > 0) {
+      acc[item.name] = item.quantity;
+    }
+    return acc;
+  }, {});
+}
+
 export default function AllocationPage() {
   const [inventory, setInventory] = useState(initialInventory);
   const [disasterEvents, setDisasterEvents] = useState([]);
@@ -115,7 +143,9 @@ export default function AllocationPage() {
       !query ||
       event.location?.toLowerCase().includes(query) ||
       event.disasterType?.toLowerCase().includes(query) ||
-      event.reportedBy?.toLowerCase().includes(query);
+      event.reportedBy?.toLowerCase().includes(query) ||
+      event.contactPhone?.toLowerCase().includes(query) ||
+      event.contactEmail?.toLowerCase().includes(query);
     const matchesFilter = filterStatus === "all" || event.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -128,6 +158,11 @@ export default function AllocationPage() {
     lowStockItems: inventory.filter(item => item.stock < item.min).length
   };
 
+  const selectedEventRequestedResources = useMemo(
+    () => normalizeRequestedResources(selectedEvent),
+    [selectedEvent]
+  );
+
   const handleAllocate = (eventId) => {
     const event = disasterEvents.find(e => e.id === eventId);
     setSelectedEvent(event);
@@ -139,7 +174,7 @@ export default function AllocationPage() {
       setAllocationMessage(event.allocatedResources.message || "");
     } else {
       setExistingAllocation(null);
-      setAllocationQuantities({});
+      setAllocationQuantities(buildInitialAllocationQuantities(event));
       setAllocationMessage("");
     }
     
@@ -419,7 +454,7 @@ export default function AllocationPage() {
                   const priorityStyle = getUrgencyColor(event.priority);
                   const statusStyle = getStatusColor(event.status);
                   const canAllocate = ["active", "pending_inventory"].includes(event.status);
-                  const needs = Array.isArray(event.immediateNeeds) ? event.immediateNeeds : [];
+                  const requestedResources = normalizeRequestedResources(event);
                   
                   return (
                     <tr key={event.id}>
@@ -439,17 +474,19 @@ export default function AllocationPage() {
                       <td>
                         <div className="contact-info">
                           <div className="contact-name">{event.reportedBy || "DMC Officer"}</div>
+                          <div className="contact-email">{event.contactPhone || "-"}</div>
                           <div className="contact-email">{event.contactEmail || "-"}</div>
                         </div>
                       </td>
                       <td>
                         <div className="items-summary">
-                          {needs.length === 0 ? (
+                          {requestedResources.length === 0 ? (
                             <div className="item-line">No items listed</div>
                           ) : (
-                            needs.map((need, idx) => (
-                              <div key={idx} className="item-line">
-                                {need}
+                            requestedResources.map((resource, idx) => (
+                              <div key={`${resource.name}-${idx}`} className="item-line">
+                                {resource.name}
+                                {resource.quantity > 0 ? ` x ${resource.quantity}` : ""}
                               </div>
                             ))
                           )}
@@ -541,22 +578,42 @@ export default function AllocationPage() {
                   </div>
                   <div className="summary-item">
                     <span>Reported By:</span>
-                    <strong>{selectedEvent.reportedBy}</strong>
+                    <strong>{selectedEvent.reportedBy || "DMC Officer"}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Contact Number:</span>
+                    <strong>{selectedEvent.contactPhone || "-"}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Email:</span>
+                    <strong>{selectedEvent.contactEmail || "-"}</strong>
                   </div>
                 </div>
               </div>
               
               <div className="allocation-details">
                 <h3>Resource Allocation</h3>
-                {selectedEvent.immediateNeeds.map((need, index) => {
+                {selectedEventRequestedResources.length === 0 ? (
+                  <p style={{ color: "#64748b", marginBottom: "12px" }}>
+                    No requested resources listed for this event.
+                  </p>
+                ) : (
+                  selectedEventRequestedResources.map((resource, index) => {
+                  const need = resource.name;
                   const available = getAvailableStock(need);
-                  const currentQty = allocationQuantities[need] || 0;
+                  const currentQty =
+                    allocationQuantities[need] ?? (resource.quantity > 0 ? resource.quantity : 0);
                   const hasStock = currentQty <= available;
                   
                   return (
                     <div key={index} className="allocation-item">
                       <div className="item-info">
                         <span className="item-name">{need}</span>
+                        {resource.quantity > 0 && (
+                          <span className="item-quantity">
+                            Requested: {resource.quantity.toLocaleString()} units
+                          </span>
+                        )}
                         <span className="item-quantity">Available: {available.toLocaleString()}</span>
                       </div>
                       <div className="quantity-input">
@@ -581,7 +638,8 @@ export default function AllocationPage() {
                       </div>
                     </div>
                   );
-                })}
+                })
+                )}
               </div>
               
               <div className="message-section">

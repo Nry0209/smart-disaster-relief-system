@@ -566,6 +566,8 @@ const DisasterEventPage = () => {
                         <p className="text-sm font-semibold text-slate-900">
                           {event.reportedBy || "DMC Officer"}
                         </p>
+                        <p className="text-xs text-slate-500">Contact: {event.contactPhone || "-"}</p>
+                        <p className="text-xs text-slate-500">Email: {event.contactEmail || "-"}</p>
                         <p className="text-xs text-slate-500">Created: {formatDateTime(event.createdAt)}</p>
                       </div>
                       <p className="text-xs text-slate-500">Ref: {eventId}</p>

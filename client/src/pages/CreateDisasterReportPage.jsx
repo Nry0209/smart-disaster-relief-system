@@ -22,6 +22,10 @@ function CreateDisasterReportPage() {
     priority: "critical",
     description: "",
     immediateNeeds: [],
+    resourceRequirements: [],
+    reportedBy: "DMC Officer",
+    contactPhone: "",
+    contactEmail: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitAction, setSubmitAction] = useState("save");
@@ -34,13 +38,28 @@ function CreateDisasterReportPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const normalizeNeedsList = (needs) =>
+    [...new Set(needs.map((item) => String(item).trim()).filter(Boolean))];
+
+  const syncResourceRequirements = (needs, existingRequirements = []) =>
+    needs.map((need) => {
+      const existing = existingRequirements.find((item) => item.name === need);
+      const quantity = Number(existing?.quantity);
+
+      return {
+        name: need,
+        quantity: Number.isFinite(quantity) && quantity > 0 ? Math.round(quantity) : 0,
+      };
+    });
+
   const handleNeedsChange = (value) => {
     setLastEditedAt(new Date());
-    const needs = value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    setFormData((prev) => ({ ...prev, immediateNeeds: needs }));
+    const needs = normalizeNeedsList(value.split(","));
+    setFormData((prev) => ({
+      ...prev,
+      immediateNeeds: needs,
+      resourceRequirements: syncResourceRequirements(needs, prev.resourceRequirements),
+    }));
   };
 
   const handleQuickNeedToggle = (need) => {
@@ -50,35 +69,29 @@ function CreateDisasterReportPage() {
       const immediateNeeds = hasNeed
         ? prev.immediateNeeds.filter((item) => item !== need)
         : [...prev.immediateNeeds, need];
-      return { ...prev, immediateNeeds };
+      const normalizedNeeds = normalizeNeedsList(immediateNeeds);
+
+      return {
+        ...prev,
+        immediateNeeds: normalizedNeeds,
+        resourceRequirements: syncResourceRequirements(normalizedNeeds, prev.resourceRequirements),
+      };
     });
   };
 
-  const predictiveEstimates = useMemo(() => {
-    const severityMultiplier = {
-      critical: 1.5,
-      high: 1.25,
-      medium: 1,
-      low: 0.85,
-    };
+  const handleNeedQuantityChange = (needName, value) => {
+    const parsedQuantity = Number(value);
+    const nextQuantity =
+      Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? Math.round(parsedQuantity) : 0;
 
-    const baseItems = [
-      { name: "Water (L)", base: 3 },
-      { name: "Meal Packs", base: 2 },
-      { name: "Medical Kits", base: 0.3 },
-      { name: "Blankets", base: 0.6 },
-    ];
-
-    const multiplier = severityMultiplier[formData.severity] || 1;
-
-    return baseItems.map((item) => ({
-      ...item,
-      estimate: Math.max(
-        1,
-        Math.round((item.base || 1) * (formData.affectedPopulation / 1000) * multiplier)
+    setLastEditedAt(new Date());
+    setFormData((prev) => ({
+      ...prev,
+      resourceRequirements: prev.resourceRequirements.map((item) =>
+        item.name === needName ? { ...item, quantity: nextQuantity } : item
       ),
     }));
-  }, [formData.affectedPopulation, formData.severity]);
+  };
 
   const impactSummary = useMemo(() => {
     const population = Number(formData.affectedPopulation) || 0;
@@ -90,6 +103,33 @@ function CreateDisasterReportPage() {
     };
   }, [formData.affectedPopulation]);
 
+  const getNeedQuantity = (needName) =>
+    formData.resourceRequirements.find((item) => item.name === needName)?.quantity ?? 0;
+
+  const totalRequestedUnits = useMemo(
+    () =>
+      formData.resourceRequirements.reduce(
+        (sum, item) => sum + (Number(item.quantity) > 0 ? Number(item.quantity) : 0),
+        0
+      ),
+    [formData.resourceRequirements]
+  );
+
+  const hasRequiredResourceCounts = useMemo(() => {
+    if (formData.immediateNeeds.length === 0) {
+      return false;
+    }
+
+    const requirementMap = new Map(
+      formData.resourceRequirements.map((item) => [item.name, Number(item.quantity) || 0])
+    );
+
+    return formData.immediateNeeds.every((need) => (requirementMap.get(need) || 0) > 0);
+  }, [formData.immediateNeeds, formData.resourceRequirements]);
+
+  const isEmailValid = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const isPhoneValid = (value) => /^[0-9+()\-\s]{7,20}$/.test(value);
+
   const completion = useMemo(() => {
     const checks = [
       Boolean(formData.disasterType?.trim()),
@@ -97,12 +137,15 @@ function CreateDisasterReportPage() {
       Boolean(formData.eventDate),
       Number(formData.affectedPopulation) > 0,
       Boolean(formData.description?.trim()),
-      formData.immediateNeeds.length > 0,
+      Boolean(formData.reportedBy?.trim()),
+      Boolean(formData.contactPhone?.trim()) && isPhoneValid(formData.contactPhone.trim()),
+      Boolean(formData.contactEmail?.trim()) && isEmailValid(formData.contactEmail.trim()),
+      hasRequiredResourceCounts,
     ];
 
     const done = checks.filter(Boolean).length;
     return Math.round((done / checks.length) * 100);
-  }, [formData]);
+  }, [formData, hasRequiredResourceCounts]);
 
   const riskBand = useMemo(() => {
     const population = Number(formData.affectedPopulation) || 0;
@@ -128,13 +171,13 @@ function CreateDisasterReportPage() {
 
   const steps = [
     "Incident profile",
-    "Situation assessment",
-    "Prediction review",
+    "DMC contact details",
+    "Resource request",
     "Submit report",
   ];
 
   const readinessLabel = useMemo(() => {
-    if (completion === 100 && formData.immediateNeeds.length > 0) {
+    if (completion === 100 && hasRequiredResourceCounts) {
       return {
         text: "Ready for submission",
         tone: "text-emerald-700 bg-emerald-100 border-emerald-200",
@@ -150,7 +193,7 @@ function CreateDisasterReportPage() {
       text: "Draft in progress",
       tone: "text-slate-700 bg-slate-100 border-slate-200",
     };
-  }, [completion, formData.immediateNeeds.length]);
+  }, [completion, hasRequiredResourceCounts]);
 
   const fieldErrors = useMemo(
     () => ({
@@ -159,6 +202,11 @@ function CreateDisasterReportPage() {
       eventDate: !formData.eventDate,
       affectedPopulation: Number(formData.affectedPopulation) <= 0,
       description: !formData.description.trim(),
+      reportedBy: !formData.reportedBy.trim(),
+      contactPhone:
+        !formData.contactPhone.trim() || !isPhoneValid(String(formData.contactPhone).trim()),
+      contactEmail:
+        !formData.contactEmail.trim() || !isEmailValid(String(formData.contactEmail).trim()),
     }),
     [formData]
   );
@@ -194,6 +242,14 @@ function CreateDisasterReportPage() {
     setFormError("");
     setFormSuccess("");
 
+    const resourceRequirements = syncResourceRequirements(
+      formData.immediateNeeds,
+      formData.resourceRequirements
+    );
+    const normalizedReportedBy = formData.reportedBy.trim();
+    const normalizedPhone = formData.contactPhone.trim();
+    const normalizedEmail = formData.contactEmail.trim().toLowerCase();
+
     if (!formData.disasterType || !formData.location || !formData.eventDate) {
       setFormError("Please fill disaster type, location, and reported date/time.");
       return;
@@ -204,14 +260,43 @@ function CreateDisasterReportPage() {
       return;
     }
 
+    if (!normalizedReportedBy) {
+      setFormError("Please enter DMC officer name.");
+      return;
+    }
+
+    if (!normalizedPhone || !isPhoneValid(normalizedPhone)) {
+      setFormError("Please enter a valid DMC contact number.");
+      return;
+    }
+
+    if (!normalizedEmail || !isEmailValid(normalizedEmail)) {
+      setFormError("Please enter a valid DMC email address.");
+      return;
+    }
+
+    if (resourceRequirements.length === 0) {
+      setFormError("Please add at least one required resource.");
+      return;
+    }
+
+    if (resourceRequirements.some((item) => Number(item.quantity) <= 0)) {
+      setFormError("Please enter request count for each required resource.");
+      return;
+    }
+
     setSubmitAction(actionType);
     setIsSubmitting(true);
 
     try {
       await createDisasterReport({
         ...formData,
+        immediateNeeds: resourceRequirements.map((item) => item.name),
+        resourceRequirements,
+        reportedBy: normalizedReportedBy,
+        contactPhone: normalizedPhone,
+        contactEmail: normalizedEmail,
         status,
-        reportedBy: "DMC Officer",
       });
 
       setFormSuccess(successMessage);
@@ -224,6 +309,10 @@ function CreateDisasterReportPage() {
         priority: "critical",
         description: "",
         immediateNeeds: [],
+        resourceRequirements: [],
+        reportedBy: "DMC Officer",
+        contactPhone: "",
+        contactEmail: "",
       });
       setLastEditedAt(new Date());
     } catch (error) {
@@ -401,6 +490,39 @@ function CreateDisasterReportPage() {
                     <option value="low">Low</option>
                   </select>
                 </label>
+
+                <label className="space-y-1 text-xs font-semibold text-slate-600">
+                  DMC officer name
+                  <input
+                    className={getFieldClass(fieldErrors.reportedBy)}
+                    type="text"
+                    placeholder="Nuwan Perera"
+                    value={formData.reportedBy}
+                    onChange={(e) => handleInputChange("reportedBy", e.target.value)}
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs font-semibold text-slate-600">
+                  DMC contact number
+                  <input
+                    className={getFieldClass(fieldErrors.contactPhone)}
+                    type="tel"
+                    placeholder="+94 77 123 4567"
+                    value={formData.contactPhone}
+                    onChange={(e) => handleInputChange("contactPhone", e.target.value)}
+                  />
+                </label>
+
+                <label className="space-y-1 text-xs font-semibold text-slate-600 md:col-span-2">
+                  DMC email
+                  <input
+                    className={getFieldClass(fieldErrors.contactEmail)}
+                    type="email"
+                    placeholder="officer@dmc.gov.lk"
+                    value={formData.contactEmail}
+                    onChange={(e) => handleInputChange("contactEmail", e.target.value)}
+                  />
+                </label>
               </div>
             </div>
 
@@ -423,7 +545,7 @@ function CreateDisasterReportPage() {
                 </label>
 
                 <label className="block space-y-1 text-xs font-semibold text-slate-600">
-                  Initial required resources (manual notes)
+                  Required resources (comma-separated names)
                   <textarea
                     className={`${inputBaseClass} min-h-20 resize-y`}
                     rows={2}
@@ -455,6 +577,46 @@ function CreateDisasterReportPage() {
                     })}
                   </div>
                 </div>
+
+                {formData.immediateNeeds.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-700">Request count for each resource</p>
+                      <p className="text-xs font-semibold text-slate-500">
+                        Total units: {formatNumber(totalRequestedUnits)}
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {formData.immediateNeeds.map((need) => {
+                        const hasError = getNeedQuantity(need) <= 0;
+                        return (
+                          <label key={need} className="space-y-1 text-xs font-semibold text-slate-600">
+                            {need}
+                            <input
+                              className={`${inputBaseClass} ${
+                                hasError
+                                  ? "border-rose-300 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-100"
+                                  : ""
+                              }`}
+                              type="number"
+                              min={1}
+                              step={1}
+                              required
+                              placeholder="Enter request count"
+                              value={getNeedQuantity(need) || ""}
+                              onChange={(e) => handleNeedQuantityChange(need, e.target.value)}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {!hasRequiredResourceCounts && (
+                      <p className="mt-2 text-[11px] font-semibold text-rose-600">
+                        Request count is required for all selected resources.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3">
@@ -509,7 +671,7 @@ function CreateDisasterReportPage() {
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-slate-900">Operations snapshot</h2>
                 <p className="text-xs text-slate-500">
-                  Live impact indicators and AI-assisted demand estimation.
+                  Live impact indicators and request overview.
                 </p>
               </div>
 
@@ -526,7 +688,7 @@ function CreateDisasterReportPage() {
                 </div>
               </div>
 
-              <div className="mb-3 grid gap-2 sm:grid-cols-3">
+              <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[11px] font-semibold text-slate-500">Severity</p>
                   <p className="text-sm font-semibold text-slate-900">{formData.severity.toUpperCase()}</p>
@@ -538,6 +700,12 @@ function CreateDisasterReportPage() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[11px] font-semibold text-slate-500">Need items</p>
                   <p className="text-sm font-semibold text-slate-900">{formData.immediateNeeds.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[11px] font-semibold text-slate-500">Requested units</p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {formatNumber(totalRequestedUnits)}
+                  </p>
                 </div>
               </div>
 
@@ -564,31 +732,6 @@ function CreateDisasterReportPage() {
                     {formatNumber(impactSummary.medicalAlerts)}
                   </p>
                 </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-sky-50/70 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold text-slate-900">Predictive resource estimate</h3>
-                <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                  AI confidence 92%
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-slate-600">
-                Estimated quantities based on affected population and incident severity.
-              </p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                {predictiveEstimates.map((item) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2"
-                  >
-                    <span className="text-sm text-slate-700">{item.name}</span>
-                    <strong className="text-sm font-semibold text-slate-900">
-                      {formatNumber(item.estimate)}
-                    </strong>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

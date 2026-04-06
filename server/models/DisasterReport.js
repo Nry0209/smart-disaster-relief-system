@@ -40,6 +40,23 @@ const disasterReportSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    resourceRequirements: {
+      type: [
+        {
+          name: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          quantity: {
+            type: Number,
+            required: true,
+            min: 1,
+          },
+        },
+      ],
+      default: [],
+    },
     status: {
       type: String,
       enum: ["draft", "active", "pending_inventory", "monitoring", "resolved"],
@@ -49,6 +66,17 @@ const disasterReportSchema = new mongoose.Schema(
       type: String,
       default: "DMC Officer",
       trim: true,
+    },
+    contactPhone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    contactEmail: {
+      type: String,
+      default: "",
+      trim: true,
+      lowercase: true,
     },
   },
   { timestamps: true }
