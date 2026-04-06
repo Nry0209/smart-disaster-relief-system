@@ -6,8 +6,8 @@ import logo from "../assets/images/logo1.png";
 import "./Pages.css";
 
 function LoginPage() {
-  const [email, setEmail] = useState("admin@example.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("admin");
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -15,22 +15,20 @@ function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
-      const mockUser = {
-        id: 1,
-        name: role === "dmc_officer" ? "DMC Officer" : "Admin User",
+    try {
+      await login({
         email,
-        role,
-      };
-
-      login(mockUser);
-      navigate(role === "dmc_officer" ? "/dmc-dashboard" : "/dashboard");
+        password,
+        role
+      });
+    } catch (error) {
+      console.error('Login error:', error);
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -77,7 +75,7 @@ function LoginPage() {
             </div>
           </div>
           <div className="login-footer-note">
-            For authorized internal users only
+            For authorized internal users only | Backend Connected
           </div>
         </div>
 
@@ -98,6 +96,7 @@ function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="officer@dmc.gov.lk"
                   required
+                  disabled={isLoading}
                 />
               </div>
 
@@ -109,17 +108,19 @@ function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
                   required
+                  disabled={isLoading}
                 />
               </div>
 
               <div className="login-form-group">
                 <label>Login role</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)}>
+                <select value={role} onChange={(e) => setRole(e.target.value)} disabled={isLoading}>
+                  <option value="admin">System Administrator</option>
                   <option value="dmc_officer">DMC Officer</option>
                   <option value="inventory_officer">Inventory Officer</option>
                   <option value="allocation_officer">Allocation Officer</option>
                   <option value="tracking_officer">Tracking Officer</option>
-                  <option value="admin">Admin</option>
+                  <option value="charity_staff">Charity Staff</option>
                 </select>
               </div>
 
@@ -129,6 +130,7 @@ function LoginPage() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={() => setRememberMe(!rememberMe)}
+                    disabled={isLoading}
                   />
                   <span>Remember me</span>
                 </label>
@@ -136,7 +138,8 @@ function LoginPage() {
                 <button
                   type="button"
                   className="login-link-btn"
-                  onClick={() => alert("Forgot password flow can be added later")}
+                  onClick={() => alert("Contact system administrator for password reset")}
+                  disabled={isLoading}
                 >
                   Forgot password?
                 </button>
@@ -147,19 +150,20 @@ function LoginPage() {
                 disabled={isLoading}
                 className="btn-base btn-primary"
               >
-                {isLoading ? "Logging in..." : "Login"}
+                {isLoading ? "Authenticating..." : "Login"}
               </button>
               <button
                 type="button"
                 className="btn-base btn-light"
                 onClick={() => navigate("/")}
+                disabled={isLoading}
               >
                 Home
               </button>
             </form>
 
             <div className="login-card-footer">
-              Authorized Internal Access Only
+              Authorized Internal Access Only | Real Backend Authentication
             </div>
           </div>
         </div>

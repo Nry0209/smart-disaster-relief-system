@@ -19,25 +19,70 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     // Check for existing user session on mount
     const savedUser = localStorage.getItem("user");
-    if (savedUser) {
+    const savedToken = localStorage.getItem("token");
+    
+    if (savedUser && savedToken) {
       try {
-        setUser(JSON.parse(savedUser));
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
       } catch (error) {
         console.error("Failed to parse saved user:", error);
         localStorage.removeItem("user");
+        localStorage.removeItem("token");
       }
     }
     setLoading(false);
   }, []);
 
-  const login = (userData) => {
-    setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
+  const login = async (credentials) => {
+    try {
+      setLoading(true);
+      
+      // Determine login endpoint based on role
+      const endpoint = credentials.role === 'admin' 
+        ? '/api/auth/admin/login' 
+        : '/api/auth/staff/login';
+      
+      const response = await fetch(`http://localhost:5000${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Save user and token
+        setUser(data.data.user);
+        localStorage.setItem("user", JSON.stringify(data.data.user));
+        localStorage.setItem("token", data.data.token);
+        
+        // Navigate based on role
+        if (data.data.user.role === 'dmc_officer') {
+          navigate("/dmc-dashboard");
+        } else if (data.data.user.role === 'admin') {
+          navigate("/dashboard");
+        } else {
+          navigate("/dashboard");
+        }
+      } else {
+        // Handle login error
+        alert(data.message || 'Login failed');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
     navigate("/");
   };
 
