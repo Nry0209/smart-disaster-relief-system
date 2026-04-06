@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, MapPin, Calendar } from "lucide-react";
-import { fetchDisasterReports, updateDisasterReport } from "../services/disasterReportService";
+import { fetchDisasterReports } from "../services/disasterReportService";
 import { adjustInventoryItem, fetchInventoryItems } from "../services/inventoryService";
+import { clearAllocationForReport, upsertAllocationForReport } from "../services/allocationService";
 import "./Pages.css";
 
 function getStatus(stock, min) {
@@ -285,8 +286,8 @@ export default function AllocationPage() {
     [existingAllocation]
   );
 
-  const closeAllocationModal = () => {
-    if (isSubmittingAllocation) {
+  const closeAllocationModal = (forceClose = false) => {
+    if (isSubmittingAllocation && !forceClose) {
       return;
     }
 
@@ -454,17 +455,21 @@ export default function AllocationPage() {
         delete nextAllocationRecord.lastUpdated;
       }
 
-      const updatedEvent = await updateDisasterReport(selectedEvent.id, {
-        status,
-        allocatedResources: nextAllocationRecord,
-      });
+      if (clearAllocation) {
+        await clearAllocationForReport(selectedEvent.id, {
+          status,
+        });
+      } else {
+        await upsertAllocationForReport(selectedEvent.id, {
+          quantities: normalizedQuantities,
+          message: String(allocationMessage || "").trim(),
+          allocatedBy: nextAllocationRecord.allocatedBy,
+          status,
+        });
+      }
 
-      setDisasterEvents((prev) =>
-        prev.map((event) => (event.id === updatedEvent.id ? updatedEvent : event))
-      );
-
-      await loadInventory();
-      closeAllocationModal();
+      await Promise.all([loadDisasterEvents(), loadInventory()]);
+      closeAllocationModal(true);
     } catch (error) {
       let rollbackMessage = "";
 
