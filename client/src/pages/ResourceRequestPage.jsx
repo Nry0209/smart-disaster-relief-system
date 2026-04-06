@@ -14,6 +14,9 @@ import { createResourceRequest } from "../services/reliefApi";
 import "./Pages.css";
 
 const EMPTY_ITEM = { name: "", quantity: "", category: "water" };
+const CONTACT_NAME_REGEX = /^[A-Za-z][A-Za-z\s.'-]{1,59}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_REGEX = /^\+?[1-9]\d{7,14}$/;
 
 export default function ResourceRequestPage() {
   const [formData, setFormData] = useState({
@@ -79,15 +82,34 @@ export default function ResourceRequestPage() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const trimmedContactName = formData.contactName.trim();
+    const trimmedContactEmail = formData.contactEmail.trim();
+    const trimmedContactPhone = formData.contactPhone.trim();
+
+    if (!CONTACT_NAME_REGEX.test(trimmedContactName)) {
+      setError("Enter a valid contact name using letters and spaces only.");
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(trimmedContactEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    if (!PHONE_REGEX.test(trimmedContactPhone.replace(/[\s()-]/g, ""))) {
+      setError("Enter a valid phone number.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError("");
 
       const payload = {
         organization: formData.organization,
-        contactName: formData.contactName,
-        contactEmail: formData.contactEmail,
-        contactPhone: formData.contactPhone,
+        contactName: trimmedContactName,
+        contactEmail: trimmedContactEmail,
+        contactPhone: trimmedContactPhone,
         disasterType: formData.disasterType,
         priority: formData.urgency,
         urgency: formData.urgency,
@@ -190,18 +212,18 @@ export default function ResourceRequestPage() {
               </div>
               <div className="form-group">
                 <label>Contact Name *</label>
-                <input name="contactName" value={formData.contactName} onChange={handleInputChange} placeholder="Full name" required />
+                <input name="contactName" value={formData.contactName} onChange={handleInputChange} placeholder="Full name" pattern="[A-Za-z][A-Za-z\s.'-]{1,59}" minLength="2" maxLength="60" title="Use 2-60 characters with letters and spaces only." required />
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div className="form-group">
                 <label>Email *</label>
-                <input name="contactEmail" type="email" value={formData.contactEmail} onChange={handleInputChange} placeholder="name@organization.org" required />
+                <input name="contactEmail" type="email" value={formData.contactEmail} onChange={handleInputChange} placeholder="name@organization.org" pattern="[^\s@]+@[^\s@]+\.[^\s@]{2,}" title="Enter a valid email address." required />
               </div>
               <div className="form-group">
                 <label>Phone *</label>
-                <input name="contactPhone" value={formData.contactPhone} onChange={handleInputChange} placeholder="+1 234 567 8900" required />
+                <input name="contactPhone" value={formData.contactPhone} onChange={handleInputChange} placeholder="+1 234 567 8900" pattern="\+?[0-9\s()-]{8,20}" title="Enter a valid phone number with country code if needed." required />
               </div>
             </div>
           </div>
