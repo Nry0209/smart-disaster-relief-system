@@ -54,250 +54,95 @@ const UserManagement = () => {
 
 
 
-  // Mock data - in real app, this would come from API
-
+  // Load users from API instead of mock data
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No authentication token found');
+          return;
+        }
 
-    const mockUsers = [
+        const response = await fetch('http://localhost:5000/api/auth/staff/all', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
 
-      {
-
-        id: 1,
-
-        name: 'John Smith',
-
-        email: 'john.smith@disasterrelief.org',
-
-        role: 'admin',
-
-        status: 'active',
-
-        createdAt: '2024-01-15T08:00:00Z',
-
-        lastLogin: '2024-03-26T14:30:00Z',
-
-        profilePicture: '/assets/profiles/users/user_1.jpg',
-
-        joinDate: '2024-01-15'
-
-      },
-
-      {
-
-        id: 2,
-
-        name: 'Sarah Johnson',
-
-        email: 'sarah.j@disasterrelief.org',
-
-        role: 'dmc_officer',
-
-        status: 'active',
-
-        createdAt: '2024-02-01T09:15:00Z',
-
-        lastLogin: '2024-03-26T10:20:00Z',
-
-        profilePicture: '/assets/profiles/users/user_2.jpg',
-
-        joinDate: '2024-02-01'
-
-      },
-
-      {
-
-        id: 3,
-
-        name: 'Michael Chen',
-
-        email: 'michael.chen@disasterrelief.org',
-
-        role: 'inventory_officer',
-
-        status: 'inactive',
-
-        createdAt: '2024-01-20T11:30:00Z',
-
-        lastLogin: '2024-03-20T16:45:00Z',
-
-        profilePicture: '/assets/profiles/users/user_3.jpg',
-
-        joinDate: '2024-01-20'
-
-      },
-
-      {
-
-        id: 4,
-
-        name: 'Emily Davis',
-
-        email: 'emily.davis@disasterrelief.org',
-
-        role: 'allocation_officer',
-
-        status: 'active',
-
-        createdAt: '2024-03-01T13:45:00Z',
-
-        lastLogin: '2024-03-26T09:00:00Z',
-
-        profilePicture: '/assets/profiles/users/user_4.jpg',
-
-        joinDate: '2024-03-01'
-
+        if (response.ok) {
+          const data = await response.json();
+          // Transform backend data to frontend format
+          const transformedUsers = data.users.map(user => ({
+            id: user._id,
+            name: user.fullName,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            createdAt: user.createdAt,
+            lastLogin: user.lastLogin,
+            profilePicture: user.profilePicture,
+            joinDate: user.joinDate
+          }));
+          setUsers(transformedUsers);
+        } else {
+          console.error('Failed to fetch users:', response.statusText);
+          // Fallback to empty array if API fails
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setUsers([]);
       }
-
-    ];
-
-
-
-    const mockPartners = [
-
-      {
-
-        id: 1,
-
-        name: 'Red Cross Society',
-
-        contactPerson: 'Dr. James Wilson',
-
-        email: 'jwilson@redcross.org',
-
-        phone: '+1-555-0101',
-
-        address: '123 Humanitarian Ave, Relief City, RC 12345',
-
-        specialization: 'Emergency Relief',
-
-        status: 'active',
-
-        createdAt: '2024-01-10T08:00:00Z',
-
-        lastContact: '2024-03-25T15:30:00Z',
-
-        profilePicture: '/assets/profiles/partners/partner_1.jpg',
-
-        partnershipDate: '2024-01-10',
-
-        organizationProfile: '/assets/documents/partners/organization-profiles/red_cross_profile.pdf',
-
-        registrationCertificate: '/assets/documents/partners/registration-certificates/red_cross_cert.pdf',
-
-        verificationDocument: '/assets/documents/partners/verification-documents/red_cross_verification.pdf'
-
-      },
-
-      {
-
-        id: 2,
-
-        name: 'Global Food Initiative',
-
-        contactPerson: 'Maria Rodriguez',
-
-        email: 'maria.r@globalfood.org',
-
-        phone: '+1-555-0102',
-
-        address: '456 Nutrition Blvd, Food City, FC 67890',
-
-        specialization: 'Food Distribution',
-
-        status: 'active',
-
-        createdAt: '2024-02-15T10:00:00Z',
-
-        lastContact: '2024-03-24T11:20:00Z',
-
-        profilePicture: '/assets/profiles/partners/partner_2.jpg',
-
-        partnershipDate: '2024-02-15',
-
-        organizationProfile: '/assets/documents/partners/organization-profiles/gfi_profile.pdf',
-
-        registrationCertificate: '/assets/documents/partners/registration-certificates/gfi_cert.pdf',
-
-        verificationDocument: '/assets/documents/partners/verification-documents/gfi_verification.pdf'
-
-      },
-
-      {
-
-        id: 3,
-
-        name: 'Medical Aid International',
-
-        contactPerson: 'Dr. Robert Kim',
-
-        email: 'rkim@medicalaid.org',
-
-        phone: '+1-555-0103',
-
-        address: '789 Health Center Dr, Medical City, MC 11223',
-
-        specialization: 'Medical Support',
-
-        status: 'inactive',
-
-        createdAt: '2024-01-25T14:30:00Z',
-
-        lastContact: '2024-03-18T09:45:00Z',
-
-        profilePicture: '/assets/profiles/partners/partner_3.jpg',
-
-        partnershipDate: '2024-01-25',
-
-        organizationProfile: '/assets/documents/partners/organization-profiles/mai_profile.pdf',
-
-        registrationCertificate: '/assets/documents/partners/registration-certificates/mai_cert.pdf',
-
-        verificationDocument: '/assets/documents/partners/verification-documents/mai_verification.pdf'
-
-      },
-
-      {
-
-        id: 4,
-
-        name: 'Shelter Builders Alliance',
-
-        contactPerson: 'Lisa Thompson',
-
-        email: 'lisa.t@shelteralliance.org',
-
-        phone: '+1-555-0104',
-
-        address: '321 Construction Way, Build City, BC 44556',
-
-        specialization: 'Shelter Management',
-
-        status: 'active',
-
-        createdAt: '2024-03-05T16:00:00Z',
-
-        lastContact: '2024-03-26T13:15:00Z',
-
-        profilePicture: '/assets/profiles/partners/partner_4.jpg',
-
-        partnershipDate: '2024-03-05',
-
-        organizationProfile: '/assets/documents/partners/organization-profiles/sba_profile.pdf',
-
-        registrationCertificate: '/assets/documents/partners/registration-certificates/sba_cert.pdf',
-
-        verificationDocument: '/assets/documents/partners/verification-documents/sba_verification.pdf'
-
+    };
+
+    const fetchPartners = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No authentication token found');
+          return;
+        }
+
+        const response = await fetch('http://localhost:5000/api/partners/all', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Transform backend data to frontend format
+          const transformedPartners = data.partners.map(partner => ({
+            id: partner._id,
+            name: partner.organizationName,
+            email: partner.email,
+            phone: partner.phone,
+            address: partner.address,
+            contactPerson: partner.contactPerson,
+            type: partner.type,
+            services: partner.services,
+            status: partner.status,
+            createdAt: partner.createdAt,
+            lastContact: partner.lastContact,
+            profilePicture: partner.profilePicture
+          }));
+          setPartners(transformedPartners);
+        } else {
+          console.error('Failed to fetch partners:', response.statusText);
+          setPartners([]);
+        }
+      } catch (error) {
+        console.error('Error fetching partners:', error);
+        setPartners([]);
       }
+    };
 
-    ];
-
-
-
-    setUsers(mockUsers);
-
-    setPartners(mockPartners);
-
+    // Fetch both users and partners
+    fetchUsers();
+    fetchPartners();
   }, []);
 
 
@@ -376,54 +221,154 @@ const UserManagement = () => {
 
 
 
-  const handleCreateUser = (userData) => {
+  const handleCreateUser = async (userData) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
 
-    const newUser = {
+      // Transform frontend data to backend format
+      const backendUserData = {
+        fullName: userData.name,
+        email: userData.email,
+        password: userData.password || 'DefaultPass123', // You may want to handle password differently
+        role: userData.role,
+        phone: userData.phone || '',
+        department: userData.department || '',
+        status: userData.status || 'active',
+        profilePicture: userData.profilePicture || null,
+        joinDate: userData.joinDate || new Date().toISOString()
+      };
 
-      id: users.length + 1,
+      const response = await fetch('http://localhost:5000/api/auth/staff/create', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(backendUserData)
+      });
 
-      ...userData,
+      if (response.ok) {
+        const result = await response.json();
+        console.log('User created successfully:', result);
+        
+        // Refresh users list
+        const fetchUsers = async () => {
+          const usersResponse = await fetch('http://localhost:5000/api/auth/staff/all', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
 
-      status: userData.status || 'active',
-
-      createdAt: new Date().toISOString(),
-
-      lastLogin: null,
-
-      profilePicture: userData.profilePicture || null
-
-    };
-
-    setUsers([...users, newUser]);
-
-    setShowCreateForm(false);
-
+          if (usersResponse.ok) {
+            const usersData = await usersResponse.json();
+            const transformedUsers = usersData.users.map(user => ({
+              id: user._id,
+              name: user.fullName,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              createdAt: user.createdAt,
+              lastLogin: user.lastLogin,
+              profilePicture: user.profilePicture,
+              joinDate: user.joinDate
+            }));
+            setUsers(transformedUsers);
+          }
+        };
+        
+        await fetchUsers();
+        setShowCreateForm(false);
+      } else {
+        const error = await response.json();
+        console.error('Failed to create user:', error.message);
+        alert('Failed to create user: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Error creating user: ' + error.message);
+    }
   };
 
 
 
-  const handleCreatePartner = (partnerData) => {
+  const handleCreatePartner = async (partnerData) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
 
-    const newPartner = {
+      // Transform frontend data to backend format
+      const backendPartnerData = {
+        organizationName: partnerData.name,
+        email: partnerData.email,
+        phone: partnerData.phone || '',
+        address: partnerData.address || '',
+        contactPerson: partnerData.contactPerson || '',
+        type: partnerData.type || 'NGO',
+        services: partnerData.services || [],
+        status: partnerData.status || 'active'
+      };
 
-      id: partners.length + 1,
+      const response = await fetch('http://localhost:5000/api/partners', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(backendPartnerData)
+      });
 
-      ...partnerData,
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Partner created successfully:', result);
+        
+        // Refresh partners list
+        const fetchPartners = async () => {
+          const partnersResponse = await fetch('http://localhost:5000/api/partners/all', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
 
-      status: partnerData.status || 'active',
-
-      createdAt: new Date().toISOString(),
-
-      lastContact: null,
-
-      profilePicture: partnerData.profilePicture || null
-
-    };
-
-    setPartners([...partners, newPartner]);
-
-    setShowPartnerForm(false);
-
+          if (partnersResponse.ok) {
+            const partnersData = await partnersResponse.json();
+            const transformedPartners = partnersData.partners.map(partner => ({
+              id: partner._id,
+              name: partner.organizationName,
+              email: partner.email,
+              phone: partner.phone,
+              address: partner.address,
+              contactPerson: partner.contactPerson,
+              type: partner.type,
+              services: partner.services,
+              status: partner.status,
+              createdAt: partner.createdAt,
+              lastContact: partner.lastContact,
+              profilePicture: partner.profilePicture
+            }));
+            setPartners(transformedPartners);
+          }
+        };
+        
+        await fetchPartners();
+        setShowPartnerForm(false);
+      } else {
+        const error = await response.json();
+        console.error('Failed to create partner:', error.message);
+        alert('Failed to create partner: ' + error.message);
+      }
+    } catch (error) {
+      console.error('Error creating partner:', error);
+      alert('Error creating partner: ' + error.message);
+    }
   };
 
 
