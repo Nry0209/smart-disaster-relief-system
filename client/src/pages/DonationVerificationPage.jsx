@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search, CheckCircle, XCircle, Clock, AlertCircle, Package, Users, Calendar, TrendingUp } from "lucide-react";
+import { Search, CheckCircle, XCircle, Clock, Package } from "lucide-react";
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
-import { fetchDonations, fetchResourceRequests, verifyDonation, rejectDonation } from '../services/reliefApi';
+import { fetchDonations, fetchResourceRequests, verifyDonation, rejectDonation, verifyResourceRequest, rejectResourceRequest } from '../services/reliefApi';
 
 const DonationVerificationPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,6 +26,7 @@ const DonationVerificationPage = () => {
       const requestRows = (requestResponse.data || []).map((request) => {
         const requestItems = Array.isArray(request.items) ? request.items : [];
         const normalizedStatus = String(request.status || "pending").toLowerCase();
+        const requestId = request.id || request._id || request.requestCode;
 
         let status = "pending";
         if (["approved", "fulfilled", "partially_fulfilled"].includes(normalizedStatus)) {
@@ -35,7 +36,8 @@ const DonationVerificationPage = () => {
         }
 
         return {
-          id: request.requestCode || request.id,
+          id: requestId,
+          displayId: request.requestCode || requestId,
           donorName: request.organization || request.requesterName || "Resource Request",
           donorType: "Resource Request",
           items: requestItems.map((item) => `${item.itemName} (${item.quantityRequested})`),
@@ -98,14 +100,48 @@ const DonationVerificationPage = () => {
   };
 
   const handleVerify = async (donationId) => {
-    await verifyDonation(donationId, { verifiedBy: null });
-    await loadDonations();
+    try {
+      const row = donations.find((entry) => String(entry.id) === String(donationId));
+
+      if (!row) {
+        return;
+      }
+
+      if (row.source === "resource-request") {
+        await verifyResourceRequest(donationId);
+      } else {
+        await verifyDonation(donationId, { verifiedBy: null });
+      }
+
+      await loadDonations();
+    } catch (err) {
+      setError(err.message || "Failed to verify record.");
+    }
   };
 
   const handleReject = async (donationId) => {
-    await rejectDonation(donationId, { verifiedBy: null });
-    await loadDonations();
+    try {
+      const row = donations.find((entry) => String(entry.id) === String(donationId));
+
+      if (!row) {
+        return;
+      }
+
+      if (row.source === "resource-request") {
+        await rejectResourceRequest(donationId);
+      } else {
+        await rejectDonation(donationId, { verifiedBy: null });
+      }
+
+      setDonations((currentDonations) =>
+        currentDonations.filter((entry) => String(entry.id) !== String(donationId))
+      );
+    } catch (err) {
+      setError(err.message || "Failed to reject record.");
+    }
   };
+
+  const isActionable = (donation) => donation.status === "pending";
 
   return (
     <div className="donation-verification-page">
@@ -198,7 +234,7 @@ const DonationVerificationPage = () => {
             ) : (
               filteredDonations.map(donation => (
                 <tr key={donation.id}>
-                  <td><span className="donation-id">{donation.id}</span></td>
+                  <td><span className="donation-id">{donation.displayId || donation.id}</span></td>
                   <td>
                     <div className="donor-info">
                       <div className="donor-name">{donation.donorName}</div>
@@ -229,7 +265,7 @@ const DonationVerificationPage = () => {
                       >
                         View
                       </button>
-                      {donation.status === "pending" && donation.source !== "resource-request" && (
+                      {isActionable(donation) && (
                         <>
                           <button 
                             className="btn-verify"
@@ -288,7 +324,7 @@ const DonationVerificationPage = () => {
                   <h3>Donation Information</h3>
                   <div className="detail-item">
                     <label>ID:</label>
-                    <span>{selectedDonation.id}</span>
+                    <span>{selectedDonation.displayId || selectedDonation.id}</span>
                   </div>
                   <div className="detail-item">
                     <label>Date:</label>
@@ -325,25 +361,25 @@ const DonationVerificationPage = () => {
             
             <div className="donation-modal-footer">
               <button className="btn-cancel" onClick={() => setSelectedDonation(null)}>Close</button>
-              {selectedDonation.status === "pending" && selectedDonation.source !== "resource-request" && (
+              {isActionable(selectedDonation) && (
                 <>
                   <button 
                     className="btn-verify"
-                    onClick={() => {
-                        handleVerify(selectedDonation.id);
+                    onClick={async () => {
+                        await handleVerify(selectedDonation.id);
                         setSelectedDonation(null);
                     }}
                   >
-                    Verify Donation
+                    Verify
                   </button>
                   <button 
                     className="btn-reject"
-                    onClick={() => {
-                        handleReject(selectedDonation.id);
+                    onClick={async () => {
+                        await handleReject(selectedDonation.id);
                         setSelectedDonation(null);
                     }}
                   >
-                    Reject Donation
+                    Reject
                   </button>
                 </>
               )}

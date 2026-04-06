@@ -132,3 +132,15 @@ export function rejectDonation(donationId, payload = {}) {
     body: JSON.stringify(payload),
   });
 }
+
+export function verifyResourceRequest(requestId) {
+  return apiRequest(`/api/resource-requests/approve/${requestId}`, {
+    method: 'PUT',
+  });
+}
+
+export function rejectResourceRequest(requestId) {
+  return apiRequest(`/api/resource-requests/reject/${requestId}`, {
+    method: 'PUT',
+  });
+}
