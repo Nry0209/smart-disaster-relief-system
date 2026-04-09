@@ -30,6 +30,16 @@ const userSchema = new mongoose.Schema({
     enum: ['active', 'inactive'],
     default: 'active'
   },
+  phone: {
+    type: String,
+    trim: true,
+    default: ""
+  },
+  department: {
+    type: String,
+    trim: true,
+    default: ""
+  },
   profilePicture: {
     type: String,
     default: null
@@ -46,12 +56,34 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+  isFirstLogin: {
+    type: Boolean,
+    default: true
+  },
+  otp: {
+    type: String,
+    default: null
+  },
+  otpExpires: {
+    type: Date,
+    default: null
+  },
+  resetPasswordToken: {
+    type: String,
+    default: null
+  },
+  resetPasswordExpires: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
 
-// Hash password before saving
+// ⚠️ DEVELOPMENT MODE: Store passwords as plain text (no encryption)
+// In production, uncomment the password hashing code below
+/*
 userSchema.pre('save', async function() {
   if (!this.isModified('password')) return;
   
@@ -63,11 +95,18 @@ userSchema.pre('save', async function() {
     throw error;
   }
 });
+*/
 
 // Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = function(candidatePassword) {
+  // ⚠️ DEVELOPMENT MODE: Plain text password comparison (no encryption)
+  const match = candidatePassword === this.password;
+  return match;
+  
+  /* Production password comparison with bcrypt (commented for dev):
   const bcrypt = require('bcryptjs');
   return await bcrypt.compare(candidatePassword, this.password);
+  */
 };
 
 // Hide password in JSON output

@@ -45,18 +45,6 @@ const {
   handleValidationErrors
 } = require('./validation');
 
-// Rate limiting middleware
-const {
-  basicLimiter,
-  authLimiter,
-  createLimiter,
-  uploadLimiter,
-  docsLimiter,
-  healthLimiter,
-  roleBasedLimiter,
-  sensitiveLimiter,
-  createRoleBasedLimiter
-} = require('./rateLimiter');
 
 // Security middleware
 const {
@@ -118,17 +106,6 @@ const middlewareCombinations = {
     performanceLogger
   ],
   
-  // Rate limiting for different endpoints
-  rateLimiting: {
-    basic: basicLimiter,
-    auth: authLimiter,
-    create: createLimiter,
-    upload: uploadLimiter,
-    docs: docsLimiter,
-    health: healthLimiter,
-    roleBased: roleBasedLimiter,
-    sensitive: sensitiveLimiter
-  },
   
   // Validation for different endpoints
   validation: {
@@ -184,15 +161,6 @@ module.exports = {
   validatePagination,
   handleValidationErrors,
   
-  basicLimiter,
-  authLimiter,
-  createLimiter,
-  uploadLimiter,
-  docsLimiter,
-  healthLimiter,
-  roleBasedLimiter,
-  sensitiveLimiter,
-  createRoleBasedLimiter,
   
   securityHeaders,
   corsOptions,

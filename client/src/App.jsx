@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import LandingPage from "./pages/LandingPage";
 import DistributionTracking from "./pages/DistributionTracking";
 import UserManagement from "./pages/UserManagement";
@@ -24,6 +25,7 @@ function App() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route path="/public-donation" element={<PublicDonationPage />} />
       <Route path="/dashboard" element={
         <DashboardLayout>

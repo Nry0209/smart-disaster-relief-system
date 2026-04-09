@@ -38,29 +38,34 @@ const auditLogger = async (req, res, next) => {
   res.send = function(data) {
     // Log audit entry for successful operations
     if (res.statusCode >= 200 && res.statusCode < 300) {
+
       const auditData = {
-        userId: req.user._id,
-        userEmail: req.user.email,
-        userRole: req.user.role,
+        userId: req.user?._id || null,
         action: getActionFromMethod(req.method),
-        resource: getResourceFromUrl(req.originalUrl),
-        method: req.method,
-        url: req.originalUrl,
-        statusCode: res.statusCode,
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent'),
-        timestamp: new Date(),
-        details: {
-          body: sanitizeRequestBody(req.body),
-          params: req.params,
-          query: req.query
-        }
+        module: getResourceFromUrl(req.originalUrl),
+        // Optional fields for debugging
+        description: JSON.stringify({
+          userEmail: req.user?.email,
+          userRole: req.user?.role,
+          method: req.method,
+          url: req.originalUrl,
+          statusCode: res.statusCode,
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent'),
+          details: {
+            body: sanitizeRequestBody(req.body),
+            params: req.params,
+            query: req.query
+          }
+        })
       };
 
       // Save audit log asynchronously
-      AuditLog.create(auditData).catch(err => {
-        console.error('Failed to save audit log:', err);
-      });
+      if (auditData.userId && auditData.action && auditData.module) {
+        AuditLog.create(auditData).catch(err => {
+          console.error('Failed to save audit log:', err);
+        });
+      }
     }
     
     originalSend.call(this, data);
@@ -90,23 +95,26 @@ const securityLogger = (req, res, next) => {
     
     // Log security event
     const securityData = {
-      type: 'SECURITY_ALERT',
+      userId: req.user?._id || null,
       action: 'SUSPICIOUS_REQUEST',
-      method: req.method,
-      url: url,
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent'),
-      timestamp: new Date(),
-      details: {
-        body: sanitizeRequestBody(req.body),
-        pattern: suspiciousPatterns.find(pattern => pattern.test(combined))
-      }
+      module: getResourceFromUrl(req.originalUrl),
+      description: JSON.stringify({
+        type: 'SECURITY_ALERT',
+        method: req.method,
+        url: url,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+        details: {
+          body: sanitizeRequestBody(req.body),
+          pattern: suspiciousPatterns.find(pattern => pattern.test(combined))
+        }
+      })
     };
-    
-    // Save security log asynchronously
-    AuditLog.create(securityData).catch(err => {
-      console.error('Failed to save security log:', err);
-    });
+    if (securityData.userId && securityData.action && securityData.module) {
+      AuditLog.create(securityData).catch(err => {
+        console.error('Failed to save security log:', err);
+      });
+    }
   }
   
   next();
@@ -170,18 +178,22 @@ const performanceLogger = (req, res, next) => {
     
     // Log performance metrics
     const performanceData = {
-      type: 'PERFORMANCE',
-      method: req.method,
-      url: req.originalUrl,
-      duration: duration,
-      statusCode: res.statusCode,
-      timestamp: new Date()
+      userId: req.user?._id || null,
+      action: 'PERFORMANCE',
+      module: getResourceFromUrl(req.originalUrl),
+      description: JSON.stringify({
+        duration: duration,
+        statusCode: res.statusCode,
+        method: req.method,
+        url: req.originalUrl,
+        timestamp: new Date()
+      })
     };
-    
-    // Save performance log asynchronously
-    AuditLog.create(performanceData).catch(err => {
-      console.error('Failed to save performance log:', err);
-    });
+    if (performanceData.userId && performanceData.action && performanceData.module) {
+      AuditLog.create(performanceData).catch(err => {
+        console.error('Failed to save performance log:', err);
+      });
+    }
   });
   
   next();

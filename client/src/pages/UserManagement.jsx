@@ -80,6 +80,8 @@ const UserManagement = () => {
             email: user.email,
             role: user.role,
             status: user.status,
+            phone: user.phone || '',
+            department: user.department || '',
             createdAt: user.createdAt,
             lastLogin: user.lastLogin,
             profilePicture: user.profilePicture,
@@ -231,15 +233,13 @@ const UserManagement = () => {
 
       // Transform frontend data to backend format
       const backendUserData = {
-        fullName: userData.name,
+        fullName: userData.fullName,
         email: userData.email,
-        password: userData.password || 'DefaultPass123', // You may want to handle password differently
         role: userData.role,
         phone: userData.phone || '',
         department: userData.department || '',
         status: userData.status || 'active',
-        profilePicture: userData.profilePicture || null,
-        joinDate: userData.joinDate || new Date().toISOString()
+        profilePicture: userData.profilePicture || null
       };
 
       const response = await fetch('http://localhost:5000/api/auth/staff/create', {
@@ -254,6 +254,17 @@ const UserManagement = () => {
       if (response.ok) {
         const result = await response.json();
         console.log('User created successfully:', result);
+        
+        // Show success message with OTP if available (dev mode)
+        let successMsg = result.data.emailSent 
+          ? 'Staff member created successfully! OTP has been sent to their email.'
+          : 'Staff member created successfully! ⚠️ Email not sent (check server logs for OTP).';
+        
+        if (result.data.otp) {
+          successMsg += `\n\n🔐 DEV MODE OTP: ${result.data.otp}`;
+        }
+        
+        alert(successMsg);
         
         // Refresh users list
         const fetchUsers = async () => {
@@ -272,6 +283,8 @@ const UserManagement = () => {
               email: user.email,
               role: user.role,
               status: user.status,
+              phone: user.phone,
+              department: user.department,
               createdAt: user.createdAt,
               lastLogin: user.lastLogin,
               profilePicture: user.profilePicture,
@@ -639,39 +652,21 @@ eligibility for partnership in relief operations.
 
     const [formData, setFormData] = useState({
 
-      name: user?.name || '',
+      fullName: user?.name || '',
 
       email: user?.email || '',
 
-      role: user?.role || 'admin',
+      role: user?.role || 'charity_staff',
+
+      phone: user?.phone || '',
+
+      department: user?.department || '',
 
       status: user?.status || 'active',
 
-      profilePicture: user?.profilePicture || null,
-
-      joinDate: user?.joinDate || new Date().toISOString().split('T')[0]
+      profilePicture: user?.profilePicture || null
 
     });
-
-
-
-    const formatDateForDisplay = (dateString) => {
-
-      if (!dateString) return '';
-
-      const date = new Date(dateString);
-
-      return date.toLocaleDateString('en-GB', {
-
-        day: '2-digit',
-
-        month: '2-digit',
-
-        year: '2-digit'
-
-      });
-
-    };
 
 
 
@@ -700,6 +695,11 @@ eligibility for partnership in relief operations.
     const handleSubmit = (e) => {
 
       e.preventDefault();
+
+      if (!formData.fullName || !formData.email || !formData.role) {
+        alert('Full name, email, and role are required');
+        return;
+      }
 
       if (user) {
 
@@ -741,7 +741,7 @@ eligibility for partnership in relief operations.
                         className="h-18 w-18 rounded-full object-cover"
                       />
                     ) : (
-                      <span className="text-blue-600 font-semibold text-2xl">{formData.name.charAt(0).toUpperCase() || 'U'}</span>
+                      <span className="text-blue-600 font-semibold text-2xl">{formData.fullName.charAt(0).toUpperCase() || 'U'}</span>
                     )}
                   </div>
                   <div>
@@ -778,8 +778,8 @@ eligibility for partnership in relief operations.
                   <input
                     type="text"
                     required
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter full name"
                   />
@@ -800,13 +800,36 @@ eligibility for partnership in relief operations.
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Department</label>
+                  <input
+                    type="text"
+                    value={formData.department}
+                    onChange={(e) => setFormData({...formData, department: e.target.value})}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter department"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Role *</label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="admin">Administrator</option>
                     <option value="dmc_officer">DMC Officer</option>
                     <option value="inventory_officer">Inventory Officer</option>
                     <option value="allocation_officer">Allocation Officer</option>
@@ -828,15 +851,10 @@ eligibility for partnership in relief operations.
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Join Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={formData.joinDate}
-                  onChange={(e) => setFormData({...formData, joinDate: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> When this staff member logs in for the first time, they will receive an OTP via email for secure verification. They will then be asked to set their own password.
+                </p>
               </div>
             </div>
 
@@ -852,7 +870,7 @@ eligibility for partnership in relief operations.
                 type="submit"
                 className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
               >
-                {user ? 'Update Staff' : 'Create Staff'}
+                {user ? 'Update Staff' : 'Create & Send OTP'}
               </button>
             </div>
           </form>

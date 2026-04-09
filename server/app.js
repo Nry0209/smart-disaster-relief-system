@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
 const dotenv = require("dotenv");
 
 // Import middleware
@@ -14,12 +13,6 @@ const {
   requestSizeLimiter,
   ipBlacklist,
   validateUserAgent,
-  basicLimiter,
-  authLimiter,
-  createLimiter,
-  uploadLimiter,
-  docsLimiter,
-  healthLimiter,
   requestLogger,
   auditLogger,
   securityLogger,
@@ -57,10 +50,9 @@ app.use(securityLogger);
 app.use(performanceLogger);
 
 // Rate limiting middleware
-app.use(basicLimiter);
 
 // Health check endpoint (with lenient rate limiting)
-app.get('/health', healthLimiter, asyncHandler(async (req, res) => {
+app.get('/health', asyncHandler(async (req, res) => {
   const healthCheck = {
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -80,7 +72,7 @@ app.get('/health', healthLimiter, asyncHandler(async (req, res) => {
 }));
 
 // API documentation endpoint
-app.get('/api/docs', docsLimiter, (req, res) => {
+app.get('/api/docs', (req, res) => {
   res.json({
     title: 'Smart Disaster Relief API',
     version: '1.0.0',
@@ -111,6 +103,16 @@ app.get('/api/docs', docsLimiter, (req, res) => {
         'POST /api/allocations': 'Create allocation plan',
         'GET /api/allocations/:id': 'Get specific allocation plan',
         'PUT /api/allocations/:id': 'Update allocation plan'
+      },
+      tracking: {
+        'GET /api/tracking': 'Get all tracking records',
+        'POST /api/tracking': 'Create tracking record (tracking officer only)',
+        'GET /api/tracking/:id': 'Get specific tracking record',
+        'PUT /api/tracking/:id': 'Update tracking record (tracking officer only)',
+        'DELETE /api/tracking/:id': 'Delete tracking record (admin only)',
+        'PATCH /api/tracking/:id/status': 'Update tracking status (DMC officer only)',
+        'GET /api/tracking/allocation/:allocationId': 'Get tracking by allocation',
+        'GET /api/tracking/disaster/:disasterId': 'Get tracking by disaster'
       },
       dispatch: {
         'GET /api/dispatch': 'Get all dispatch records',
@@ -146,21 +148,23 @@ const authRoutes = require('./routes/auth');
 const disasterRoutes = require('./routes/disasterReports');
 const inventoryRoutes = require('./routes/inventory');
 const allocationRoutes = require('./routes/allocations');
+const trackingRoutes = require('./routes/tracking');
 const dispatchRoutes = require('./routes/dispatch');
 const donationRoutes = require('./routes/donations');
 const partnerRoutes = require('./routes/partners');
 
 // API Routes with specific rate limiting
-app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/disaster-reports', createLimiter, disasterRoutes);
-app.use('/api/inventory', createLimiter, inventoryRoutes);
-app.use('/api/allocations', createLimiter, allocationRoutes);
-app.use('/api/dispatch', createLimiter, dispatchRoutes);
-app.use('/api/donations', createLimiter, donationRoutes);
-app.use('/api/partners', createLimiter, partnerRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/disaster-reports', disasterRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/allocations', allocationRoutes);
+app.use('/api/tracking', trackingRoutes);
+app.use('/api/dispatch', dispatchRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/partners', partnerRoutes);
 
 // Root route
-app.get("/", healthLimiter, (req, res) => {
+app.get("/", (req, res) => {
   res.json({
     message: "Smart Disaster Relief API is running...",
     version: "1.0.0",
@@ -170,6 +174,7 @@ app.get("/", healthLimiter, (req, res) => {
       disasterReports: "/api/disaster-reports",
       inventory: "/api/inventory",
       allocations: "/api/allocations",
+      tracking: "/api/tracking",
       dispatch: "/api/dispatch",
       donations: "/api/donations",
       partners: "/api/partners",

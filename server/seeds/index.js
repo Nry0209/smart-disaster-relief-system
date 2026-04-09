@@ -1,32 +1,30 @@
+
+const dotenv = require('dotenv');
+dotenv.config({ path: require('path').resolve(__dirname, '../.env') });
 const mongoose = require('mongoose');
-const seedAdmin = require('./adminSeed');
+const { createAdminUser } = require('./createAdminUser');
+const dbConfig = require('../config/db');
 
-// Run all seeds
-const runSeeds = async () => {
+async function runSeeds() {
   try {
-    console.log('🌱 Starting database seeding...');
-    
-    // Seed admin user
-    await seedAdmin();
-    
-    console.log('✅ Database seeding completed successfully!');
-    
-  } catch (error) {
-    console.error('❌ Error during seeding:', error);
-  } finally {
-    // Close database connection
-    mongoose.connection.close();
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not set in environment variables');
+    }
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('✅ Database connected');
+    await createAdminUser();
+  } catch (err) {
+    console.error('❌ Error during seeding:', err);
+    process.exit(1);
   }
-};
+}
 
-// Run seeds if called directly
+
 if (require.main === module) {
-  // Connect to database and run seeds
-  require('../config/db').then(() => {
-    runSeeds();
-  }).catch(error => {
-    console.error('❌ Database connection error:', error);
-    });
+  runSeeds().then(async () => {
+    await mongoose.disconnect();
+    console.log('✅ Seeding complete. Database disconnected.');
+  });
 }
 
 module.exports = { runSeeds };
