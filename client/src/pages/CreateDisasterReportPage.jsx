@@ -237,7 +237,7 @@ function CreateDisasterReportPage() {
         ? "border-rose-300 bg-rose-50/40 focus:border-rose-400 focus:ring-rose-100"
         : ""
     }`;
-
+//create  repoting a disaster
   const handleCreateReport = async (status, successMessage, actionType) => {
     setFormError("");
     setFormSuccess("");
@@ -249,7 +249,7 @@ function CreateDisasterReportPage() {
     const normalizedReportedBy = formData.reportedBy.trim();
     const normalizedPhone = formData.contactPhone.trim();
     const normalizedEmail = formData.contactEmail.trim().toLowerCase();
-
+//validation part
     if (!formData.disasterType || !formData.location || !formData.eventDate) {
       setFormError("Please fill disaster type, location, and reported date/time.");
       return;
@@ -287,7 +287,7 @@ function CreateDisasterReportPage() {
 
     setSubmitAction(actionType);
     setIsSubmitting(true);
-
+//create disaster report
     try {
       await createDisasterReport({
         ...formData,
@@ -298,7 +298,7 @@ function CreateDisasterReportPage() {
         contactEmail: normalizedEmail,
         status,
       });
-
+//display sucess message to user 
       setFormSuccess(successMessage);
       setFormData({
         disasterType: "",
@@ -314,6 +314,7 @@ function CreateDisasterReportPage() {
         contactPhone: "",
         contactEmail: "",
       });
+      //reset form for next disaster report
       setLastEditedAt(new Date());
     } catch (error) {
       setFormError(error.message || "Failed to create disaster report.");
@@ -430,6 +431,7 @@ function CreateDisasterReportPage() {
 
                 <label className="space-y-1 text-xs font-semibold text-slate-600">
                   Severity level
+//
                   <select
                     className={inputBaseClass}
                     value={formData.severity}

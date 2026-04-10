@@ -20,16 +20,19 @@ export const SIDEBAR_ITEMS = [
     ],
   },
   {
+//dmc dashboard
     label: "DMC Dashboard",
     path: "/dmc-dashboard",
     roles: [ROLES.DMC],
   },
   {
     label: "Create Disaster Report",
+//create disaster report
     path: "/disaster-report/create",
     roles: [ROLES.DMC],
   },
   {
+//disaster report view ,edit ,delete
     label: "Disaster Reports",
     path: "/disaster-events",
     roles: [ROLES.ADMIN, ROLES.DMC],

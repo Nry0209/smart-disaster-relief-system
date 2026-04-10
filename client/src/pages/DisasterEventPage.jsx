@@ -58,7 +58,7 @@ const DisasterEventPage = () => {
       .map((item) => String(item).trim())
       .filter(Boolean)
       .join(", ");
-
+//view  disaster report
   const loadReports = async () => {
     setIsLoading(true);
     setErrorMessage("");
@@ -81,7 +81,7 @@ const DisasterEventPage = () => {
     setActionMessage("");
     await loadReports();
   };
-
+//update disaster report
   const openEditModal = (event) => {
     setActionMessage("");
     setErrorMessage("");
@@ -159,7 +159,7 @@ const DisasterEventPage = () => {
       setActiveActionId("");
     }
   };
-
+//disaster delete
   const handleDeleteReport = async (id) => {
     const shouldDelete = window.confirm(
       "Are you sure you want to delete this disaster report? This action cannot be undone."
