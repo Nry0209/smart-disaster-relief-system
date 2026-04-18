@@ -23,10 +23,6 @@ function LoginPage() {
   // Forgot Password States
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
-  const [forgotPasswordStep, setForgotPasswordStep] = useState("email"); // email or reset
-  const [resetToken, setResetToken] = useState("");
-  const [resetPassword, setResetPassword] = useState("");
-  const [confirmResetPassword, setConfirmResetPassword] = useState("");
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -65,7 +61,7 @@ function LoginPage() {
         // Check if it's a first-login OTP user
         if (data.message && data.message.includes('OTP')) {
           setLoginStep('otp');
-          alert('This is your first login. Please enter the OTP sent to your email.');
+          alert('This is your first login. Enter the OTP from your email. If email is not configured yet, contact admin for the OTP shown in User Management/server logs.');
         } else {
           alert(data.message || 'Login failed');
         }
@@ -185,7 +181,8 @@ function LoginPage() {
           : 'Password reset prepared. ⚠️ Email not sent (check server logs for reset link).';
         
         if (data.resetToken) {
-          msg += `\n\n🔑 DEV MODE: Copy this link in your browser:\nhttp://localhost:3000/reset-password/${data.resetToken}`;
+          const frontendBaseUrl = window.location.origin || 'http://localhost:5173';
+          msg += `\n\n🔑 DEV MODE: Direct reset link:\n${frontendBaseUrl}/reset-password/${data.resetToken}`;
         }
         
         alert(msg);
@@ -281,7 +278,7 @@ function LoginPage() {
                     maxLength="6"
                   />
                   <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-                    Enter the 6-digit code sent to your email. OTP expires in 15 minutes.
+                    Enter the 6-digit code. OTP expires in 15 minutes. If SMTP is not configured, use the OTP provided by admin/server logs.
                   </p>
                 </div>
 
@@ -562,7 +559,6 @@ function LoginPage() {
                 onClick={() => {
                   setShowForgotPassword(false);
                   setForgotPasswordEmail('');
-                  setForgotPasswordStep('email');
                 }}
               >
                 ✕
@@ -570,32 +566,30 @@ function LoginPage() {
             </div>
 
             <form onSubmit={handleForgotPassword} className="p-6 space-y-4">
-              {forgotPasswordStep === 'email' ? (
-                <>
-                  <p className="text-slate-600 text-sm">
-                    Enter your email address and we'll send you a link to reset your password.
-                  </p>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
-                    <input
-                      type="email"
-                      value={forgotPasswordEmail}
-                      onChange={(e) => setForgotPasswordEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      required
-                      disabled={isLoading}
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
+              <>
+                <p className="text-slate-600 text-sm">
+                  Enter your email address and we will send you a password reset link.
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
+                  <input
+                    type="email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
                     disabled={isLoading}
-                    className="btn-base btn-primary w-full"
-                  >
-                    {isLoading ? "Sending..." : "Send Reset Link"}
-                  </button>
-                </>
-              ) : null}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn-base btn-primary w-full"
+                >
+                  {isLoading ? "Sending..." : "Send Reset Link"}
+                </button>
+              </>
             </form>
           </div>
         </div>

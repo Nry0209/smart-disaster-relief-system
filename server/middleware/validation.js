@@ -269,48 +269,47 @@ const validateDonation = [
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Donor name must be between 2 and 100 characters'),
+
+  body('donorType')
+    .isIn(['individual', 'organization'])
+    .withMessage('Donor type must be individual or organization'),
+
+  body('organizationName')
+    .if(body('donorType').equals('organization'))
+    .trim()
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Organization name must be between 2 and 120 characters'),
+
+  body('donationType')
+    .isIn(['monetary', 'inventory'])
+    .withMessage('Donation type must be monetary or inventory'),
   
-  body('donorEmail')
+  body('email')
     .optional()
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email address'),
   
-  body('donorPhone')
+  body('phone')
     .optional()
     .isMobilePhone('any')
     .withMessage('Please provide a valid phone number'),
-  
-  body('donationType')
-    .isIn(['monetary', 'goods', 'services'])
-    .withMessage('Invalid donation type'),
-  
-  body('items')
-    .if(body('donationType').equals('goods'))
-    .isArray({ min: 1 })
-    .withMessage('At least one item is required for goods donation'),
-  
-  body('items.*.name')
-    .if(body('donationType').equals('goods'))
+
+  body('itemType')
+    .if(body('donationType').equals('inventory'))
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Item name must be between 2 and 100 characters'),
-  
-  body('items.*.quantity')
-    .if(body('donationType').equals('goods'))
+
+  body('quantity')
+    .if(body('donationType').equals('inventory'))
     .isInt({ min: 1 })
     .withMessage('Quantity must be a positive number'),
   
   body('amount')
     .if(body('donationType').equals('monetary'))
-    .isFloat({ min: 0 })
+    .isFloat({ min: 0.01 })
     .withMessage('Amount must be a positive number'),
-  
-  body('serviceType')
-    .if(body('donationType').equals('services'))
-    .trim()
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Service type must be between 2 and 100 characters'),
   
   handleValidationErrors
 ];

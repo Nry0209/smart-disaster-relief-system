@@ -8,6 +8,7 @@ const {
   setPasswordAfterOTP,
   forgotPassword,
   resetPassword,
+  testEmail,
   getCurrentUser,
   updateProfile,
   getAllUsers,
@@ -38,6 +39,9 @@ router.post('/forgot-password', forgotPassword);
 
 // Reset Password Using Token
 router.post('/reset-password', resetPassword);
+
+// Send Test Email (Admin only)
+router.post('/test-email', authenticateToken, adminOnly, testEmail);
 
 // Create Staff User (Admin only)
 router.post('/staff/create', authenticateToken, adminOnly, createStaff);

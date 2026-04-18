@@ -1,4 +1,3 @@
-// module.exports = connectDB;
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
@@ -11,6 +10,7 @@ const connectDB = async () => {
     return false; // ❌ return failure
   }
 };
+
 mongoose.connection.on("connected", () => {
   console.log("🟢 Mongoose connected");
 });

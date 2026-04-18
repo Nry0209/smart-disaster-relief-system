@@ -12,6 +12,23 @@ const donationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    organizationName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    donorType: {
+      type: String,
+      enum: ["individual", "organization"],
+      required: true,
+      default: "individual",
+    },
+    donationType: {
+      type: String,
+      enum: ["monetary", "inventory"],
+      required: true,
+      default: "inventory",
+    },
     email: {
       type: String,
       trim: true,
@@ -23,8 +40,8 @@ const donationSchema = new mongoose.Schema(
     },
     itemType: {
       type: String,
-      required: true,
       trim: true,
+      default: "",
     },
     category: {
       type: String,
@@ -32,8 +49,13 @@ const donationSchema = new mongoose.Schema(
     },
     quantity: {
       type: Number,
-      required: true,
-      min: 1,
+      min: 0,
+      default: 0,
+    },
+    amount: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     expectedDeliveryDate: {
       type: Date,

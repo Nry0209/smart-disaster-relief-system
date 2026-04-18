@@ -28,6 +28,49 @@ const UserManagement = () => {
 
   const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
 
+  const extractUsersArray = (payload) => {
+    if (Array.isArray(payload?.data?.users)) return payload.data.users;
+    if (Array.isArray(payload?.users)) return payload.users;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
+  const extractPartnersArray = (payload) => {
+    if (Array.isArray(payload?.data?.partners)) return payload.data.partners;
+    if (Array.isArray(payload?.partners)) return payload.partners;
+    if (Array.isArray(payload?.data)) return payload.data;
+    return [];
+  };
+
+  const mapStaffUser = (staffUser) => ({
+    id: staffUser._id || staffUser.id,
+    name: staffUser.fullName || staffUser.name || '',
+    email: staffUser.email || '',
+    role: staffUser.role || '',
+    status: staffUser.status || 'inactive',
+    phone: staffUser.phone || '',
+    department: staffUser.department || '',
+    createdAt: staffUser.createdAt,
+    lastLogin: staffUser.lastLogin,
+    profilePicture: staffUser.profilePicture,
+    joinDate: staffUser.joinDate
+  });
+
+  const mapPartner = (partner) => ({
+    id: partner._id || partner.id,
+    name: partner.organizationName || partner.name || '',
+    email: partner.email || '',
+    phone: partner.phone || '',
+    address: partner.address || '',
+    contactPerson: partner.contactPerson || '',
+    type: partner.type || '',
+    services: Array.isArray(partner.services) ? partner.services : [],
+    status: partner.status || 'inactive',
+    createdAt: partner.createdAt,
+    lastContact: partner.lastContact,
+    profilePicture: partner.profilePicture
+  });
+
 
 
   // Check user role for permissions
@@ -73,20 +116,7 @@ const UserManagement = () => {
 
         if (response.ok) {
           const data = await response.json();
-          // Transform backend data to frontend format
-          const transformedUsers = data.users.map(user => ({
-            id: user._id,
-            name: user.fullName,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            phone: user.phone || '',
-            department: user.department || '',
-            createdAt: user.createdAt,
-            lastLogin: user.lastLogin,
-            profilePicture: user.profilePicture,
-            joinDate: user.joinDate
-          }));
+          const transformedUsers = extractUsersArray(data).map(mapStaffUser);
           setUsers(transformedUsers);
         } else {
           console.error('Failed to fetch users:', response.statusText);
@@ -107,7 +137,7 @@ const UserManagement = () => {
           return;
         }
 
-        const response = await fetch('http://localhost:5000/api/partners/all', {
+        const response = await fetch('http://localhost:5000/api/partners', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -116,21 +146,7 @@ const UserManagement = () => {
 
         if (response.ok) {
           const data = await response.json();
-          // Transform backend data to frontend format
-          const transformedPartners = data.partners.map(partner => ({
-            id: partner._id,
-            name: partner.organizationName,
-            email: partner.email,
-            phone: partner.phone,
-            address: partner.address,
-            contactPerson: partner.contactPerson,
-            type: partner.type,
-            services: partner.services,
-            status: partner.status,
-            createdAt: partner.createdAt,
-            lastContact: partner.lastContact,
-            profilePicture: partner.profilePicture
-          }));
+          const transformedPartners = extractPartnersArray(data).map(mapPartner);
           setPartners(transformedPartners);
         } else {
           console.error('Failed to fetch partners:', response.statusText);
@@ -256,12 +272,16 @@ const UserManagement = () => {
         console.log('User created successfully:', result);
         
         // Show success message with OTP if available (dev mode)
-        let successMsg = result.data.emailSent 
+        let successMsg = result?.data?.emailSent 
           ? 'Staff member created successfully! OTP has been sent to their email.'
           : 'Staff member created successfully! ⚠️ Email not sent (check server logs for OTP).';
         
-        if (result.data.otp) {
+        if (result?.data?.otp) {
           successMsg += `\n\n🔐 DEV MODE OTP: ${result.data.otp}`;
+        }
+
+        if (result?.data?.setupLink) {
+          successMsg += `\n\n🔗 DEV MODE SETUP LINK: ${result.data.setupLink}`;
         }
         
         alert(successMsg);
@@ -277,19 +297,7 @@ const UserManagement = () => {
 
           if (usersResponse.ok) {
             const usersData = await usersResponse.json();
-            const transformedUsers = usersData.users.map(user => ({
-              id: user._id,
-              name: user.fullName,
-              email: user.email,
-              role: user.role,
-              status: user.status,
-              phone: user.phone,
-              department: user.department,
-              createdAt: user.createdAt,
-              lastLogin: user.lastLogin,
-              profilePicture: user.profilePicture,
-              joinDate: user.joinDate
-            }));
+            const transformedUsers = extractUsersArray(usersData).map(mapStaffUser);
             setUsers(transformedUsers);
           }
         };
@@ -344,7 +352,7 @@ const UserManagement = () => {
         
         // Refresh partners list
         const fetchPartners = async () => {
-          const partnersResponse = await fetch('http://localhost:5000/api/partners/all', {
+          const partnersResponse = await fetch('http://localhost:5000/api/partners', {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -353,20 +361,7 @@ const UserManagement = () => {
 
           if (partnersResponse.ok) {
             const partnersData = await partnersResponse.json();
-            const transformedPartners = partnersData.partners.map(partner => ({
-              id: partner._id,
-              name: partner.organizationName,
-              email: partner.email,
-              phone: partner.phone,
-              address: partner.address,
-              contactPerson: partner.contactPerson,
-              type: partner.type,
-              services: partner.services,
-              status: partner.status,
-              createdAt: partner.createdAt,
-              lastContact: partner.lastContact,
-              profilePicture: partner.profilePicture
-            }));
+            const transformedPartners = extractPartnersArray(partnersData).map(mapPartner);
             setPartners(transformedPartners);
           }
         };
@@ -384,8 +379,6 @@ const UserManagement = () => {
     }
   };
 
-
-
   const handleUpdateUser = (userId, updates) => {
 
     setUsers(users.map(user => 
@@ -400,12 +393,38 @@ const UserManagement = () => {
 
 
 
-  const handleDeleteUser = (userId) => {
+  const handleDeleteUser = async (userId) => {
 
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+      return;
+    }
 
-      setUsers(users.filter(user => user.id !== userId));
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Authentication token not found. Please login again.');
+        return;
+      }
 
+      const response = await fetch(`http://localhost:5000/api/auth/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete user');
+      }
+
+      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
+      alert(result.message || 'User deleted successfully');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error deleting user: ' + error.message);
     }
 
   };
@@ -442,12 +461,38 @@ const UserManagement = () => {
 
 
 
-  const handleDeletePartner = (partnerId) => {
+  const handleDeletePartner = async (partnerId) => {
 
-    if (window.confirm('Are you sure you want to delete this NGO partner?')) {
+    if (!window.confirm('Are you sure you want to delete this NGO partner?')) {
+      return;
+    }
 
-      setPartners(partners.filter(partner => partner.id !== partnerId));
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Authentication token not found. Please login again.');
+        return;
+      }
 
+      const response = await fetch(`http://localhost:5000/api/partners/${partnerId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete partner');
+      }
+
+      setPartners((prevPartners) => prevPartners.filter((partner) => partner.id !== partnerId));
+      alert(result.message || 'Partner deleted successfully');
+    } catch (error) {
+      console.error('Error deleting partner:', error);
+      alert('Error deleting partner: ' + error.message);
     }
 
   };
@@ -1422,21 +1467,15 @@ eligibility for partnership in relief operations.
               </div>
 
               {canEditUsers && (
-
-                <button 
-
-                  className="btn-primary btn-create"
-
-                  onClick={() => setShowCreateForm(true)}
-
-                >
-
-                  <span className="btn-icon">+</span>
-
-                  <span className="btn-text">Create Staff</span>
-
-                </button>
-
+                <div className="toolbar-actions">
+                  <button
+                    className="btn-primary btn-create"
+                    onClick={() => setShowCreateForm(true)}
+                  >
+                    <span className="btn-icon">+</span>
+                    <span className="btn-text">Create Staff</span>
+                  </button>
+                </div>
               )}
 
             </div>
@@ -1449,96 +1488,89 @@ eligibility for partnership in relief operations.
                   <p>No staff members found</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {filteredUsers.map(user => (
-                    <div key={user.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start gap-4">
-                          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-semibold text-lg border-2 border-blue-200">
-                            {user.profilePicture ? (
-                              <img 
-                                src={user.profilePicture} 
-                                alt={user.name} 
-                                className="h-10 w-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-blue-600 font-semibold">{user.name.charAt(0).toUpperCase()}</span>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-slate-900 mb-1">{user.name}</h3>
-                            <p className="text-sm text-slate-600 mb-2">{user.email}</p>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-slate-100 text-slate-600">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
-                                {user.role.replace('_', ' ').toUpperCase()}
-                              </span>
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-slate-100 text-slate-600">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(user.createdAt).toLocaleDateString()}
-                              </span>
+                <div className="requests-table-container">
+                  <table className="requests-table">
+                    <thead>
+                      <tr>
+                        <th>Staff</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last Login</th>
+                        <th>Joined</th>
+                        {canEditUsers && <th>Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td>
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-xs overflow-hidden">
+                                {user.profilePicture ? (
+                                  <img
+                                    src={user.profilePicture}
+                                    alt={user.name || 'Staff'}
+                                    className="h-8 w-8 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <span>{(user.name || 'U').charAt(0).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <span className="font-medium text-slate-900">{user.name || '-'}</span>
                             </div>
-                          </div>
-                        </div>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-                          user.status === 'active' 
-                            ? 'bg-emerald-100 text-emerald-700' 
-                            : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            user.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
-                          }`}></span>
-                          {user.status}
-                        </span>
-                      </div>
-                      
-                      <div className="border-t border-slate-200 pt-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Last Login:</span>
-                            <p className="font-medium text-slate-900">
-                              {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Join Date:</span>
-                            <p className="font-medium text-slate-900">
-                              {new Date(user.joinDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {canEditUsers && (
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
-                          <div className="flex gap-2">
-                            <button 
-                              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                user.status === 'active' 
-                                  ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' 
-                                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                              }`}
-                              onClick={() => handleToggleUserStatus(user.id)}
+                          </td>
+                          <td>{user.email || '-'}</td>
+                          <td>
+                            <span className="urgency-badge" style={{ color: '#334155', background: '#e2e8f0' }}>
+                              {(user.role || '-').replace('_', ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className="status-badge"
+                              style={{
+                                color: user.status === 'active' ? '#166534' : '#475569',
+                                background: user.status === 'active' ? '#dcfce7' : '#e2e8f0'
+                              }}
                             >
-                              {user.status === 'active' ? '⏸ Deactivate' : '▶ Activate'}
-                            </button>
-                            <button 
-                              className="inline-flex items-center gap-2 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-200 transition-colors"
-                              onClick={() => setEditingUser(user)}
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button 
-                              className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm font-medium hover:bg-red-100 transition-colors"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              🗑 Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                              {user.status || 'inactive'}
+                            </span>
+                          </td>
+                          <td>{user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}</td>
+                          <td>{new Date(user.joinDate || user.createdAt).toLocaleDateString()}</td>
+                          {canEditUsers && (
+                            <td>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                    user.status === 'active'
+                                      ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  }`}
+                                  onClick={() => handleToggleUserStatus(user.id)}
+                                >
+                                  {user.status === 'active' ? 'Deactivate' : 'Activate'}
+                                </button>
+                                <button
+                                  className="inline-flex items-center gap-2 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-200 transition-colors"
+                                  onClick={() => setEditingUser(user)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm font-medium hover:bg-red-100 transition-colors"
+                                  onClick={() => handleDeleteUser(user.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -1584,21 +1616,15 @@ eligibility for partnership in relief operations.
               </div>
 
               {canEditPartners && (
-
-                <button 
-
-                  className="btn-primary btn-create"
-
-                  onClick={() => setShowPartnerForm(true)}
-
-                >
-
-                  <span className="btn-icon">+</span>
-
-                  <span className="btn-text">Create Partner</span>
-
-                </button>
-
+                <div className="toolbar-actions">
+                  <button
+                    className="btn-primary btn-create"
+                    onClick={() => setShowPartnerForm(true)}
+                  >
+                    <span className="btn-icon">+</span>
+                    <span className="btn-text">Create Partner</span>
+                  </button>
+                </div>
               )}
 
             </div>

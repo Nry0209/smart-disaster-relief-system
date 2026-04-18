@@ -1,305 +1,851 @@
-import React, { useState } from "react";
-import { AlertTriangle, MapPin, Users, Calendar, Clock, FileText, CheckCircle, AlertCircle } from "lucide-react";
-import './Pages.css';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Activity,
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  MapPin,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Search,
+  ShieldAlert,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import {
+  deleteDisasterReport,
+  fetchDisasterReports,
+  updateDisasterReport,
+} from "../services/disasterReportService";
+import PageHeader from "../components/PageHeader";
+import "./Pages.css";
+
+const INITIAL_FORM = {
+  disasterType: "",
+  location: "",
+  severity: "high",
+  affectedPopulation: "",
+  eventDate: "",
+  priority: "high",
+  status: "active",
+  description: "",
+  immediateNeedsText: "",
+};
+
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_IMMEDIATE_NEEDS = 12;
+const MAX_IMMEDIATE_NEED_LENGTH = 60;
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
+const MAX_AFFECTED_POPULATION_DIGITS = String(MAX_AFFECTED_POPULATION).length;
+
+function parseImmediateNeedsFromText(rawText) {
+  const seen = new Set();
+
+  return String(rawText || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+}
+
+function sanitizePopulationInput(value) {
+  const digitsOnly = String(value ?? "").replace(/\D/g, "");
+  if (!digitsOnly) {
+    return "";
+  }
+
+  const parsed = Number(digitsOnly);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "";
+  }
+
+  return String(Math.min(parsed, MAX_AFFECTED_POPULATION));
+}
+
+function preventInvalidPopulationKey(event) {
+  if (["e", "E", "+", "-", ".", ","].includes(event.key)) {
+    event.preventDefault();
+  }
+}
 
 const DisasterEventPage = () => {
-  const [disasterEvents, setDisasterEvents] = useState([
-    {
-      id: "DIS-001",
-      disasterType: "Flood",
-      severity: "critical",
-      location: "Mumbai, Maharashtra",
-      affectedPopulation: 15000,
-      eventDate: "2026-03-28",
-      reportedBy: "Rajesh Kumar",
-      designation: "DMC Officer",
-      contactPhone: "+91 98765 43210",
-      contactEmail: "rajesh.kumar@dmc.gov.in",
-      description: "Severe flooding in low-lying areas due to heavy rainfall. Multiple evacuation centers established.",
-      coordinates: { lat: 19.0760, lng: 72.8777 },
-      estimatedDuration: "5-7 days",
-      immediateNeeds: ["Water", "Food", "Medical Supplies", "Shelter"],
-      status: "active",
-      priority: "high",
-      lastUpdated: "2026-03-28T14:30:00Z"
-    },
-    {
-      id: "DIS-002",
-      disasterType: "Earthquake",
-      severity: "high",
-      location: "Gujarat, Kutch District",
-      affectedPopulation: 8500,
-      eventDate: "2026-03-27",
-      reportedBy: "Priya Sharma",
-      designation: "DMC Officer",
-      contactPhone: "+91 87654 32109",
-      contactEmail: "priya.sharma@dmc.gov.in",
-      description: "Magnitude 6.2 earthquake caused structural damage to buildings. Rescue operations ongoing.",
-      coordinates: { lat: 23.8315, lng: 69.6637 },
-      estimatedDuration: "2-3 weeks",
-      immediateNeeds: ["Tents", "Medical Kits", "Dry Food", "Rescue Equipment"],
-      status: "active",
-      priority: "critical",
-      lastUpdated: "2026-03-27T09:15:00Z"
-    },
-    {
-      id: "DIS-003",
-      disasterType: "Cyclone",
-      severity: "medium",
-      location: "Chennai, Tamil Nadu",
-      affectedPopulation: 5000,
-      eventDate: "2026-03-25",
-      reportedBy: "Mohan Raj",
-      designation: "DMC Officer",
-      contactPhone: "+91 98765 12345",
-      contactEmail: "mohan.raj@dmc.gov.in",
-      description: "Cyclonic storm causing heavy rainfall and strong winds. Coastal areas evacuated.",
-      coordinates: { lat: 13.0827, lng: 80.2707 },
-      estimatedDuration: "3-4 days",
-      immediateNeeds: ["Emergency Supplies", "Food", "Water", "Medical Aid"],
-      status: "monitoring",
-      priority: "medium",
-      lastUpdated: "2026-03-26T16:45:00Z"
-    }
-  ]);
-
+  const navigate = useNavigate();
+  const [disasterEvents, setDisasterEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
 
-  const getSeverityColor = (severity) => {
-    switch(severity) {
-      case 'critical': return { color: "#dc2626", bg: "#fee2e2", icon: AlertTriangle };
-      case 'high': return { color: "#ea580c", bg: "#ffedd5", icon: AlertTriangle };
-      case 'medium': return { color: "#d97706", bg: "#fef3c7", icon: AlertCircle };
-      case 'low': return { color: "#16a34a", bg: "#dcfce7", icon: CheckCircle };
-      default: return { color: "#6b7280", bg: "#f3f4f6", icon: AlertCircle };
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [activeActionId, setActiveActionId] = useState("");
+  const [activeAllocationId, setActiveAllocationId] = useState("");
+  const [formData, setFormData] = useState(INITIAL_FORM);
+
+  const toDateTimeLocal = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    const offsetMs = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  };
+
+  const normalizeNeedsText = (value) =>
+    (Array.isArray(value) ? value : [])
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .join(", ");
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingId("");
+    setFormData(INITIAL_FORM);
+  };
+
+  const openEditModal = (event) => {
+    const populationValue = Number(event.affectedPopulation || 0);
+
+    setErrorMessage("");
+    setActionMessage("");
+    setEditingId(event.id);
+    setFormData({
+      disasterType: event.disasterType || "",
+      location: event.location || "",
+      severity: event.severity || "high",
+      affectedPopulation:
+        Number.isInteger(populationValue) && populationValue >= MIN_AFFECTED_POPULATION
+          ? String(Math.min(populationValue, MAX_AFFECTED_POPULATION))
+          : "",
+      eventDate: toDateTimeLocal(event.eventDate),
+      priority: event.priority || "high",
+      status: event.status || "active",
+      description: event.description || "",
+      immediateNeedsText: normalizeNeedsText(event.immediateNeeds),
+    });
+    setIsModalOpen(true);
+  };
+
+  const loadReports = async () => {
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const reports = await fetchDisasterReports();
+      setDisasterEvents(Array.isArray(reports) ? reports : []);
+    } catch (error) {
+      setDisasterEvents([]);
+      setErrorMessage(error.message || "Failed to load disaster reports.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'active': return { color: "#16a34a", bg: "#dcfce7" };
-      case 'monitoring': return { color: "#d97706", bg: "#fef3c7" };
-      case 'resolved': return { color: "#2563eb", bg: "#dbeafe" };
-      default: return { color: "#6b7280", bg: "#f3f4f6" };
+  useEffect(() => {
+    loadReports();
+  }, []);
+
+  const filteredEvents = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return disasterEvents.filter((event) => {
+      const matchesSearch =
+        !query ||
+        event.location?.toLowerCase().includes(query) ||
+        event.disasterType?.toLowerCase().includes(query) ||
+        event.reportedBy?.toLowerCase().includes(query);
+
+      const matchesStatus = filterStatus === "all" || event.status === filterStatus;
+      const matchesPriority =
+        filterPriority === "all" || event.priority === filterPriority;
+
+      return matchesSearch && matchesStatus && matchesPriority;
+    });
+  }, [disasterEvents, filterPriority, filterStatus, searchTerm]);
+
+  const stats = useMemo(
+    () => ({
+      totalEvents: disasterEvents.length,
+      activeEvents: disasterEvents.filter((e) => e.status === "active").length,
+      criticalEvents: disasterEvents.filter((e) => e.priority === "critical").length,
+      totalAffected: disasterEvents.reduce(
+        (sum, e) => sum + Number(e.affectedPopulation || 0),
+        0
+      ),
+    }),
+    [disasterEvents]
+  );
+
+  const getSeverityStyle = (severity) => {
+    switch (severity) {
+      case "critical":
+        return { color: "#be123c", bg: "#ffe4e6", icon: ShieldAlert };
+      case "high":
+        return { color: "#c2410c", bg: "#ffedd5", icon: AlertTriangle };
+      case "medium":
+        return { color: "#b45309", bg: "#fef3c7", icon: AlertTriangle };
+      case "low":
+        return { color: "#047857", bg: "#d1fae5", icon: CheckCircle2 };
+      default:
+        return { color: "#334155", bg: "#e2e8f0", icon: Activity };
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch(priority) {
-      case 'critical': return { color: "#dc2626", bg: "#fee2e2" };
-      case 'high': return { color: "#ea580c", bg: "#ffedd5" };
-      case 'medium': return { color: "#d97706", bg: "#fef3c7" };
-      case 'low': return { color: "#16a34a", bg: "#dcfce7" };
-      default: return { color: "#6b7280", bg: "#f3f4f6" };
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "draft":
+        return { color: "#334155", bg: "#e2e8f0" };
+      case "active":
+        return { color: "#047857", bg: "#d1fae5" };
+      case "pending_inventory":
+        return { color: "#4338ca", bg: "#e0e7ff" };
+      case "allocated":
+        return { color: "#166534", bg: "#dcfce7" };
+      case "monitoring":
+        return { color: "#b45309", bg: "#fef3c7" };
+      case "resolved":
+        return { color: "#0c4a6e", bg: "#e0f2fe" };
+      default:
+        return { color: "#334155", bg: "#e2e8f0" };
     }
   };
 
-  const filteredEvents = disasterEvents.filter(event => {
-    const matchesSearch = event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.disasterType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         event.reportedBy.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || event.status === filterStatus;
-    const matchesPriority = filterPriority === "all" || event.priority === filterPriority;
-    return matchesSearch && matchesStatus && matchesPriority;
-  });
-
-  const stats = {
-    totalEvents: disasterEvents.length,
-    activeEvents: disasterEvents.filter(e => e.status === 'active').length,
-    criticalEvents: disasterEvents.filter(e => e.priority === 'critical').length,
-    totalAffected: disasterEvents.reduce((sum, e) => sum + e.affectedPopulation, 0)
+  const getPriorityStyle = (priority) => {
+    switch (priority) {
+      case "critical":
+        return { color: "#be123c", bg: "#ffe4e6" };
+      case "high":
+        return { color: "#c2410c", bg: "#ffedd5" };
+      case "medium":
+        return { color: "#b45309", bg: "#fef3c7" };
+      case "low":
+        return { color: "#047857", bg: "#d1fae5" };
+      default:
+        return { color: "#334155", bg: "#e2e8f0" };
+    }
   };
 
-  const formatPopulation = (num) => {
-    return new Intl.NumberFormat('en-IN').format(num);
-  };
+  const formatPopulation = (num = 0) => new Intl.NumberFormat("en-IN").format(num);
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
+  const handleFormInput = (field, value) => {
+    const nextValue = field === "affectedPopulation" ? sanitizePopulationInput(value) : value;
+    setFormData((prev) => ({ ...prev, [field]: nextValue }));
+  };
+
+  const validateReportForm = () => {
+    const disasterType = formData.disasterType.trim();
+    const location = formData.location.trim();
+    const description = formData.description.trim();
+    const immediateNeeds = parseImmediateNeedsFromText(formData.immediateNeedsText);
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const eventDate = new Date(formData.eventDate);
+
+    if (!disasterType || disasterType.length < 3) {
+      return "Disaster type must be at least 3 characters.";
+    }
+
+    if (disasterType.length > 80) {
+      return "Disaster type cannot exceed 80 characters.";
+    }
+
+    if (!location || location.length < 3) {
+      return "Location must be at least 3 characters.";
+    }
+
+    if (location.length > 120) {
+      return "Location cannot exceed 120 characters.";
+    }
+
+    if (
+      !Number.isInteger(affectedPopulation) ||
+      affectedPopulation < MIN_AFFECTED_POPULATION ||
+      affectedPopulation > MAX_AFFECTED_POPULATION
+    ) {
+      return `Affected population must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`;
+    }
+
+    if (Number.isNaN(eventDate.getTime())) {
+      return "Event date and time is invalid.";
+    }
+
+    if (eventDate.getTime() > Date.now() + 60000) {
+      return "Event date cannot be in the future.";
+    }
+
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      return `Description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`;
+    }
+
+    if (immediateNeeds.length > MAX_IMMEDIATE_NEEDS) {
+      return `Immediate needs cannot exceed ${MAX_IMMEDIATE_NEEDS} items.`;
+    }
+
+    const longNeed = immediateNeeds.find((item) => item.length > MAX_IMMEDIATE_NEED_LENGTH);
+    if (longNeed) {
+      return `Each immediate need must be ${MAX_IMMEDIATE_NEED_LENGTH} characters or less.`;
+    }
+
+    if (["pending_inventory", "allocated"].includes(formData.status) && immediateNeeds.length === 0) {
+      return "Add at least one immediate need before setting Pending Inventory or Allocated status.";
+    }
+
+    return "";
+  };
+
+  const getPayloadFromForm = () => {
+    const affectedPopulation = Number(formData.affectedPopulation);
+    const immediateNeeds = parseImmediateNeedsFromText(formData.immediateNeedsText);
+
+    return {
+      disasterType: formData.disasterType.trim(),
+      location: formData.location.trim(),
+      severity: formData.severity,
+      affectedPopulation,
+      eventDate: formData.eventDate,
+      priority: formData.priority,
+      status: formData.status,
+      description: formData.description.trim(),
+      immediateNeeds,
+      reportedBy: "DMC Officer",
+    };
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setActionMessage("");
+
+    const validationError = validateReportForm();
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
+    const payload = getPayloadFromForm();
+    setIsSubmitting(true);
+
+    try {
+      const updated = await updateDisasterReport(editingId, payload);
+      setDisasterEvents((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      setActionMessage("Disaster report updated successfully.");
+
+      closeModal();
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to save disaster report.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const shouldDelete = window.confirm(
+      "Are you sure you want to delete this disaster report?"
+    );
+    if (!shouldDelete) return;
+
+    setErrorMessage("");
+    setActionMessage("");
+    setActiveActionId(id);
+
+    try {
+      await deleteDisasterReport(id);
+      setDisasterEvents((prev) => prev.filter((item) => item.id !== id));
+      setActionMessage("Disaster report deleted successfully.");
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to delete disaster report.");
+    } finally {
+      setActiveActionId("");
+    }
+  };
+
+  const handleSendToAllocation = async (id) => {
+    const report = disasterEvents.find((event) => event.id === id);
+    if (!report) {
+      setErrorMessage("Disaster report not found.");
+      return;
+    }
+
+    if (["pending_inventory", "allocated", "monitoring", "resolved"].includes(report.status)) {
+      setErrorMessage("This report cannot be sent to allocation from its current status.");
+      return;
+    }
+
+    const immediateNeeds = Array.isArray(report.immediateNeeds)
+      ? report.immediateNeeds.map((item) => String(item).trim()).filter(Boolean)
+      : [];
+
+    if (!immediateNeeds.length) {
+      setErrorMessage("Add at least one immediate need before sending to allocation.");
+      return;
+    }
+
+    setErrorMessage("");
+    setActionMessage("");
+    setActiveAllocationId(id);
+
+    try {
+      const updated = await updateDisasterReport(id, {
+        status: "pending_inventory",
+      });
+
+      setDisasterEvents((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+
+      setActionMessage("Report sent to allocation queue. Allocation officer will process it.");
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to send report to allocation.");
+    } finally {
+      setActiveAllocationId("");
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_55%),radial-gradient(circle_at_75%_25%,rgba(34,197,94,0.12),transparent_45%)] px-6 py-7 text-slate-900">
-      <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-[0_16px_30px_rgba(15,23,42,0.06)] lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <span className="text-xs font-semibold text-slate-500">
-            Admin / Disaster Management
-          </span>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Disaster Events
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Monitor and manage disaster events reported by DMC officers
-          </p>
-        </div>
-      </section>
+    <div className="disaster-event-page">
+      <PageHeader
+        role="Admin / Disaster Management"
+        title="Disaster Reports"
+        description="Track every reported incident, prioritize response actions, and keep allocation teams synchronized."
+      />
 
-      {/* STATS CARDS */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-            <FileText size={20} />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Total Events</p>
-            <strong className="text-xl font-semibold text-slate-900">{stats.totalEvents}</strong>
-          </div>
+      {actionMessage && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+          {actionMessage}
         </div>
-        
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-            <CheckCircle size={20} />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Active Events</p>
-            <strong className="text-xl font-semibold text-slate-900">{stats.activeEvents}</strong>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-            <AlertTriangle size={20} />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Critical Priority</p>
-            <strong className="text-xl font-semibold text-slate-900">{stats.criticalEvents}</strong>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_20px_rgba(15,23,42,0.05)]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <Users size={20} />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Total Affected</p>
-            <strong className="text-xl font-semibold text-slate-900">{formatPopulation(stats.totalAffected)}</strong>
-          </div>
-        </div>
-      </section>
+      )}
 
-      {/* FILTERS AND SEARCH */}
-      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="flex-1 min-w-[300px]">
-            <div className="relative">
-              <MapPin size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search by location, disaster type, or reporting officer..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+      {errorMessage && (
+        <div style={{ marginBottom: 16 }} className="no-events">
+          <AlertTriangle size={28} color="#dc2626" />
+          <h3>Could not complete action</h3>
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      <div className="disaster-event-toolbar">
+        <button className="btn-primary" type="button" onClick={() => navigate("/disaster-report/create")}>
+          <Plus size={14} /> Create Report
+        </button>
+        <button className="btn-light" type="button" onClick={loadReports}>
+          <RefreshCcw size={14} /> Refresh
+        </button>
+        <div className="disaster-event-toolbar-meta">
+          Showing {filteredEvents.length} of {disasterEvents.length} reports
+        </div>
+      </div>
+
+      <div className="disaster-stats-grid">
+        <div className="disaster-stat-card">
+          <div className="disaster-stat-icon" style={{ background: "#eff6ff" }}>
+            <Activity size={24} color="#2563eb" />
           </div>
-          <div className="flex gap-3">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="monitoring">Monitoring</option>
-              <option value="resolved">Resolved</option>
-            </select>
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Priority</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+          <div className="disaster-stat-content">
+            <h3>Total Events</h3>
+            <p>{stats.totalEvents}</p>
           </div>
         </div>
-      </section>
 
-      {/* EVENTS LIST */}
-      <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_14px_24px_rgba(15,23,42,0.05)]">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Disaster Events</h2>
-        <div className="space-y-4">
-          {filteredEvents.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
-              <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No disaster events found</p>
-              <p className="text-sm">Try adjusting your search or filters</p>
-            </div>
-          ) : (
-            filteredEvents.map(event => {
-              const severityStyle = getSeverityColor(event.severity);
-              const statusStyle = getStatusColor(event.status);
-              const priorityStyle = getPriorityColor(event.priority);
-              const SeverityIcon = severityStyle.icon;
-              
-              return (
-                <div key={event.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-slate-900">{event.disasterType}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${priorityStyle.bg} ${priorityStyle.color}`}>
-                          {event.priority.toUpperCase()}
+        <div className="disaster-stat-card">
+          <div className="disaster-stat-icon" style={{ background: "#dcfce7" }}>
+            <CheckCircle2 size={24} color="#16a34a" />
+          </div>
+          <div className="disaster-stat-content">
+            <h3>Active Events</h3>
+            <p>{stats.activeEvents}</p>
+          </div>
+        </div>
+
+        <div className="disaster-stat-card">
+          <div className="disaster-stat-icon" style={{ background: "#fee2e2" }}>
+            <AlertTriangle size={24} color="#dc2626" />
+          </div>
+          <div className="disaster-stat-content">
+            <h3>Critical Priority</h3>
+            <p>{stats.criticalEvents}</p>
+          </div>
+        </div>
+
+        <div className="disaster-stat-card">
+          <div className="disaster-stat-icon" style={{ background: "#fef3c7" }}>
+            <Users size={24} color="#d97706" />
+          </div>
+          <div className="disaster-stat-content">
+            <h3>Total Affected</h3>
+            <p>{formatPopulation(stats.totalAffected)}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="disaster-filter-shell">
+        <div className="disaster-search-bar">
+          <Search size={18} />
+          <input
+            type="text"
+            placeholder="Search by location, disaster type, or reporting officer..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="disaster-filter-buttons">
+          <select
+            className="disaster-select"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="draft">Draft</option>
+            <option value="active">Active</option>
+            <option value="pending_inventory">Pending Inventory</option>
+            <option value="allocated">Allocated</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="resolved">Resolved</option>
+          </select>
+
+          <select
+            className="disaster-select"
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+          >
+            <option value="all">All Priority</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="events-grid">
+        {isLoading ? (
+          <div className="no-events">
+            <Activity size={48} color="#94a3b8" />
+            <h3>Loading reports...</h3>
+            <p>Please wait while we fetch disaster events.</p>
+          </div>
+        ) : filteredEvents.length === 0 ? (
+          <div className="no-events">
+            <AlertTriangle size={48} color="#94a3b8" />
+            <h3>No events found</h3>
+            <p>No disaster events match your current filters.</p>
+          </div>
+        ) : (
+          filteredEvents.map((event) => {
+            const severityStyle = getSeverityStyle(event.severity);
+            const statusStyle = getStatusStyle(event.status);
+            const priorityStyle = getPriorityStyle(event.priority);
+            const SeverityIcon = severityStyle.icon;
+            const immediateNeeds = Array.isArray(event.immediateNeeds)
+              ? event.immediateNeeds
+              : [];
+
+            return (
+              <div key={event.id} className="event-card">
+                <div className="event-header">
+                  <div className="event-title">
+                    <h3>{event.disasterType}</h3>
+                    <span className="event-id">{event.id}</span>
+                  </div>
+                  <div className="event-badges">
+                    <span
+                      className="severity-badge"
+                      style={{ color: severityStyle.color, background: severityStyle.bg }}
+                    >
+                      <SeverityIcon size={12} />
+                      {String(event.severity || "unknown").toUpperCase()}
+                    </span>
+                    <span
+                      className="priority-badge"
+                      style={{ color: priorityStyle.color, background: priorityStyle.bg }}
+                    >
+                      {String(event.priority || "unknown").toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="event-location">
+                  <MapPin size={16} />
+                  <span>{event.location || "Location not specified"}</span>
+                </div>
+
+                <div className="event-details">
+                  <div className="detail-item">
+                    <Users size={16} />
+                    <span>{formatPopulation(event.affectedPopulation)} affected</span>
+                  </div>
+                  <div className="detail-item">
+                    <Calendar size={16} />
+                    <span>{formatDate(event.eventDate)}</span>
+                  </div>
+                </div>
+
+                <div className="event-description">
+                  <p>{event.description || "No description provided."}</p>
+                </div>
+
+                <div className="event-needs">
+                  <h4>Immediate Needs:</h4>
+                  <div className="needs-tags">
+                    {immediateNeeds.length === 0 ? (
+                      <span className="need-tag">No needs listed</span>
+                    ) : (
+                      immediateNeeds.map((need, index) => (
+                        <span key={`${event.id}-need-${index}`} className="need-tag">
+                          {need}
                         </span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.color}`}>
-                          {event.status.toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-slate-600 mb-2">
-                        <div className="flex items-center gap-1">
-                          <MapPin size={16} />
-                          <span>{event.location}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar size={16} />
-                          <span>{formatDate(event.eventDate)}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users size={16} />
-                          <span>{formatPopulation(event.affectedPopulation)} affected</span>
-                        </div>
-                      </div>
-                      <p className="text-slate-700 mb-3">{event.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-slate-500">
-                        <span>Reported by: {event.reportedBy} ({event.designation})</span>
-                        <span>•</span>
-                        <span>{event.contactPhone}</span>
-                      </div>
-                    </div>
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${severityStyle.bg} ${severityStyle.color}`}>
-                      <SeverityIcon size={24} />
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="event-footer">
+                  <div className="event-contact">
+                    <div className="contact-info">
+                      <span className="contact-name">{event.reportedBy || "DMC Officer"}</span>
                     </div>
                   </div>
-                  
-                  {event.immediateNeeds && (
-                    <div className="border-t border-slate-200 pt-4">
-                      <h4 className="text-sm font-medium text-slate-900 mb-2">Immediate Needs:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {event.immediateNeeds.map((need, index) => (
-                          <span key={index} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs">
-                            {need}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="event-status">
+                    <span
+                      className="status-badge"
+                      style={{ color: statusStyle.color, background: statusStyle.bg }}
+                    >
+                      {String(event.status || "unknown").toUpperCase()}
+                    </span>
+                  </div>
                 </div>
-              );
-            })
-          )}
+
+                <div className="event-actions">
+                  {event.status === "pending_inventory" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Sent to Allocation
+                    </button>
+                  ) : event.status === "allocated" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Allocated by Officer
+                    </button>
+                  ) : event.status === "monitoring" ? (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      disabled
+                    >
+                      Allocation in Monitoring
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="event-action-btn allocate"
+                      onClick={() => handleSendToAllocation(event.id)}
+                      disabled={activeAllocationId === event.id || event.status === "resolved"}
+                    >
+                      {activeAllocationId === event.id ? "Sending..." : "Send to Allocation"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="event-action-btn edit"
+                    onClick={() => openEditModal(event)}
+                  >
+                    <Pencil size={12} /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="event-action-btn delete"
+                    onClick={() => handleDelete(event.id)}
+                    disabled={activeActionId === event.id}
+                  >
+                    <Trash2 size={12} />
+                    {activeActionId === event.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                onClick={closeModal}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm text-slate-700">
+                Disaster type
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.disasterType}
+                  onChange={(e) => handleFormInput("disasterType", e.target.value)}
+                  maxLength={80}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Location
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.location}
+                  onChange={(e) => handleFormInput("location", e.target.value)}
+                  maxLength={120}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Severity
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.severity}
+                  onChange={(e) => handleFormInput("severity", e.target.value)}
+                >
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Priority
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.priority}
+                  onChange={(e) => handleFormInput("priority", e.target.value)}
+                >
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Affected population
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={MAX_AFFECTED_POPULATION_DIGITS}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.affectedPopulation}
+                  onKeyDown={preventInvalidPopulationKey}
+                  onChange={(e) => handleFormInput("affectedPopulation", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700">
+                Event date and time
+                <input
+                  type="datetime-local"
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.eventDate}
+                  onChange={(e) => handleFormInput("eventDate", e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Status
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.status}
+                  onChange={(e) => handleFormInput("status", e.target.value)}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="pending_inventory">Pending Inventory</option>
+                  <option value="allocated">Allocated</option>
+                  <option value="monitoring">Monitoring</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Description
+                <textarea
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.description}
+                  onChange={(e) => handleFormInput("description", e.target.value)}
+                  maxLength={MAX_DESCRIPTION_LENGTH}
+                />
+              </label>
+
+              <label className="text-sm text-slate-700 md:col-span-2">
+                Immediate needs (comma-separated)
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  value={formData.immediateNeedsText}
+                  onChange={(e) => handleFormInput("immediateNeedsText", e.target.value)}
+                  placeholder="Water, Meal Packs, Medical Kits"
+                  maxLength={500}
+                />
+              </label>
+
+              <div className="mt-2 flex justify-end gap-2 md:col-span-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
+                  onClick={closeModal}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Saving..." : "Update Report"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </section>
+      )}
     </div>
   );
-}
+};
 
 export default DisasterEventPage;
