@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { logo, slide1, slide2, slide3 } from '../assets/images';
+import logo2 from '../assets/images/logo2.png';
+import { slide1, slide2, slide3 } from '../assets/images';
 import "./Pages.css";
 
 function LandingPage() {
@@ -50,7 +51,7 @@ function LandingPage() {
       {/* TOP BAR */}
       <header className="landing-topbar">
         <div className="landing-brand brand-base">
-          <img src={logo} alt="System Logo" className="landing-brand-logo brand-logo-base" />
+          <img src={logo2} alt="System Logo" className="landing-brand-logo brand-logo-base" />
           <div>
             <h2>ReliefLink Lanka</h2>
             <p>Real-time disaster coordination across Sri Lanka</p>

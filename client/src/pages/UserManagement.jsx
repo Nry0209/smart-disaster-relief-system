@@ -1,8 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Package, MapPin, Phone, Mail, Building, Users, CheckCircle, AlertTriangle, Clock, ArrowRight, Search, Filter, Truck, Bell, Trash2, X, Upload } from 'lucide-react';
+import { Calendar, MapPin, Phone, Mail, Building, Users, Search, Filter, X, Upload, MoreVertical, UserCog, Activity } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
+const MIN_NAME_LENGTH = 2;
+const MAX_NAME_LENGTH = 100;
+const MIN_DEPARTMENT_LENGTH = 2;
+const MAX_DEPARTMENT_LENGTH = 100;
+const MIN_ADDRESS_LENGTH = 10;
+const MAX_ADDRESS_LENGTH = 200;
+const MAX_PHONE_DIGITS = 15;
+
+function validatePhoneNumber(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+
+  const digitsOnly = normalized.replace(/\D/g, '');
+  if (digitsOnly.length < 7 || digitsOnly.length > MAX_PHONE_DIGITS || !PHONE_PATTERN.test(normalized)) {
+    return 'Enter a valid phone number, including country code if needed.';
+  }
+
+  return '';
+}
 
 const UserManagement = () => {
 
@@ -22,9 +44,31 @@ const UserManagement = () => {
 
   const [editingPartner, setEditingPartner] = useState(null);
 
-  const [filterRole, setFilterRole] = useState('all');
-
   const [filterStatus, setFilterStatus] = useState('all');
+
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+
+  const [staffSearch, setStaffSearch] = useState('');
+
+  const [partnerSearch, setPartnerSearch] = useState('');
+
+  const [selectedRoles, setSelectedRoles] = useState([]);
+
+  const [selectedStaffStatuses, setSelectedStaffStatuses] = useState([]);
+
+  const [joinedFrom, setJoinedFrom] = useState('');
+
+  const [joinedTo, setJoinedTo] = useState('');
+
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+
+  const [staffViewMode, setStaffViewMode] = useState('cards');
+
+  const [partnerViewMode, setPartnerViewMode] = useState('cards');
+
+  const [selectedPartnerId, setSelectedPartnerId] = useState('');
+
+  const [toastMessage, setToastMessage] = useState('');
 
   const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
 
@@ -159,9 +203,20 @@ const UserManagement = () => {
     };
 
     // Fetch both users and partners
-    fetchUsers();
-    fetchPartners();
+    async function loadDirectory() {
+      setIsLoadingUsers(true);
+      await Promise.allSettled([fetchUsers(), fetchPartners()]);
+      setIsLoadingUsers(false);
+    }
+
+    loadDirectory();
   }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = setTimeout(() => setToastMessage(''), 2600);
+    return () => clearTimeout(timeout);
+  }, [toastMessage]);
 
 
 
@@ -219,23 +274,127 @@ const UserManagement = () => {
 
 
 
-  const filteredUsers = users.filter(user => {
+  const filteredUsers = useMemo(() => {
+    return users.filter((staffUser) => {
+      const matchesSearch =
+        !staffSearch.trim() ||
+        String(staffUser.name || '').toLowerCase().includes(staffSearch.trim().toLowerCase()) ||
+        String(staffUser.email || '').toLowerCase().includes(staffSearch.trim().toLowerCase()) ||
+        String(staffUser.department || '').toLowerCase().includes(staffSearch.trim().toLowerCase());
 
-    if (filterRole === 'all') return true;
+      const matchesRole =
+        selectedRoles.length === 0 || selectedRoles.includes(String(staffUser.role || ''));
 
-    return user.role === filterRole;
+      const matchesStatus =
+        selectedStaffStatuses.length === 0 || selectedStaffStatuses.includes(String(staffUser.status || 'inactive'));
 
-  });
+      const joinDate = staffUser.joinDate || staffUser.createdAt;
+      const joinDateValue = joinDate ? new Date(joinDate).getTime() : null;
+      const fromValue = joinedFrom ? new Date(joinedFrom).getTime() : null;
+      const toValue = joinedTo ? new Date(joinedTo).getTime() : null;
+
+      const matchesDateFrom = !fromValue || (joinDateValue !== null && joinDateValue >= fromValue);
+      const matchesDateTo = !toValue || (joinDateValue !== null && joinDateValue <= toValue + 86399999);
+
+      return matchesSearch && matchesRole && matchesStatus && matchesDateFrom && matchesDateTo;
+    });
+  }, [users, staffSearch, selectedRoles, selectedStaffStatuses, joinedFrom, joinedTo]);
 
 
 
-  const filteredPartners = partners.filter(partner => {
+  const filteredPartners = useMemo(() => {
+    return partners.filter((partner) => {
+      const matchesStatus = filterStatus === 'all' || partner.status === filterStatus;
+      const query = partnerSearch.trim().toLowerCase();
+      const matchesSearch =
+        !query ||
+        String(partner.name || '').toLowerCase().includes(query) ||
+        String(partner.email || '').toLowerCase().includes(query) ||
+        String(partner.contactPerson || '').toLowerCase().includes(query);
 
-    if (filterStatus === 'all') return true;
+      return matchesStatus && matchesSearch;
+    });
+  }, [partners, filterStatus, partnerSearch]);
 
-    return partner.status === filterStatus;
+  const selectedStaff = useMemo(() => {
+    if (!filteredUsers.length) return null;
+    return filteredUsers.find((staffUser) => staffUser.id === selectedStaffId) || filteredUsers[0];
+  }, [filteredUsers, selectedStaffId]);
 
-  });
+  useEffect(() => {
+    if (!selectedStaff && filteredUsers.length > 0) {
+      setSelectedStaffId(filteredUsers[0].id);
+      return;
+    }
+
+    if (selectedStaff && selectedStaff.id !== selectedStaffId) {
+      setSelectedStaffId(selectedStaff.id);
+    }
+  }, [filteredUsers, selectedStaff, selectedStaffId]);
+
+  const selectedPartner = useMemo(() => {
+    if (!filteredPartners.length) return null;
+    return filteredPartners.find((partner) => partner.id === selectedPartnerId) || filteredPartners[0];
+  }, [filteredPartners, selectedPartnerId]);
+
+  useEffect(() => {
+    if (!selectedPartner && filteredPartners.length > 0) {
+      setSelectedPartnerId(filteredPartners[0].id);
+      return;
+    }
+
+    if (selectedPartner && selectedPartner.id !== selectedPartnerId) {
+      setSelectedPartnerId(selectedPartner.id);
+    }
+  }, [filteredPartners, selectedPartner, selectedPartnerId]);
+
+  const directoryMetrics = useMemo(() => {
+    const activeUsers = users.filter((staffUser) => staffUser.status === 'active').length;
+    const inactiveUsers = users.length - activeUsers;
+    return {
+      totalStaff: users.length,
+      activeUsers,
+      inactiveUsers,
+      partnersCount: partners.length,
+    };
+  }, [users, partners]);
+
+  const rolePillClasses = {
+    admin: 'bg-violet-50 text-violet-700 border-violet-200',
+    dmc_officer: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    inventory_officer: 'bg-blue-50 text-blue-700 border-blue-200',
+    allocation_officer: 'bg-amber-50 text-amber-700 border-amber-200',
+    tracking_officer: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    charity_staff: 'bg-slate-100 text-slate-700 border-slate-200',
+  };
+
+  const roleFilterOptions = roleOptions.filter((option) => option.value !== 'all');
+
+  function toggleRoleFilterValue(roleValue) {
+    setSelectedRoles((prev) =>
+      prev.includes(roleValue) ? prev.filter((entry) => entry !== roleValue) : [...prev, roleValue]
+    );
+  }
+
+  function toggleStatusFilterValue(statusValue) {
+    setSelectedStaffStatuses((prev) =>
+      prev.includes(statusValue) ? prev.filter((entry) => entry !== statusValue) : [...prev, statusValue]
+    );
+  }
+
+  function formatRelativeTime(value) {
+    if (!value) return 'Never logged in';
+    const timestamp = new Date(value).getTime();
+    if (Number.isNaN(timestamp)) return 'Unknown';
+    const diffMs = Date.now() - timestamp;
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
 
 
 
@@ -387,6 +546,8 @@ const UserManagement = () => {
 
     ));
 
+    setToastMessage('Staff profile updated successfully.');
+
     setEditingUser(null);
 
   };
@@ -433,6 +594,19 @@ const UserManagement = () => {
 
   const handleToggleUserStatus = (userId) => {
 
+    const selected = users.find((entry) => entry.id === userId);
+    if (!selected) return;
+
+    const nextStatus = selected.status === 'active' ? 'inactive' : 'active';
+    const confirmationText =
+      nextStatus === 'inactive'
+        ? `Deactivate ${selected.name}?`
+        : `Activate ${selected.name}?`;
+
+    if (!window.confirm(confirmationText)) {
+      return;
+    }
+
     setUsers(users.map(user => 
 
       user.id === userId 
@@ -442,6 +616,8 @@ const UserManagement = () => {
         : user
 
     ));
+
+    setToastMessage(`Staff ${nextStatus === 'active' ? 'activated' : 'deactivated'} successfully.`);
 
   };
 
@@ -713,6 +889,8 @@ eligibility for partnership in relief operations.
 
     });
 
+    const [formError, setFormError] = useState('');
+
 
 
     const handleImageUpload = (e) => {
@@ -741,18 +919,58 @@ eligibility for partnership in relief operations.
 
       e.preventDefault();
 
-      if (!formData.fullName || !formData.email || !formData.role) {
-        alert('Full name, email, and role are required');
+      const fullName = String(formData.fullName || '').trim();
+      const email = String(formData.email || '').trim();
+      const phone = String(formData.phone || '').trim();
+      const department = String(formData.department || '').trim();
+
+      if (!fullName || fullName.length < MIN_NAME_LENGTH || fullName.length > MAX_NAME_LENGTH) {
+        setFormError(`Full name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
         return;
       }
 
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        setFormError('Enter a valid email address.');
+        return;
+      }
+
+      const phoneError = validatePhoneNumber(phone);
+      if (phoneError) {
+        setFormError(phoneError);
+        return;
+      }
+
+      if (department && (department.length < MIN_DEPARTMENT_LENGTH || department.length > MAX_DEPARTMENT_LENGTH)) {
+        setFormError(`Department must be between ${MIN_DEPARTMENT_LENGTH} and ${MAX_DEPARTMENT_LENGTH} characters.`);
+        return;
+      }
+
+      if (!formData.role) {
+        setFormError('Role is required.');
+        return;
+      }
+
+      setFormError('');
+
       if (user) {
 
-        handleUpdateUser(user.id, formData);
+        handleUpdateUser(user.id, {
+          ...formData,
+          fullName,
+          email,
+          phone,
+          department,
+        });
 
       } else {
 
-        handleCreateUser(formData);
+        handleCreateUser({
+          ...formData,
+          fullName,
+          email,
+          phone,
+          department,
+        });
 
       }
 
@@ -761,8 +979,8 @@ eligibility for partnership in relief operations.
 
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="management-modal fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="management-modal-card bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b border-slate-200">
             <h2 className="text-xl font-bold text-slate-900">{user ? 'Edit Staff Member' : 'Add New Staff Member'}</h2>
             <button 
@@ -773,7 +991,7 @@ eligibility for partnership in relief operations.
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="management-form p-6 space-y-6">
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Profile Picture</label>
@@ -827,6 +1045,8 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, fullName: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter full name"
+                    minLength={MIN_NAME_LENGTH}
+                    maxLength={MAX_NAME_LENGTH}
                   />
                 </div>
 
@@ -839,6 +1059,7 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter email address"
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -852,6 +1073,7 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter phone number"
+                    inputMode="tel"
                   />
                 </div>
 
@@ -863,6 +1085,8 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Enter department"
+                    minLength={MIN_DEPARTMENT_LENGTH}
+                    maxLength={MAX_DEPARTMENT_LENGTH}
                   />
                 </div>
               </div>
@@ -904,16 +1128,21 @@ eligibility for partnership in relief operations.
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-200">
+              {formError && (
+                <div className="mr-auto rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+                  {formError}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-6 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+                className="management-secondary-btn px-6 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                className="management-primary-btn px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
               >
                 {user ? 'Update Staff' : 'Create & Send OTP'}
               </button>
@@ -953,6 +1182,8 @@ eligibility for partnership in relief operations.
       verificationDocument: partner?.verificationDocument || null
 
     });
+
+    const [formError, setFormError] = useState('');
 
 
 
@@ -1086,13 +1317,61 @@ eligibility for partnership in relief operations.
 
       e.preventDefault();
 
+      const name = String(formData.name || '').trim();
+      const contactPerson = String(formData.contactPerson || '').trim();
+      const email = String(formData.email || '').trim();
+      const phone = String(formData.phone || '').trim();
+      const address = String(formData.address || '').trim();
+
+      if (!name || name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
+        setFormError(`Organization name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
+        return;
+      }
+
+      if (!contactPerson || contactPerson.length < MIN_NAME_LENGTH || contactPerson.length > MAX_NAME_LENGTH) {
+        setFormError(`Contact person must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
+        return;
+      }
+
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        setFormError('Enter a valid email address.');
+        return;
+      }
+
+      const phoneError = validatePhoneNumber(phone);
+      if (phoneError) {
+        setFormError(phoneError);
+        return;
+      }
+
+      if (!address || address.length < MIN_ADDRESS_LENGTH || address.length > MAX_ADDRESS_LENGTH) {
+        setFormError(`Address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`);
+        return;
+      }
+
+      setFormError('');
+
       if (partner) {
 
-        handleUpdatePartner(partner.id, formData);
+        handleUpdatePartner(partner.id, {
+          ...formData,
+          name,
+          contactPerson,
+          email,
+          phone,
+          address,
+        });
 
       } else {
 
-        handleCreatePartner(formData);
+        handleCreatePartner({
+          ...formData,
+          name,
+          contactPerson,
+          email,
+          phone,
+          address,
+        });
 
       }
 
@@ -1101,8 +1380,8 @@ eligibility for partnership in relief operations.
 
 
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="management-modal fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="management-modal-card bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b border-slate-200">
             <h2 className="text-xl font-bold text-slate-900">{partner ? 'Edit NGO Partner' : 'Add New NGO Partner'}</h2>
             <button 
@@ -1113,7 +1392,7 @@ eligibility for partnership in relief operations.
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <form onSubmit={handleSubmit} className="management-form p-6 space-y-6">
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Organization Logo</label>
@@ -1167,6 +1446,8 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder="Enter organization name"
+                    minLength={MIN_NAME_LENGTH}
+                    maxLength={MAX_NAME_LENGTH}
                   />
                 </div>
 
@@ -1179,6 +1460,8 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder="Enter contact person name"
+                    minLength={MIN_NAME_LENGTH}
+                    maxLength={MAX_NAME_LENGTH}
                   />
                 </div>
               </div>
@@ -1193,6 +1476,7 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder="Enter email address"
+                    autoComplete="email"
                   />
                 </div>
 
@@ -1205,6 +1489,7 @@ eligibility for partnership in relief operations.
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                     placeholder="Enter phone number"
+                    inputMode="tel"
                   />
                 </div>
               </div>
@@ -1218,6 +1503,8 @@ eligibility for partnership in relief operations.
                   onChange={(e) => setFormData({...formData, address: e.target.value})}
                   className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   placeholder="Enter complete address"
+                    minLength={MIN_ADDRESS_LENGTH}
+                    maxLength={MAX_ADDRESS_LENGTH}
                 />
               </div>
 
@@ -1362,16 +1649,21 @@ eligibility for partnership in relief operations.
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-200">
+              {formError && (
+                <div className="mr-auto rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+                  {formError}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-6 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+                className="management-secondary-btn px-6 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"
+                className="management-primary-btn px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors shadow-sm"
               >
                 {partner ? 'Update Partner' : 'Create Partner'}
               </button>
@@ -1390,6 +1682,25 @@ eligibility for partnership in relief operations.
         description="Manage system users and NGO partner organizations"
       />
 
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase text-slate-500">Total Staff</p>
+          <p className="mt-1 text-2xl font-semibold text-slate-900">{directoryMetrics.totalStaff}</p>
+        </article>
+        <article className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase text-emerald-700">Active Users</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-800">{directoryMetrics.activeUsers}</p>
+        </article>
+        <article className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase text-amber-700">Inactive Users</p>
+          <p className="mt-1 text-2xl font-semibold text-amber-800">{directoryMetrics.inactiveUsers}</p>
+        </article>
+        <article className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase text-blue-700">Partners Count</p>
+          <p className="mt-1 text-2xl font-semibold text-blue-800">{directoryMetrics.partnersCount}</p>
+        </article>
+      </div>
+
 
 
       <div className="directory-tabs">
@@ -1406,7 +1717,7 @@ eligibility for partnership in relief operations.
 
             <span className="tab-icon">👥</span>
 
-            <span className="tab-label">Staff Directory</span>
+            <span className="tab-label">Staff</span>
 
           </button>
 
@@ -1422,7 +1733,7 @@ eligibility for partnership in relief operations.
 
           <span className="tab-icon">🏢</span>
 
-          <span className="tab-label">Partner Directory</span>
+          <span className="tab-label">Partners</span>
 
         </button>
 
@@ -1434,147 +1745,226 @@ eligibility for partnership in relief operations.
 
         {activeTab === 'staff' && (
 
-          <div className="tracking-section">
-
+          <div className="tracking-section space-y-4">
             <div className="tracking-actions">
-
-              <div className="filter-controls">
-
-                <label>Filter by Role:</label>
-
-                <select 
-
-                  className="filter-select"
-
-                  value={filterRole}
-
-                  onChange={(e) => setFilterRole(e.target.value)}
-
-                >
-
-                  {roleOptions.map(option => (
-
-                    <option key={option.value} value={option.value}>
-
-                      {option.label}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
+              <div className="search-input max-w-md">
+                <Search size={14} />
+                <input
+                  placeholder="Search staff by name, email, or department"
+                  value={staffSearch}
+                  onChange={(e) => setStaffSearch(e.target.value)}
+                />
               </div>
 
-              {canEditUsers && (
-                <div className="toolbar-actions">
+              <div className="flex items-center gap-2">
+                <button
+                  className={`btn-secondary ${staffViewMode === 'cards' ? 'bg-slate-100' : ''}`}
+                  onClick={() => setStaffViewMode('cards')}
+                >
+                  Cards View
+                </button>
+                <button
+                  className={`btn-secondary ${staffViewMode === 'table' ? 'bg-slate-100' : ''}`}
+                  onClick={() => setStaffViewMode('table')}
+                >
+                  Table View
+                </button>
+                {canEditUsers && (
                   <button
-                    className="btn-primary btn-create"
+                    className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-slate-800"
                     onClick={() => setShowCreateForm(true)}
                   >
-                    <span className="btn-icon">+</span>
-                    <span className="btn-text">Create Staff</span>
+                    + Create Staff
                   </button>
-                </div>
-              )}
-
+                )}
+              </div>
             </div>
 
+            <div className="grid gap-4 xl:grid-cols-[260px_1fr_330px]">
+              <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-semibold text-slate-900">Smart Filters</h3>
+                <p className="mt-1 text-xs text-slate-500">Roles and status at a glance</p>
 
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">Roles</p>
+                    <div className="space-y-2">
+                      {roleFilterOptions.map((option) => (
+                        <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedRoles.includes(option.value)}
+                            onChange={() => toggleRoleFilterValue(option.value)}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
 
-            <div className="records-container">
-              {filteredUsers.length === 0 ? (
-                <div className="no-records">
-                  <p>No staff members found</p>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">Status</p>
+                    <div className="space-y-2">
+                      {['active', 'inactive'].map((statusValue) => (
+                        <label key={statusValue} className="flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedStaffStatuses.includes(statusValue)}
+                            onChange={() => toggleStatusFilterValue(statusValue)}
+                          />
+                          <span className="capitalize">{statusValue}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="requests-table-container">
-                  <table className="requests-table">
-                    <thead>
-                      <tr>
-                        <th>Staff</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Status</th>
-                        <th>Last Login</th>
-                        <th>Joined</th>
-                        {canEditUsers && <th>Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.map((user) => (
-                        <tr key={user.id}>
-                          <td>
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-xs overflow-hidden">
-                                {user.profilePicture ? (
-                                  <img
-                                    src={user.profilePicture}
-                                    alt={user.name || 'Staff'}
-                                    className="h-8 w-8 rounded-full object-cover"
-                                  />
-                                ) : (
-                                  <span>{(user.name || 'U').charAt(0).toUpperCase()}</span>
-                                )}
-                              </div>
-                              <span className="font-medium text-slate-900">{user.name || '-'}</span>
+              </aside>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {isLoadingUsers ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[1, 2, 3, 4].map((skeleton) => (
+                      <div key={skeleton} className="h-32 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+                    ))}
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="no-records">
+                    <p>No staff members found for the selected filters.</p>
+                  </div>
+                ) : staffViewMode === 'cards' ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {filteredUsers.map((staffUser) => (
+                      <article
+                        key={staffUser.id}
+                        className={`rounded-xl border p-4 transition ${selectedStaff?.id === staffUser.id ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                        onClick={() => setSelectedStaffId(staffUser.id)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <div className="h-11 w-11 overflow-hidden rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-semibold">
+                              {staffUser.profilePicture ? (
+                                <img src={staffUser.profilePicture} alt={staffUser.name || 'Staff'} className="h-11 w-11 object-cover" />
+                              ) : (
+                                <span>{(staffUser.name || 'U').charAt(0).toUpperCase()}</span>
+                              )}
                             </div>
-                          </td>
-                          <td>{user.email || '-'}</td>
-                          <td>
-                            <span className="urgency-badge" style={{ color: '#334155', background: '#e2e8f0' }}>
-                              {(user.role || '-').replace('_', ' ').toUpperCase()}
-                            </span>
-                          </td>
-                          <td>
-                            <span
-                              className="status-badge"
-                              style={{
-                                color: user.status === 'active' ? '#166534' : '#475569',
-                                background: user.status === 'active' ? '#dcfce7' : '#e2e8f0'
-                              }}
-                            >
-                              {user.status || 'inactive'}
-                            </span>
-                          </td>
-                          <td>{user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}</td>
-                          <td>{new Date(user.joinDate || user.createdAt).toLocaleDateString()}</td>
-                          {canEditUsers && (
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{staffUser.name || '-'}</p>
+                              <p className="text-xs text-slate-500">{staffUser.email || '-'}</p>
+                            </div>
+                          </div>
+                          <details className="relative">
+                            <summary className="cursor-pointer list-none rounded-md p-1 text-slate-500 hover:bg-slate-100">
+                              <MoreVertical size={14} />
+                            </summary>
+                            <div className="absolute right-0 top-7 z-10 min-w-[120px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => setEditingUser(staffUser)}>Edit</button>
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => handleToggleUserStatus(staffUser.id)}>{staffUser.status === 'active' ? 'Deactivate' : 'Activate'}</button>
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteUser(staffUser.id)}>Delete</button>
+                            </div>
+                          </details>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between">
+                          <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${rolePillClasses[staffUser.role] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                            {String(staffUser.role || '-').replaceAll('_', ' ')}
+                          </span>
+
+                          <label className="inline-flex cursor-pointer items-center">
+                            <input
+                              type="checkbox"
+                              className="peer sr-only"
+                              checked={staffUser.status === 'active'}
+                              onChange={() => handleToggleUserStatus(staffUser.id)}
+                            />
+                            <span className="h-5 w-10 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500" />
+                          </label>
+                        </div>
+
+                        <p className="mt-3 text-xs text-slate-500">Last login: {formatRelativeTime(staffUser.lastLogin)}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="requests-table-container">
+                    <table className="requests-table">
+                      <thead>
+                        <tr>
+                          <th>Staff</th>
+                          <th>Role</th>
+                          <th>Status</th>
+                          <th>Last Login</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.map((staffUser) => (
+                          <tr key={staffUser.id} onClick={() => setSelectedStaffId(staffUser.id)} className="cursor-pointer">
                             <td>
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                    user.status === 'active'
-                                      ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                  }`}
-                                  onClick={() => handleToggleUserStatus(user.id)}
-                                >
-                                  {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                                </button>
-                                <button
-                                  className="inline-flex items-center gap-2 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-200 transition-colors"
-                                  onClick={() => setEditingUser(user)}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm font-medium hover:bg-red-100 transition-colors"
-                                  onClick={() => handleDeleteUser(user.id)}
-                                >
-                                  Delete
-                                </button>
+                              <div className="flex items-center gap-2">
+                                <span className="h-7 w-7 rounded-full bg-slate-200 text-xs font-semibold text-slate-700 flex items-center justify-center">
+                                  {(staffUser.name || 'U').charAt(0).toUpperCase()}
+                                </span>
+                                <span>{staffUser.name}</span>
                               </div>
                             </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                            <td>{String(staffUser.role || '-').replaceAll('_', ' ')}</td>
+                            <td>{staffUser.status}</td>
+                            <td>{formatRelativeTime(staffUser.lastLogin)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
 
+              <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {!selectedStaff ? (
+                  <p className="text-sm text-slate-500">Select a staff card to view details.</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Staff Details</h3>
+                      <p className="text-xs text-slate-500">Master-detail quick panel</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <UserCog size={16} className="text-slate-500" />
+                        <p className="text-sm font-semibold text-slate-900">{selectedStaff.name || '-'}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-600">{selectedStaff.email || '-'}</p>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-slate-700">
+                      <p><strong>Role:</strong> {String(selectedStaff.role || '-').replaceAll('_', ' ')}</p>
+                      <p><strong>Status:</strong> {selectedStaff.status}</p>
+                      <p><strong>Department:</strong> {selectedStaff.department || '-'}</p>
+                      <p><strong>Phone:</strong> {selectedStaff.phone || '-'}</p>
+                      <p><strong>Joined:</strong> {selectedStaff.joinDate || selectedStaff.createdAt ? new Date(selectedStaff.joinDate || selectedStaff.createdAt).toLocaleDateString() : '-'}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+                        <Activity size={14} /> Activity Snapshot
+                      </div>
+                      <p className="text-xs text-slate-600">Last login: {formatRelativeTime(selectedStaff.lastLogin)}</p>
+                    </div>
+
+                    {canEditUsers && (
+                      <div className="flex gap-2">
+                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => setEditingUser(selectedStaff)}>
+                          Edit Profile
+                        </button>
+                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => handleToggleUserStatus(selectedStaff.id)}>
+                          {selectedStaff.status === 'active' ? 'Deactivate' : 'Activate'} User
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </aside>
+            </div>
           </div>
 
         )}
@@ -1583,161 +1973,209 @@ eligibility for partnership in relief operations.
 
         {activeTab === 'partners' && (
 
-          <div className="tracking-section">
+          <div className="tracking-section space-y-4">
 
             <div className="tracking-actions">
-
-              <div className="filter-controls">
-
-                <label>Filter by Status:</label>
-
-                <select 
-
-                  className="filter-select"
-
-                  value={filterStatus}
-
-                  onChange={(e) => setFilterStatus(e.target.value)}
-
-                >
-
-                  {statusOptions.map(option => (
-
-                    <option key={option.value} value={option.value}>
-
-                      {option.label}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
+              <div className="search-input max-w-md">
+                <Search size={14} />
+                <input
+                  placeholder="Search partners by name, contact, or email"
+                  value={partnerSearch}
+                  onChange={(e) => setPartnerSearch(e.target.value)}
+                />
               </div>
 
-              {canEditPartners && (
-                <div className="toolbar-actions">
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  className="filter-select"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  {statusOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  className={`btn-secondary ${partnerViewMode === 'cards' ? 'bg-slate-100' : ''}`}
+                  onClick={() => setPartnerViewMode('cards')}
+                >
+                  Cards View
+                </button>
+                <button
+                  className={`btn-secondary ${partnerViewMode === 'table' ? 'bg-slate-100' : ''}`}
+                  onClick={() => setPartnerViewMode('table')}
+                >
+                  Table View
+                </button>
+
+                {canEditPartners && (
                   <button
-                    className="btn-primary btn-create"
+                    className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-slate-800"
                     onClick={() => setShowPartnerForm(true)}
                   >
-                    <span className="btn-icon">+</span>
-                    <span className="btn-text">Create Partner</span>
+                    + Create Partner
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
             </div>
 
-
-
-            <div className="records-container">
-
-              {filteredPartners.length === 0 ? (
-
-                <div className="no-records">
-
-                  <p>No NGO partners found</p>
-
-                </div>
-
-              ) : (
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredPartners.map(partner => (
-                    <div key={partner.id} className="border border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start gap-4">
-                          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-emerald-600 font-semibold text-lg border-2 border-emerald-200">
-                            {partner.profilePicture ? (
-                              <img 
-                                src={partner.profilePicture} 
-                                alt={partner.name} 
-                                className="h-10 w-10 rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="text-emerald-600 font-semibold">{partner.name.charAt(0).toUpperCase()}</span>
-                            )}
+            <div className="grid gap-4 xl:grid-cols-[1fr_330px]">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {isLoadingUsers ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {[1, 2, 3, 4].map((skeleton) => (
+                      <div key={skeleton} className="h-32 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+                    ))}
+                  </div>
+                ) : filteredPartners.length === 0 ? (
+                  <div className="no-records">
+                    <p>No NGO partners found</p>
+                  </div>
+                ) : partnerViewMode === 'cards' ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {filteredPartners.map(partner => (
+                      <article
+                        key={partner.id}
+                        className={`rounded-xl border p-4 transition ${selectedPartner?.id === partner.id ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                        onClick={() => setSelectedPartnerId(partner.id)}
+                      >
+                        <div className="mb-4 flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-4">
+                            <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100 text-base font-semibold text-emerald-600">
+                              {partner.profilePicture ? (
+                                <img
+                                  src={partner.profilePicture}
+                                  alt={partner.name}
+                                  className="h-10 w-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-emerald-600 font-semibold">{partner.name.charAt(0).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="mb-1 text-base font-semibold text-slate-900">{partner.name}</h3>
+                              <p className="mb-2 text-sm text-slate-600">{partner.contactPerson || 'N/A'}</p>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                                  <Calendar className="h-3 w-3" />
+                                  {partner.createdAt ? new Date(partner.createdAt).toLocaleDateString() : 'Date unavailable'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-slate-900 mb-1">{partner.name}</h3>
-                            <p className="text-sm text-slate-600 mb-2">{partner.contactPerson}</p>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-slate-100 text-slate-600">
-                                <Building className="w-3 h-3" />
-                                {partner.specialization}
-                              </span>
-                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-slate-100 text-slate-600">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(partner.partnershipDate).toLocaleDateString()}
-                              </span>
+                          <details className="relative">
+                            <summary className="cursor-pointer list-none rounded-md p-1 text-slate-500 hover:bg-slate-100">
+                              <MoreVertical size={14} />
+                            </summary>
+                            <div className="absolute right-0 top-7 z-10 min-w-[120px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => setEditingPartner(partner)}>Edit</button>
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => handleTogglePartnerStatus(partner.id)}>{partner.status === 'active' ? 'Deactivate' : 'Activate'}</button>
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50" onClick={() => handleDeletePartner(partner.id)}>Delete</button>
+                            </div>
+                          </details>
+                        </div>
+
+                        <div className="border-t border-slate-200 pt-3">
+                          <div className="space-y-2.5 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-slate-400" />
+                              <span className="text-slate-500">Email:</span>
+                              <p className="truncate font-medium text-slate-900">{partner.email || '-'}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4 text-slate-400" />
+                              <span className="text-slate-500">Phone:</span>
+                              <p className="font-medium text-slate-900">{partner.phone || '-'}</p>
                             </div>
                           </div>
                         </div>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-                          partner.status === 'active' 
-                            ? 'bg-emerald-100 text-emerald-700' 
-                            : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            partner.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
-                          }`}></span>
-                          {partner.status}
-                        </span>
-                      </div>
-                      
-                      <div className="border-t border-slate-200 pt-4">
-                        <div className="space-y-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            <span className="text-slate-500">Email:</span>
-                            <p className="font-medium text-slate-900 truncate">{partner.email}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            <span className="text-slate-500">Phone:</span>
-                            <p className="font-medium text-slate-900">{partner.phone}</p>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
-                            <span className="text-slate-500">Address:</span>
-                            <p className="font-medium text-slate-900 text-xs leading-tight">{partner.address}</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {canEditPartners && (
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200">
-                          <div className="flex gap-2">
-                            <button 
-                              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                partner.status === 'active' 
-                                  ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' 
-                                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                              }`}
-                              onClick={() => handleTogglePartnerStatus(partner.id)}
-                            >
-                              {partner.status === 'active' ? '⏸ Deactivate' : '▶ Activate'}
-                            </button>
-                            <button 
-                              className="inline-flex items-center gap-2 rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-200 transition-colors"
-                              onClick={() => setEditingPartner(partner)}
-                            >
-                              ✏️ Edit
-                            </button>
-                            <button 
-                              className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm font-medium hover:bg-red-100 transition-colors"
-                              onClick={() => handleDeletePartner(partner.id)}
-                            >
-                              🗑 Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="requests-table-container">
+                    <table className="requests-table">
+                      <thead>
+                        <tr>
+                          <th>Partner</th>
+                          <th>Contact</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPartners.map((partner) => (
+                          <tr key={partner.id} onClick={() => setSelectedPartnerId(partner.id)} className="cursor-pointer">
+                            <td>
+                              <div className="flex items-center gap-2">
+                                <span className="h-7 w-7 rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 flex items-center justify-center">
+                                  {(partner.name || 'P').charAt(0).toUpperCase()}
+                                </span>
+                                <span>{partner.name || '-'}</span>
+                              </div>
+                            </td>
+                            <td>{partner.contactPerson || '-'}</td>
+                            <td>{partner.status || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+
+              <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {!selectedPartner ? (
+                  <p className="text-sm text-slate-500">Select a partner card to view details.</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Partner Details</h3>
+                      <p className="text-xs text-slate-500">Master-detail quick panel</p>
                     </div>
-                  ))}
-                </div>
-              )}
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-sm font-semibold text-slate-900">{selectedPartner.name || '-'}</p>
+                      <p className="mt-1 text-xs text-slate-600">{selectedPartner.email || '-'}</p>
+                    </div>
+
+                    <div className="space-y-2 text-sm text-slate-700">
+                      <p><strong>Contact:</strong> {selectedPartner.contactPerson || '-'}</p>
+                      <p><strong>Status:</strong> {selectedPartner.status || '-'}</p>
+                      <p><strong>Phone:</strong> {selectedPartner.phone || '-'}</p>
+                      <p><strong>Address:</strong> {selectedPartner.address || '-'}</p>
+                      <p><strong>Joined:</strong> {selectedPartner.createdAt ? new Date(selectedPartner.createdAt).toLocaleDateString() : '-'}</p>
+                    </div>
+
+                    {selectedPartner.services?.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 p-3">
+                        <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Services</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedPartner.services.map((service, index) => (
+                            <span key={`${selectedPartner.id}-service-${index}`} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                              {service}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {canEditPartners && (
+                      <div className="flex gap-2">
+                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => setEditingPartner(selectedPartner)}>
+                          Edit Partner
+                        </button>
+                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => handleTogglePartnerStatus(selectedPartner.id)}>
+                          {selectedPartner.status === 'active' ? 'Deactivate' : 'Activate'} Partner
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </aside>
             </div>
 
           </div>
@@ -1745,6 +2183,12 @@ eligibility for partnership in relief operations.
         )}
 
       </div>
+
+      {toastMessage && (
+        <div className="fixed bottom-6 left-6 z-50 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
+          {toastMessage}
+        </div>
+      )}
 
 
 

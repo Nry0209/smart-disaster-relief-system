@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   Activity,
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
   MapPin,
   Pencil,
   Plus,
@@ -20,7 +24,6 @@ import {
   fetchDisasterReports,
   updateDisasterReport,
 } from "../services/disasterReportService";
-import PageHeader from "../components/PageHeader";
 import "./Pages.css";
 
 const INITIAL_FORM = {
@@ -81,6 +84,7 @@ function preventInvalidPopulationKey(event) {
 
 const DisasterEventPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [disasterEvents, setDisasterEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -88,6 +92,9 @@ const DisasterEventPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+  const canCreateReport = user?.role === "dmc_officer";
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -175,11 +182,20 @@ const DisasterEventPage = () => {
     });
   }, [disasterEvents, filterPriority, filterStatus, searchTerm]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / itemsPerPage));
+
+  const paginatedEvents = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * itemsPerPage;
+    return filteredEvents.slice(startIndex, startIndex + itemsPerPage);
+  }, [currentPage, filteredEvents, totalPages]);
+
   const stats = useMemo(
     () => ({
       totalEvents: disasterEvents.length,
       activeEvents: disasterEvents.filter((e) => e.status === "active").length,
       criticalEvents: disasterEvents.filter((e) => e.priority === "critical").length,
+      resolvedEvents: disasterEvents.filter((e) => e.status === "resolved").length,
       totalAffected: disasterEvents.reduce(
         (sum, e) => sum + Number(e.affectedPopulation || 0),
         0
@@ -381,6 +397,12 @@ const DisasterEventPage = () => {
     }
   };
 
+  const handleSummaryFilter = (nextStatus, nextPriority) => {
+    setFilterStatus(nextStatus ?? "all");
+    setFilterPriority(nextPriority ?? "all");
+    setCurrentPage(1);
+  };
+
   const handleSendToAllocation = async (id) => {
     const report = disasterEvents.find((event) => event.id === id);
     if (!report) {
@@ -425,11 +447,23 @@ const DisasterEventPage = () => {
 
   return (
     <div className="disaster-event-page">
-      <PageHeader
-        role="Admin / Disaster Management"
-        title="Disaster Reports"
-        description="Track every reported incident, prioritize response actions, and keep allocation teams synchronized."
-      />
+      <div className="disaster-page-header">
+        <div>
+          <p className="disaster-page-kicker">Admin / Disaster Management</p>
+          <h1>Disaster Reports</h1>
+          <p>Track incidents, prioritize response actions, and keep allocation teams synchronized.</p>
+        </div>
+        <div className="disaster-page-actions">
+          {canCreateReport && (
+            <button className="btn-primary" type="button" onClick={() => navigate("/disaster-report/create")}>
+              <Plus size={14} /> Create Report
+            </button>
+          )}
+          <button className="btn-secondary" type="button" onClick={loadReports}>
+            <RefreshCcw size={14} /> Refresh
+          </button>
+        </div>
+      </div>
 
       {actionMessage && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -445,58 +479,46 @@ const DisasterEventPage = () => {
         </div>
       )}
 
-      <div className="disaster-event-toolbar">
-        <button className="btn-primary" type="button" onClick={() => navigate("/disaster-report/create")}>
-          <Plus size={14} /> Create Report
-        </button>
-        <button className="btn-light" type="button" onClick={loadReports}>
-          <RefreshCcw size={14} /> Refresh
-        </button>
-        <div className="disaster-event-toolbar-meta">
-          Showing {filteredEvents.length} of {disasterEvents.length} reports
-        </div>
-      </div>
-
       <div className="disaster-stats-grid">
-        <div className="disaster-stat-card">
+        <button type="button" className={`disaster-stat-card ${filterStatus === "all" && filterPriority === "all" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("all", "all") }>
           <div className="disaster-stat-icon" style={{ background: "#eff6ff" }}>
             <Activity size={24} color="#2563eb" />
           </div>
           <div className="disaster-stat-content">
-            <h3>Total Events</h3>
+            <h3>Total Reports</h3>
             <p>{stats.totalEvents}</p>
           </div>
-        </div>
+        </button>
 
-        <div className="disaster-stat-card">
+        <button type="button" className={`disaster-stat-card ${filterStatus === "active" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("active", "all") }>
           <div className="disaster-stat-icon" style={{ background: "#dcfce7" }}>
             <CheckCircle2 size={24} color="#16a34a" />
           </div>
           <div className="disaster-stat-content">
-            <h3>Active Events</h3>
+            <h3>Active</h3>
             <p>{stats.activeEvents}</p>
           </div>
-        </div>
+        </button>
 
-        <div className="disaster-stat-card">
+        <button type="button" className={`disaster-stat-card ${filterPriority === "critical" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("all", "critical") }>
           <div className="disaster-stat-icon" style={{ background: "#fee2e2" }}>
             <AlertTriangle size={24} color="#dc2626" />
           </div>
           <div className="disaster-stat-content">
-            <h3>Critical Priority</h3>
+            <h3>Critical</h3>
             <p>{stats.criticalEvents}</p>
           </div>
-        </div>
+        </button>
 
-        <div className="disaster-stat-card">
+        <button type="button" className={`disaster-stat-card ${filterStatus === "resolved" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("resolved", "all") }>
           <div className="disaster-stat-icon" style={{ background: "#fef3c7" }}>
             <Users size={24} color="#d97706" />
           </div>
           <div className="disaster-stat-content">
-            <h3>Total Affected</h3>
-            <p>{formatPopulation(stats.totalAffected)}</p>
+            <h3>Resolved</h3>
+            <p>{stats.resolvedEvents}</p>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="disaster-filter-shell">
@@ -504,16 +526,22 @@ const DisasterEventPage = () => {
           <Search size={18} />
           <input
             type="text"
-            placeholder="Search by location, disaster type, or reporting officer..."
+            placeholder="Search by location, type, or officer..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <div className="disaster-filter-buttons">
           <select
             className="disaster-select"
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={(e) => {
+              setFilterStatus(e.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="all">All Status</option>
             <option value="draft">Draft</option>
@@ -527,7 +555,10 @@ const DisasterEventPage = () => {
           <select
             className="disaster-select"
             value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
+            onChange={(e) => {
+              setFilterPriority(e.target.value);
+              setCurrentPage(1);
+            }}
           >
             <option value="all">All Priority</option>
             <option value="critical">Critical</option>
@@ -548,11 +579,29 @@ const DisasterEventPage = () => {
         ) : filteredEvents.length === 0 ? (
           <div className="no-events">
             <AlertTriangle size={48} color="#94a3b8" />
-            <h3>No events found</h3>
-            <p>No disaster events match your current filters.</p>
+            <h3>No disaster reports available</h3>
+            <p>
+              {canCreateReport
+                ? 'Click "Create Report" to add a new incident.'
+                : "No disaster reports are currently available to view."}
+            </p>
           </div>
         ) : (
-          filteredEvents.map((event) => {
+          <div className="disaster-report-table-shell">
+            <div className="requests-table-container">
+              <table className="requests-table disaster-report-table">
+                <thead>
+                  <tr>
+                    <th>Disaster Type</th>
+                    <th>Location</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Reported Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedEvents.map((event) => {
             const severityStyle = getSeverityStyle(event.severity);
             const statusStyle = getStatusStyle(event.status);
             const priorityStyle = getPriorityStyle(event.priority);
@@ -562,141 +611,83 @@ const DisasterEventPage = () => {
               : [];
 
             return (
-              <div key={event.id} className="event-card">
-                <div className="event-header">
-                  <div className="event-title">
-                    <h3>{event.disasterType}</h3>
-                    <span className="event-id">{event.id}</span>
+              <tr key={event.id}>
+                <td>
+                  <div className="disaster-report-type-cell">
+                    <strong>{event.disasterType || "-"}</strong>
+                    <span>{event.id}</span>
                   </div>
-                  <div className="event-badges">
-                    <span
-                      className="severity-badge"
-                      style={{ color: severityStyle.color, background: severityStyle.bg }}
-                    >
-                      <SeverityIcon size={12} />
-                      {String(event.severity || "unknown").toUpperCase()}
-                    </span>
-                    <span
-                      className="priority-badge"
-                      style={{ color: priorityStyle.color, background: priorityStyle.bg }}
-                    >
-                      {String(event.priority || "unknown").toUpperCase()}
-                    </span>
+                </td>
+                <td>
+                  <div className="disaster-report-location-cell">
+                    <MapPin size={14} />
+                    <span>{event.location || "Location not specified"}</span>
                   </div>
-                </div>
-
-                <div className="event-location">
-                  <MapPin size={16} />
-                  <span>{event.location || "Location not specified"}</span>
-                </div>
-
-                <div className="event-details">
-                  <div className="detail-item">
-                    <Users size={16} />
-                    <span>{formatPopulation(event.affectedPopulation)} affected</span>
-                  </div>
-                  <div className="detail-item">
-                    <Calendar size={16} />
-                    <span>{formatDate(event.eventDate)}</span>
-                  </div>
-                </div>
-
-                <div className="event-description">
-                  <p>{event.description || "No description provided."}</p>
-                </div>
-
-                <div className="event-needs">
-                  <h4>Immediate Needs:</h4>
-                  <div className="needs-tags">
-                    {immediateNeeds.length === 0 ? (
-                      <span className="need-tag">No needs listed</span>
-                    ) : (
-                      immediateNeeds.map((need, index) => (
-                        <span key={`${event.id}-need-${index}`} className="need-tag">
-                          {need}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="event-footer">
-                  <div className="event-contact">
-                    <div className="contact-info">
-                      <span className="contact-name">{event.reportedBy || "DMC Officer"}</span>
-                    </div>
-                  </div>
-                  <div className="event-status">
-                    <span
-                      className="status-badge"
-                      style={{ color: statusStyle.color, background: statusStyle.bg }}
-                    >
-                      {String(event.status || "unknown").toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="event-actions">
-                  {event.status === "pending_inventory" ? (
+                </td>
+                <td>
+                  <span className="table-badge" style={{ color: priorityStyle.color, background: priorityStyle.bg }}>
+                    {String(event.priority || "unknown").toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <span className="table-badge" style={{ color: statusStyle.color, background: statusStyle.bg }}>
+                    {String(event.status || "unknown").toUpperCase()}
+                  </span>
+                </td>
+                <td>{formatDate(event.eventDate)}</td>
+                <td>
+                  <div className="report-row-actions">
+                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="View report">
+                      <Eye size={14} />
+                    </button>
+                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="Edit report">
+                      <Pencil size={14} />
+                    </button>
                     <button
                       type="button"
-                      className="event-action-btn allocate"
-                      disabled
+                      className="row-icon-btn danger"
+                      onClick={() => handleDelete(event.id)}
+                      disabled={activeActionId === event.id}
+                      aria-label="Delete report"
                     >
-                      Sent to Allocation
+                      <Trash2 size={14} />
                     </button>
-                  ) : event.status === "allocated" ? (
-                    <button
-                      type="button"
-                      className="event-action-btn allocate"
-                      disabled
-                    >
-                      Allocated by Officer
-                    </button>
-                  ) : event.status === "monitoring" ? (
-                    <button
-                      type="button"
-                      className="event-action-btn allocate"
-                      disabled
-                    >
-                      Allocation in Monitoring
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="event-action-btn allocate"
-                      onClick={() => handleSendToAllocation(event.id)}
-                      disabled={activeAllocationId === event.id || event.status === "resolved"}
-                    >
-                      {activeAllocationId === event.id ? "Sending..." : "Send to Allocation"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="event-action-btn edit"
-                    onClick={() => openEditModal(event)}
-                  >
-                    <Pencil size={12} /> Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="event-action-btn delete"
-                    onClick={() => handleDelete(event.id)}
-                    disabled={activeActionId === event.id}
-                  >
-                    <Trash2 size={12} />
-                    {activeActionId === event.id ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </div>
+                  </div>
+                </td>
+              </tr>
             );
-          })
+          })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pagination-shell">
+              <button type="button" className="pagination-btn" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>
+                <ChevronLeft size={14} /> Previous
+              </button>
+              <div className="pagination-pages">
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    className={`pagination-page ${currentPage === pageNumber ? "active" : ""}`}
+                    onClick={() => setCurrentPage(pageNumber)}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="pagination-btn" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages}>
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="professional-form-shell w-full max-w-2xl rounded-2xl p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
               <button
@@ -706,6 +697,21 @@ const DisasterEventPage = () => {
               >
                 <X size={16} />
               </button>
+            </div>
+
+            <div className="shared-stepper mb-4">
+              <div className="step-chip active">
+                <span>1</span>
+                <p>Incident Data</p>
+              </div>
+              <div className="step-chip active">
+                <span>2</span>
+                <p>Operational Status</p>
+              </div>
+              <div className="step-chip active">
+                <span>3</span>
+                <p>Update Record</p>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">

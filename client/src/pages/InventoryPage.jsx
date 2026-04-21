@@ -31,7 +31,10 @@ const DEFAULT_ACTION_FORM = {
 };
 
 const MAX_ITEM_NAME_LENGTH = 80;
+const MIN_ITEM_NAME_LENGTH = 2;
+const MIN_WAREHOUSE_LENGTH = 2;
 const MAX_WAREHOUSE_LENGTH = 60;
+const MIN_UNIT_LENGTH = 1;
 const MAX_UNIT_LENGTH = 20;
 const MAX_ACTION_NOTE_LENGTH = 300;
 
@@ -245,6 +248,11 @@ export default function InventoryPage() {
       return;
     }
 
+    if (normalizedWarehouse.length < MIN_WAREHOUSE_LENGTH) {
+      setError(`Warehouse must be at least ${MIN_WAREHOUSE_LENGTH} characters.`);
+      return;
+    }
+
     if (normalizedWarehouse.length > MAX_WAREHOUSE_LENGTH) {
       setError(`Warehouse cannot exceed ${MAX_WAREHOUSE_LENGTH} characters.`);
       return;
@@ -252,6 +260,11 @@ export default function InventoryPage() {
 
     if (!normalizedUnit) {
       setError("Unit is required.");
+      return;
+    }
+
+    if (normalizedUnit.length < MIN_UNIT_LENGTH) {
+      setError(`Unit must be at least ${MIN_UNIT_LENGTH} character.`);
       return;
     }
 
@@ -332,8 +345,13 @@ export default function InventoryPage() {
       return;
     }
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      setError("Quantity must be a whole number greater than zero.");
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      setError("Invalid count. Quantity cannot be negative.");
+      return;
+    }
+
+    if (quantity === 0) {
+      setError("Quantity must be greater than zero.");
       return;
     }
 
@@ -622,6 +640,8 @@ export default function InventoryPage() {
                       placeholder="e.g. Bottled Water"
                       value={itemForm.name}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, name: event.target.value }))}
+                      minLength={MIN_ITEM_NAME_LENGTH}
+                      maxLength={MAX_ITEM_NAME_LENGTH}
                     />
                   </div>
                   <div className="form-group">
@@ -640,6 +660,7 @@ export default function InventoryPage() {
                     <input
                       type="number"
                       min="0"
+                      step="1"
                       value={itemForm.stock}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, stock: event.target.value }))}
                     />
@@ -649,6 +670,7 @@ export default function InventoryPage() {
                     <input
                       type="number"
                       min="0"
+                      step="1"
                       value={itemForm.min}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, min: event.target.value }))}
                     />
@@ -658,6 +680,8 @@ export default function InventoryPage() {
                     <input
                       value={itemForm.warehouse}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, warehouse: event.target.value }))}
+                      minLength={MIN_WAREHOUSE_LENGTH}
+                      maxLength={MAX_WAREHOUSE_LENGTH}
                     />
                   </div>
                   <div className="form-group">
@@ -665,6 +689,8 @@ export default function InventoryPage() {
                     <input
                       value={itemForm.unit}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, unit: event.target.value }))}
+                      minLength={MIN_UNIT_LENGTH}
+                      maxLength={MAX_UNIT_LENGTH}
                     />
                   </div>
                 </>
@@ -698,7 +724,7 @@ export default function InventoryPage() {
                         <label>Quantity</label>
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           step="1"
                           value={actionForm.quantity}
                           onChange={(event) => setActionForm((prev) => ({ ...prev, quantity: event.target.value }))}
@@ -713,6 +739,8 @@ export default function InventoryPage() {
                             onChange={(event) =>
                               setActionForm((prev) => ({ ...prev, destinationWarehouse: event.target.value }))
                             }
+                            minLength={MIN_WAREHOUSE_LENGTH}
+                            maxLength={MAX_WAREHOUSE_LENGTH}
                           />
                         </div>
                       )}

@@ -32,8 +32,8 @@
   width: 56px;
   height: 56px;
   object-fit: contain;
-  border-radius: 14px;
-  padding: 6px;
+  border-radius: 0;
+  padding: 0;
 
 }
 
@@ -445,7 +445,7 @@
 /* LANDING PAGE */
 .landing-page {
   min-height: 100vh;
-  background: #eef3fb;
+  background: #ffffff;
 
   font-family: Arial, sans-serif;
 
@@ -483,19 +483,19 @@
 
 .landing-brand-logo {
 
-  width: 46px;
+  width: 104px;
 
-  height: 46px;
+  height: 104px;
 
   object-fit: contain;
 
-  border-radius: 14px;
+  border-radius: 0;
 
-  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  background: transparent;
 
-  padding: 6px;
+  padding: 0;
 
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.18);
+  box-shadow: none;
 
 }
 
@@ -1085,9 +1085,9 @@
 
   width: 100%;
 
-  max-width: 1400px;
+  max-width: 1220px;
 
-  min-height: 760px;
+  min-height: 720px;
 
   background: #ffffff;
 
@@ -1109,7 +1109,7 @@
 
   position: relative;
 
-  padding: 32px 32px 24px;
+  padding: 28px 28px 22px;
 
   background-color: #14327a;
 
@@ -1166,53 +1166,42 @@
 
 
 .login-brand {
-
   display: flex;
-
   align-items: center;
-
   gap: 14px;
-
 }
 
 
 
 .login-brand-logo {
-
-  width: 56px;
-
-  height: 56px;
-
+  width: 112px;
+  height: 112px;
   object-fit: contain;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
 
-  background: rgba(255, 255, 255, 0.12);
 
-  border-radius: 14px;
-
-  padding: 6px;
-
+.login-page .login-brand-logo {
+  width: 140px;
+  height: 140px;
 }
 
 
 
 .login-brand h2 {
-
   margin: 0;
-
   font-size: 20px;
-
   font-weight: 700;
-
 }
 
 
 
 .login-brand p {
-
   margin: 4px 0 0;
-
   font-size: 14px;
-
   opacity: 0.9;
 
 }
@@ -1220,41 +1209,27 @@
 
 
 .login-visual-content {
-
-  margin-top: 24px;
-
+  margin-top: 12px;
 }
 
-
-
 .login-visual-content h1 {
-
   margin: 0 0 18px;
-
   font-size: 52px;
-
   line-height: 1.1;
-
   font-weight: 800;
-
   max-width: 820px;
+  color: rgba(255, 255, 255, 0.92)
 
 }
 
 
 
 .login-visual-content p {
-
   margin: 0 0 24px;
-
   font-size: 19px;
-
   line-height: 1.7;
-
   max-width: 780px;
-
   color: rgba(255, 255, 255, 0.92);
-
 }
 
 
@@ -1263,7 +1238,7 @@
 
   display: grid;
 
-  gap: 14px;
+  gap: 12px;
 
   margin-top: 20px;
 
@@ -1281,7 +1256,7 @@
 
   border-radius: 18px;
 
-  padding: 16px 18px;
+  padding: 15px 16px;
 
   backdrop-filter: blur(6px);
 
@@ -1355,7 +1330,7 @@
 
 .login-footer-note {
 
-  margin-top: 18px;
+  margin-top: 14px;
 
   font-size: 14px;
 
@@ -1620,6 +1595,7 @@
   .login-container {
 
     grid-template-columns: 1fr;
+    max-width: 900px;
 
   }
 
@@ -1666,6 +1642,15 @@
   .login-visual-content h1 {
 
     font-size: 30px;
+
+  }
+
+
+  .login-page .login-brand-logo {
+
+    width: 112px;
+
+    height: 112px;
 
   }
 
@@ -4489,6 +4474,52 @@
   font-family: Arial, sans-serif;
 }
 
+.disaster-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 6px 2px 2px;
+}
+
+.disaster-page-kicker {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.disaster-page-header h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.disaster-page-header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  max-width: 62ch;
+}
+
+.disaster-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.disaster-page-actions .btn-primary,
+.disaster-page-actions .btn-secondary {
+  min-height: 40px;
+  border-radius: 12px;
+}
+
 .disaster-event-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -4516,6 +4547,7 @@
 }
 
 .disaster-stat-card {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -4524,6 +4556,21 @@
   border-radius: 16px;
   padding: 16px;
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+}
+
+.disaster-stat-card.is-active {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.disaster-stat-card:hover {
+  border-color: #bfd3ec;
+}
+
+.disaster-stat-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
 }
 
 .disaster-stat-icon {
@@ -4611,6 +4658,197 @@
 .disaster-select:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.disaster-report-table-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.disaster-report-table-shell .requests-table-container {
+  margin-top: 0;
+}
+
+.disaster-report-table {
+  table-layout: fixed;
+}
+
+.disaster-report-table th:nth-child(1),
+.disaster-report-table td:nth-child(1) {
+  width: 22%;
+}
+
+.disaster-report-table th:nth-child(2),
+.disaster-report-table td:nth-child(2) {
+  width: 22%;
+}
+
+.disaster-report-table th:nth-child(3),
+.disaster-report-table td:nth-child(3),
+.disaster-report-table th:nth-child(4),
+.disaster-report-table td:nth-child(4),
+.disaster-report-table th:nth-child(5),
+.disaster-report-table td:nth-child(5) {
+  width: 12%;
+}
+
+.disaster-report-table th:nth-child(6),
+.disaster-report-table td:nth-child(6) {
+  width: 20%;
+}
+
+.disaster-report-type-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.disaster-report-type-cell strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.disaster-report-type-cell span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.disaster-report-location-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.report-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.row-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  transition: all 0.18s ease;
+}
+
+.row-icon-btn:hover {
+  border-color: #bfd3ec;
+  background: #f8fbff;
+}
+
+.row-icon-btn.danger {
+  color: #be123c;
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.row-icon-btn.danger:hover {
+  border-color: #fda4af;
+  background: #ffe4e6;
+}
+
+.row-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pagination-shell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pagination-btn,
+.pagination-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.18s ease;
+}
+
+.pagination-page {
+  min-width: 36px;
+  padding: 0 10px;
+}
+
+.pagination-btn:hover:not(:disabled),
+.pagination-page:hover {
+  border-color: #bfd3ec;
+  background: #f8fbff;
+}
+
+.pagination-page.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.pagination-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 900px) {
+  .disaster-page-header {
+    flex-direction: column;
+  }
+
+  .disaster-page-actions {
+    width: 100%;
+  }
+
+  .pagination-shell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-pages {
+    justify-content: center;
+  }
 }
 
 .disaster-report-page {
@@ -19577,3 +19815,818 @@
     width: 100%;
   }
 }
+
+  /* Shared professional form style for operational pages */
+  .professional-form-shell {
+    border: 1px solid rgba(203, 213, 225, 0.9);
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 255, 0.86));
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .shared-stepper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .shared-stepper .step-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #dbe6f5;
+    border-radius: 12px;
+    background: #f8fbff;
+    padding: 10px 12px;
+    color: #475569;
+    transition: all 0.2s ease;
+  }
+
+  .shared-stepper .step-chip.active {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+    box-shadow: 0 10px 18px rgba(37, 99, 235, 0.12);
+  }
+
+  .shared-stepper .step-chip span {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .shared-stepper .step-chip.active span {
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .shared-stepper .step-chip p {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .shared-stepper {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* System-wide form and button refinements */
+  .form-group label,
+  .login-form-group label {
+    font-size: 13px;
+    color: #475569;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select,
+  .login-form-group input,
+  .login-form-group select,
+  .resource-line-input,
+  .search-input input,
+  .filter-select,
+  .period-selector select {
+    font-size: 14px;
+    color: #0f172a;
+    background: #ffffff;
+    border-color: #dbe3ee;
+    border-radius: 12px;
+    min-height: 44px;
+  }
+
+  .form-group input::placeholder,
+  .form-group textarea::placeholder,
+  .resource-line-input::placeholder,
+  .search-input input::placeholder {
+    color: #94a3b8;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-confirm,
+  .btn-cancel,
+  .btn-create,
+  .btn-export,
+  .btn-refresh,
+  .btn-view,
+  .btn-verify,
+  .btn-reject,
+  .btn-compact,
+  .btn-add,
+  .btn-remove,
+  .inventory-row-btn,
+  .category-btn,
+  .action-btn,
+  .tab-button,
+  .filter-btn,
+  .export-option {
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 12px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #475569, #334155);
+    color: #ffffff;
+    box-shadow: 0 10px 20px rgba(51, 65, 85, 0.18);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.02);
+  }
+
+  .btn-secondary,
+  .btn-cancel,
+  .btn-compact,
+  .btn-refresh,
+  .filter-btn,
+  .export-option {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+  }
+
+  .btn-secondary:hover,
+  .btn-cancel:hover,
+  .btn-compact:hover,
+  .btn-refresh:hover,
+  .filter-btn:hover,
+  .export-option:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+
+  .btn-create,
+  .action-btn.add,
+  .action-btn.export,
+  .category-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+    box-shadow: none;
+  }
+
+  .btn-create:hover,
+  .action-btn.add:hover,
+  .action-btn.export:hover,
+  .category-btn:hover,
+  .category-btn.active {
+    background: #eef2f7;
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
+
+  .resource-request-page,
+  .distribution-tracking-page,
+  .disaster-report-page,
+  .inventory-page,
+  .allocation-page,
+  .reports-analytics-page,
+  .audit-logs-page,
+  .user-management {
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  .resource-request-page .resource-line-input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #dbe3ee;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 14px;
+    outline: none;
+    min-height: 44px;
+  }
+
+  .resource-request-page .resource-line-input::placeholder {
+    color: #94a3b8;
+  }
+
+  .resource-request-page .resource-line-input:focus {
+    border-color: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
+  }
+
+  .disaster-report-page .rounded-3xl,
+  .inventory-page .inventory-table-container,
+  .inventory-page .quick-actions,
+  .inventory-page .activity-log,
+  .allocation-page .rounded-3xl,
+  .distribution-tracking-page .rounded-3xl,
+  .reports-analytics-page .analytics-content,
+  .reports-analytics-page .report-type-card,
+  .audit-logs-page .logs-table-container,
+  .audit-logs-page .summary-card,
+  .user-management .requests-table-container,
+  .user-management .border.border-slate-200.rounded-2xl.p-6.bg-white.shadow-sm.hover\:shadow-md.transition-shadow {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #dbe3ee;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .disaster-report-page h2,
+  .inventory-page h2,
+  .allocation-page h2,
+  .distribution-tracking-page h2,
+  .reports-analytics-page h3,
+  .audit-logs-page h3,
+  .user-management h2,
+  .user-management h3 {
+    font-size: 15px;
+  }
+
+  .disaster-report-page p,
+  .inventory-page p,
+  .allocation-page p,
+  .distribution-tracking-page p,
+  .reports-analytics-page p,
+  .audit-logs-page p,
+  .user-management p,
+  .user-management label,
+  .user-management td,
+  .user-management th {
+    font-size: 13px;
+  }
+
+  .disaster-report-page button {
+    border-radius: 12px;
+  }
+
+  .disaster-report-page .rounded-3xl button,
+  .allocation-page .btn-primary,
+  .distribution-tracking-page .btn-primary,
+  .user-management .btn-primary,
+  .user-management .btn-create,
+  .reports-analytics-page .btn-export,
+  .audit-logs-page .btn-export,
+  .audit-logs-page .btn-refresh {
+    padding: 10px 16px;
+  }
+
+  .disaster-report-page .rounded-3xl .shadow-\[0_12px_24px_rgba\(15\,23\,42\,0\.05\)\] {
+    border-radius: 20px;
+  }
+
+  .inventory-page {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .inventory-page .inventory-stats,
+  .inventory-page .inventory-actions,
+  .inventory-page .quick-actions,
+  .inventory-page .activity-log,
+  .allocation-page .allocation-stats,
+  .allocation-page .allocation-actions,
+  .distribution-tracking-page .tracking-actions,
+  .user-management .tracking-actions,
+  .reports-analytics-page .analytics-controls,
+  .audit-logs-page .audit-filters,
+  .audit-logs-page .logs-summary {
+    gap: 12px;
+  }
+
+  .inventory-page .stat-card,
+  .allocation-page .stat-card,
+  .reports-analytics-page .analytics-stat-card,
+  .audit-logs-page .summary-card {
+    border-radius: 16px;
+  }
+
+  .inventory-page .category-btn,
+  .inventory-page .action-btn,
+  .inventory-page .inventory-row-btn {
+    min-height: 40px;
+  }
+
+  .inventory-page .action-btn.add,
+  .inventory-page .action-btn.export {
+    background: #f1f5f9;
+  }
+
+  .allocation-page {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .allocation-page .filter-select,
+  .allocation-page input,
+  .allocation-page select,
+  .allocation-page textarea {
+    font-size: 14px;
+  }
+
+  .allocation-page .btn-primary {
+    background: linear-gradient(135deg, #475569, #1f2937);
+  }
+
+  .distribution-tracking-page {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .distribution-tracking-page .btn-primary {
+    background: linear-gradient(135deg, #475569, #1f2937);
+  }
+
+  .distribution-tracking-page .requests-table th,
+  .distribution-tracking-page .requests-table td,
+  .inventory-page .inventory-table th,
+  .inventory-page .inventory-table td,
+  .user-management .requests-table th,
+  .user-management .requests-table td,
+  .reports-analytics-page .analytics-content,
+  .audit-logs-page .logs-table th,
+  .audit-logs-page .logs-table td {
+    font-size: 13px;
+  }
+
+  .user-management {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .user-management .tab-button {
+    border: 1px solid #dbe3ee;
+    background: #ffffff;
+    color: #475569;
+    padding: 12px 16px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  .user-management .tab-button.active {
+    background: #eef2f7;
+    color: #0f172a;
+    border-bottom-color: transparent;
+  }
+
+  .user-management .tracking-actions {
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    border: 1px solid #dbe3ee;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .user-management .filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .user-management .filter-controls label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  .user-management .filter-select {
+    min-width: 220px;
+  }
+
+  .user-management .toolbar-actions .btn-create {
+    background: #f1f5f9;
+    color: #0f172a;
+  }
+
+  .user-management .toolbar-actions .btn-create:hover {
+    background: #e2e8f0;
+  }
+
+  .user-management .requests-table-container {
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .user-management .requests-table th {
+    background: #f8fafc;
+    color: #475569;
+  }
+
+  .user-management .requests-table td,
+  .user-management .requests-table th {
+    padding: 12px 10px;
+  }
+
+  .reports-analytics-page {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .reports-analytics-page .analytics-header,
+  .audit-logs-page .audit-header {
+    padding: 16px 18px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #dbe3ee;
+    border-radius: 18px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .reports-analytics-page .btn-export,
+  .audit-logs-page .btn-export,
+  .audit-logs-page .btn-refresh,
+  .reports-analytics-page .filter-btn,
+  .audit-logs-page .filter-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+    box-shadow: none;
+  }
+
+  .reports-analytics-page .report-type-card,
+  .audit-logs-page .summary-card {
+    border-radius: 16px;
+  }
+
+  .reports-analytics-page .analytics-controls,
+  .audit-logs-page .audit-filters {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #dbe3ee;
+    border-radius: 16px;
+  }
+
+  .reports-analytics-page .search-bar input,
+  .audit-logs-page .search-bar input,
+  .reports-analytics-page .period-selector,
+  .audit-logs-page .filter-group select {
+    border-radius: 12px;
+  }
+
+  .audit-logs-page {
+    padding: 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  }
+
+  .audit-logs-page .logs-table-container {
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .audit-logs-page .status-badge.success,
+  .audit-logs-page .status-badge.failure {
+    padding: 4px 8px;
+  }
+
+  .audit-logs-page .action-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+  }
+
+  .audit-logs-page .action-btn:hover {
+    background: #eef2f7;
+  }
+
+  .management-modal .management-modal-card {
+    border: 1px solid #dbe3ee;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
+  }
+
+  .management-modal .management-form label,
+  .management-modal .management-form h3 {
+    font-size: 13px;
+  }
+
+  .management-modal .management-form input,
+  .management-modal .management-form select,
+  .management-modal .management-form textarea {
+    font-size: 14px;
+    border-radius: 12px;
+    border-color: #dbe3ee;
+    color: #0f172a;
+    background: #ffffff;
+  }
+
+  .management-modal .management-form input::placeholder,
+  .management-modal .management-form textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  .management-modal .management-secondary-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+  }
+
+  .management-modal .management-primary-btn {
+    background: linear-gradient(135deg, #475569, #334155);
+    color: #ffffff;
+  }
+
+  .management-modal .management-primary-btn:hover,
+  .management-modal .management-secondary-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .disaster-report-page h2 {
+    letter-spacing: -0.01em;
+  }
+
+  .disaster-report-page .rounded-3xl h2 {
+    font-size: 15px !important;
+  }
+
+  .disaster-report-page .rounded-3xl p,
+  .disaster-report-page .rounded-3xl span {
+    font-size: 13px;
+  }
+
+  .disaster-report-page .rounded-3xl button {
+    font-size: 13px;
+    min-height: 40px;
+  }
+
+  .inventory-page .inventory-stats .stat-card h3,
+  .allocation-page .stats-grid .stat-card h3,
+  .reports-analytics-page .analytics-stat-card .stat-content h3,
+  .audit-logs-page .summary-content h3 {
+    font-size: 11px;
+  }
+
+  .inventory-page .inventory-stats .stat-card p,
+  .allocation-page .stats-grid .stat-card p,
+  .reports-analytics-page .analytics-stat-card .stat-content p,
+  .audit-logs-page .summary-content p {
+    font-size: 18px;
+  }
+
+  .inventory-page .action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .inventory-page .action-btn {
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #dbe3ee;
+    padding: 10px 14px;
+  }
+
+  .inventory-page .action-btn.add,
+  .inventory-page .action-btn.export {
+    background: #eef2f7;
+  }
+
+  .inventory-page .inventory-row-btn {
+    padding: 8px 12px;
+    border: 1px solid #dbe3ee;
+    background: #ffffff;
+    color: #334155;
+  }
+
+  .inventory-page .inventory-row-btn.edit {
+    background: #eef2f7;
+  }
+
+  .inventory-page .inventory-row-btn.delete {
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+
+  .inventory-page .inventory-modal,
+  .allocation-page .allocation-modal,
+  .distribution-tracking-page .tracking-modal {
+    border-radius: 20px;
+    border: 1px solid #dbe3ee;
+  }
+
+  .allocation-page .allocation-actions,
+  .distribution-tracking-page .tracking-actions,
+  .user-management .tracking-actions,
+  .reports-analytics-page .analytics-controls,
+  .audit-logs-page .audit-filters {
+    align-items: center;
+  }
+
+  .distribution-tracking-page .form-group input,
+  .distribution-tracking-page .form-group select,
+  .distribution-tracking-page .form-group textarea,
+  .allocation-page .form-group input,
+  .allocation-page .form-group select,
+  .allocation-page .form-group textarea {
+    font-size: 14px;
+  }
+
+  .distribution-tracking-page .btn-primary,
+  .distribution-tracking-page .btn-secondary,
+  .allocation-page .btn-primary,
+  .allocation-page .btn-secondary {
+    min-height: 42px;
+  }
+
+  .reports-analytics-page .report-type-card {
+    text-align: left;
+  }
+
+  .reports-analytics-page .report-type-card h3 {
+    font-size: 13px;
+  }
+
+  .reports-analytics-page .report-type-card p {
+    font-size: 12px;
+  }
+
+  .audit-logs-page .action-btn {
+    min-height: 36px;
+    padding: 8px 10px;
+  }
+
+  /* Enterprise operations look for inventory and allocation */
+  .inventory-page,
+  .allocation-page {
+    background:
+      radial-gradient(circle at 5% 0%, rgba(100, 116, 139, 0.12), transparent 30%),
+      linear-gradient(180deg, #f6f8fb 0%, #eef2f7 100%);
+  }
+
+  .inventory-page .inventory-stats,
+  .allocation-page .allocation-stats {
+    margin-top: 14px;
+  }
+
+  .inventory-page .stat-card,
+  .allocation-page .stat-card {
+    border: 1px solid #d9e1eb;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+  }
+
+  .inventory-page .inventory-table-container,
+  .allocation-page .requests-table-container,
+  .allocation-page .allocation-inventory-section,
+  .allocation-page .allocation-filters-section,
+  .inventory-page .quick-actions,
+  .inventory-page .activity-log {
+    border: 1px solid #d9e1eb;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.05);
+  }
+
+  .inventory-page .inventory-table th,
+  .allocation-page .requests-table th {
+    background: #f4f7fb;
+    color: #475569;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .inventory-page .inventory-table td,
+  .allocation-page .requests-table td {
+    font-size: 13px;
+    padding: 11px 10px;
+    border-bottom: 1px solid #edf2f7;
+  }
+
+  .inventory-page .action-btn.adjust,
+  .inventory-page .action-btn.transfer,
+  .inventory-page .action-btn.donate,
+  .allocation-page .allocate-btn,
+  .allocation-page .update-btn,
+  .allocation-page .finalize-btn {
+    background: #334155;
+    color: #ffffff;
+    border: 1px solid #334155;
+  }
+
+  .inventory-page .action-btn.adjust:hover,
+  .inventory-page .action-btn.transfer:hover,
+  .inventory-page .action-btn.donate:hover,
+  .allocation-page .allocate-btn:hover,
+  .allocation-page .update-btn:hover,
+  .allocation-page .finalize-btn:hover {
+    background: #1f2937;
+    border-color: #1f2937;
+  }
+
+  .allocation-page .delete-btn {
+    background: #f8fafc;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+  }
+
+  .allocation-page .allocation-filter-btn {
+    font-size: 12px;
+    border-radius: 10px;
+    border: 1px solid #d7e0ea;
+    background: #ffffff;
+    color: #475569;
+  }
+
+  .allocation-page .allocation-filter-btn.active,
+  .allocation-page .allocation-filter-btn:hover {
+    background: #eef2f7;
+    color: #1f2937;
+    border-color: #cbd5e1;
+  }
+
+  /* Tighter reports/audit spacing and iconography */
+  .reports-analytics-page .analytics-content,
+  .audit-logs-page .logs-table-container {
+    padding: 16px;
+  }
+
+  .reports-analytics-page .analytics-stats-grid,
+  .audit-logs-page .logs-summary {
+    gap: 10px;
+  }
+
+  .reports-analytics-page .analytics-stat-card,
+  .audit-logs-page .summary-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .reports-analytics-page .analytics-stat-card .stat-icon,
+  .audit-logs-page .summary-icon,
+  .reports-analytics-page .report-icon,
+  .reports-analytics-page .header-icon,
+  .audit-logs-page .header-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .reports-analytics-page .header-icon svg,
+  .audit-logs-page .header-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .reports-analytics-page .report-icon svg,
+  .reports-analytics-page .analytics-stat-card .stat-icon svg,
+  .audit-logs-page .summary-icon svg,
+  .audit-logs-page .action-cell svg,
+  .audit-logs-page .status-cell svg,
+  .audit-logs-page .timestamp svg,
+  .audit-logs-page .user-info svg,
+  .audit-logs-page .action-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .reports-analytics-page .analytics-header,
+  .audit-logs-page .audit-header {
+    margin-bottom: 16px;
+  }
+
+  .reports-analytics-page .report-type-card {
+    padding: 14px;
+  }
+
+  .reports-analytics-page .analytics-controls,
+  .audit-logs-page .audit-filters {
+    margin-bottom: 12px;
+  }
+
+  .reports-analytics-page .search-bar input,
+  .audit-logs-page .search-bar input,
+  .audit-logs-page .filter-group select {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  .audit-logs-page .logs-table th {
+    padding: 9px 8px;
+    font-size: 10px;
+  }
+
+  .audit-logs-page .logs-table td {
+    padding: 8px 8px;
+    font-size: 11px;
+  }
+
+  .audit-logs-page .details-text,
+  .audit-logs-page .timestamp,
+  .audit-logs-page .action-cell span,
+  .audit-logs-page .user-name,
+  .audit-logs-page .severity-badge,
+  .audit-logs-page .status-badge {
+    font-size: 10px;
+  }
+
+  .audit-logs-page .action-btn {
+    min-height: 30px;
+    padding: 6px 8px;
+    border-radius: 8px;
+  }

@@ -3,6 +3,8 @@ import PageHeader from "../components/PageHeader";
 import { confirmTrackingDelivery, fetchTrackingRecords } from "../services/workflowService";
 import "./Pages.css";
 
+const MAX_CONFIRMATION_NOTES_LENGTH = 500;
+
 export default function DmcDeliveryVerificationPage() {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,11 @@ export default function DmcDeliveryVerificationPage() {
 
   async function handleConfirm(record) {
     const notes = String(notesById[record._id] || "").trim();
+
+    if (notes.length > MAX_CONFIRMATION_NOTES_LENGTH) {
+      setError(`Confirmation notes cannot exceed ${MAX_CONFIRMATION_NOTES_LENGTH} characters.`);
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -101,6 +108,7 @@ export default function DmcDeliveryVerificationPage() {
                             setNotesById((prev) => ({ ...prev, [record._id]: e.target.value }))
                           }
                           disabled={record.status === "confirmed_delivered"}
+                          maxLength={MAX_CONFIRMATION_NOTES_LENGTH}
                         />
                       </td>
                       <td>

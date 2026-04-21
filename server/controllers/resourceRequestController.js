@@ -33,6 +33,11 @@ async function createResourceRequest(req, res) {
       return res.status(400).json({ message: "All required fields must be provided." });
     }
 
+    const hasInvalidCount = requestedItems.some((item) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 0);
+    if (hasInvalidCount) {
+      return res.status(400).json({ message: "Invalid count. Quantity cannot be negative." });
+    }
+
     // Validate NGO exists
     const ngo = await Partner.findById(ngoId);
     if (!ngo) {

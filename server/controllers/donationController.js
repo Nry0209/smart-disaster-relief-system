@@ -61,9 +61,21 @@ async function createDonation(req, res) {
     }
 
     if (donationType === "inventory") {
-      if (!itemType || !Number.isFinite(quantity) || quantity <= 0) {
+      if (!itemType || !Number.isFinite(quantity)) {
         return res.status(400).json({
           message: "For inventory donations, item type and a valid quantity are required."
+        });
+      }
+
+      if (quantity < 0) {
+        return res.status(400).json({
+          message: "Invalid count. Quantity cannot be negative."
+        });
+      }
+
+      if (quantity === 0) {
+        return res.status(400).json({
+          message: "For inventory donations, quantity must be greater than zero."
         });
       }
     }
@@ -333,9 +345,21 @@ async function updateDonation(req, res) {
     }
 
     if (donationType === "inventory") {
-      if (!itemType || !Number.isFinite(quantity) || quantity <= 0) {
+      if (!itemType || !Number.isFinite(quantity)) {
         return res.status(400).json({
           message: "For inventory donations, item type and a valid quantity are required."
+        });
+      }
+
+      if (quantity < 0) {
+        return res.status(400).json({
+          message: "Invalid count. Quantity cannot be negative."
+        });
+      }
+
+      if (quantity === 0) {
+        return res.status(400).json({
+          message: "For inventory donations, quantity must be greater than zero."
         });
       }
     }

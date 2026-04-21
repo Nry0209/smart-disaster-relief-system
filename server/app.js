@@ -27,6 +27,7 @@ const dispatchRoutes = require("./routes/dispatch");
 const donationRoutes = require("./routes/donations");
 const partnerRoutes = require("./routes/partners");
 const resourceRequestRoutes = require("./routes/resourceRequests");
+const notificationRoutes = require("./routes/notifications");
 
 // ================= API ROUTES =================
 app.use("/api/auth", authRoutes);
@@ -38,6 +39,7 @@ app.use("/api/dispatch", dispatchRoutes);
 app.use("/api/donations", donationRoutes);
 app.use("/api/partners", partnerRoutes);
 app.use("/api/resource-requests", resourceRequestRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ================= HEALTH CHECK =================
 app.get("/health", (req, res) => {
@@ -73,6 +75,7 @@ app.get("/", (req, res) => {
       donations: "/api/donations",
       partners: "/api/partners",
       resourceRequests: "/api/resource-requests",
+      notifications: "/api/notifications",
       health: "/health",
       docs: "/api/docs",
     },

@@ -3,6 +3,20 @@ import { useState } from "react";
 import logo from "../assets/images/logo1.png";
 import "./Pages.css";
 
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+
+function getPasswordValidationMessage(value) {
+  if (!value || value.length < 6) {
+    return "Password must be at least 6 characters long.";
+  }
+
+  if (!PASSWORD_PATTERN.test(value)) {
+    return "Password must include at least one uppercase letter, one lowercase letter, and one number.";
+  }
+
+  return "";
+}
+
 function ResetPasswordPage() {
   const { token } = useParams();
   const [newPassword, setNewPassword] = useState("");
@@ -16,13 +30,16 @@ function ResetPasswordPage() {
   const handleResetPassword = async (e) => {
     e.preventDefault();
 
-    if (newPassword !== confirmPassword) {
-      setErrorMessage('Passwords do not match');
+    const passwordError = getPasswordValidationMessage(newPassword);
+    if (passwordError) {
+      setErrorMessage(passwordError);
+      setResetStatus('form');
       return;
     }
 
-    if (newPassword.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long');
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Passwords do not match');
+      setResetStatus('form');
       return;
     }
 
@@ -291,6 +308,20 @@ function ResetPasswordPage() {
               Create a new password for your account
             </p>
 
+            {errorMessage && (
+              <div style={{ 
+                backgroundColor: '#fee2e2', 
+                border: '1px solid #fecaca',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px',
+                color: '#991b1b',
+                fontSize: '14px'
+              }}>
+                {errorMessage}
+              </div>
+            )}
+
             <form onSubmit={handleResetPassword}>
               <div className="login-form-group">
                 <label>New Password</label>
@@ -302,6 +333,9 @@ function ResetPasswordPage() {
                   required
                   disabled={isLoading}
                   minLength="6"
+                  autoComplete="new-password"
+                  pattern={PASSWORD_PATTERN.source}
+                  title="At least 6 characters including uppercase, lowercase, and a number."
                 />
               </div>
 
@@ -315,22 +349,9 @@ function ResetPasswordPage() {
                   required
                   disabled={isLoading}
                   minLength="6"
+                  autoComplete="new-password"
                 />
               </div>
-
-              {errorMessage && (
-                <div style={{ 
-                  backgroundColor: '#fee2e2', 
-                  border: '1px solid #fecaca',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  marginBottom: '16px',
-                  color: '#991b1b',
-                  fontSize: '14px'
-                }}>
-                  {errorMessage}
-                </div>
-              )}
 
               <button
                 type="submit"

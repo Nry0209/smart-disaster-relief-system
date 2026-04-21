@@ -11,13 +11,14 @@ const {
 } = require("../controllers/disasterReportController");
 const {
   authenticateToken,
+  authorizeRoles,
   dmcOfficerOnly,
   internalStaffOnly,
 } = require("../config/auth");
 
 const router = express.Router();
 
-router.post("/", authenticateToken, dmcOfficerOnly, createDisasterReport);
+router.post("/", authenticateToken, authorizeRoles("dmc_officer"), createDisasterReport);
 router.get("/", authenticateToken, internalStaffOnly, listDisasterReports);
 router.get("/:id", authenticateToken, internalStaffOnly, getDisasterReportById);
 router.put("/:id", authenticateToken, dmcOfficerOnly, updateDisasterReport);

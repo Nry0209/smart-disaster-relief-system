@@ -406,7 +406,7 @@ function CreateDisasterReportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_50%),radial-gradient(circle_at_90%_25%,rgba(56,189,248,0.12),transparent_45%)] px-4 py-6 md:px-6">
+    <div className="disaster-report-page min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_50%),radial-gradient(circle_at_90%_25%,rgba(56,189,248,0.12),transparent_45%)] px-4 py-6 md:px-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <section className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-[0_16px_30px_rgba(15,23,42,0.06)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

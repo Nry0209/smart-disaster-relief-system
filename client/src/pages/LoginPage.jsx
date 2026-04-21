@@ -2,8 +2,24 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import illustration from "../assets/images/loginImage.png";
-import logo from "../assets/images/logo1.png";
+import logo from "../assets/images/logo2.png";
 import "./Pages.css";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+const OTP_PATTERN = /^\d{6}$/;
+
+function getPasswordValidationMessage(value) {
+  if (!value || value.length < 6) {
+    return "Password must be at least 6 characters long.";
+  }
+
+  if (!PASSWORD_PATTERN.test(value)) {
+    return "Password must include at least one uppercase letter, one lowercase letter, and one number.";
+  }
+
+  return "";
+}
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +28,7 @@ function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loginStep, setLoginStep] = useState("credentials"); // credentials, otp, or normal
+  const [formError, setFormError] = useState("");
 
   // OTP States
   const [otp, setOtp] = useState("");
@@ -29,6 +46,19 @@ function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
+      setFormError("Enter a valid email address.");
+      return;
+    }
+
+    if (!password) {
+      setFormError("Password is required.");
+      return;
+    }
+
+    setFormError("");
     setIsLoading(true);
 
     try {
@@ -42,7 +72,7 @@ function LoginPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email,
+          email: trimmedEmail,
           password,
           role
         }),
@@ -51,31 +81,40 @@ function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        setFormError("");
         // Normal login successful
         await login({
-          email,
+          email: trimmedEmail,
           password,
           role
         });
       } else {
         // Check if it's a first-login OTP user
         if (data.message && data.message.includes('OTP')) {
+          setFormError("");
           setLoginStep('otp');
           alert('This is your first login. Enter the OTP from your email. If email is not configured yet, contact admin for the OTP shown in User Management/server logs.');
         } else {
-          alert(data.message || 'Login failed');
+          setFormError(data.message || 'Login failed');
         }
         setIsLoading(false);
       }
     } catch (error) {
       console.error('Login error:', error);
-      alert('Login failed. Please try again.');
+      setFormError('Login failed. Please try again.');
       setIsLoading(false);
     }
   };
 
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
+
+    if (!OTP_PATTERN.test(otp)) {
+      setFormError('Enter the 6-digit OTP sent to your email.');
+      return;
+    }
+
+    setFormError("");
     setIsLoading(true);
 
     try {
@@ -93,16 +132,17 @@ function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        setFormError("");
         // OTP verified, now need to set password
         setTempAuthToken(data.data.tempToken);
         setRequiresPasswordReset(true);
         setLoginStep('password');
       } else {
-        alert(data.message || 'Invalid OTP');
+        setFormError(data.message || 'Invalid OTP');
       }
     } catch (error) {
       console.error('OTP login error:', error);
-      alert('OTP verification failed. Please try again.');
+      setFormError('OTP verification failed. Please try again.');
     }
 
     setIsLoading(false);
@@ -110,17 +150,19 @@ function LoginPage() {
 
   const handleSetPassword = async (e) => {
     e.preventDefault();
-    
+
+    const passwordError = getPasswordValidationMessage(newPassword);
+    if (passwordError) {
+      setFormError(passwordError);
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
-      alert('Passwords do not match');
+      setFormError('Passwords do not match');
       return;
     }
 
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters long');
-      return;
-    }
-
+    setFormError("");
     setIsLoading(true);
 
     try {
@@ -139,6 +181,7 @@ function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        setFormError("");
         alert('Password set successfully! Please login with your new password.');
         // Reset form and go back to credentials step
         setLoginStep('credentials');
@@ -148,11 +191,11 @@ function LoginPage() {
         setTempAuthToken(null);
         setRequiresPasswordReset(false);
       } else {
-        alert(data.message || 'Failed to set password');
+        setFormError(data.message || 'Failed to set password');
       }
     } catch (error) {
       console.error('Set password error:', error);
-      alert('Failed to set password. Please try again.');
+      setFormError('Failed to set password. Please try again.');
     }
 
     setIsLoading(false);
@@ -160,6 +203,13 @@ function LoginPage() {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
+
+    if (!EMAIL_PATTERN.test(forgotPasswordEmail.trim())) {
+      setFormError('Enter a valid email address.');
+      return;
+    }
+
+    setFormError("");
     setIsLoading(true);
 
     try {
@@ -176,6 +226,7 @@ function LoginPage() {
       const data = await response.json();
 
       if (data.success) {
+        setFormError("");
         let msg = data.emailSent 
           ? 'Password reset link has been sent to your email. Please check your email and click the link to reset your password.'
           : 'Password reset prepared. ⚠️ Email not sent (check server logs for reset link).';
@@ -189,11 +240,11 @@ function LoginPage() {
         setShowForgotPassword(false);
         setForgotPasswordEmail('');
       } else {
-        alert(data.message || 'Error sending reset link');
+        setFormError(data.message || 'Error sending reset link');
       }
     } catch (error) {
       console.error('Forgot password error:', error);
-      alert('Error processing forgot password request');
+      setFormError('Error processing forgot password request');
     }
 
     setIsLoading(false);
@@ -255,6 +306,12 @@ function LoginPage() {
                 Verify your email address with the OTP you received
               </p>
 
+              {formError && (
+                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {formError}
+                </div>
+              )}
+
               <form onSubmit={handleOtpSubmit}>
                 <div className="login-form-group">
                   <label>Email</label>
@@ -276,6 +333,8 @@ function LoginPage() {
                     required
                     disabled={isLoading}
                     maxLength="6"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
                   />
                   <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                     Enter the 6-digit code. OTP expires in 15 minutes. If SMTP is not configured, use the OTP provided by admin/server logs.
@@ -363,6 +422,12 @@ function LoginPage() {
                 Create a new password to secure your account
               </p>
 
+              {formError && (
+                <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {formError}
+                </div>
+              )}
+
               <form onSubmit={handleSetPassword}>
                 <div className="login-form-group">
                   <label>New Password</label>
@@ -374,6 +439,9 @@ function LoginPage() {
                     required
                     disabled={isLoading}
                     minLength="6"
+                    autoComplete="new-password"
+                    pattern={PASSWORD_PATTERN.source}
+                    title="At least 6 characters including uppercase, lowercase, and a number."
                   />
                 </div>
 
@@ -387,6 +455,7 @@ function LoginPage() {
                     required
                     disabled={isLoading}
                     minLength="6"
+                    autoComplete="new-password"
                   />
                 </div>
 
@@ -466,6 +535,12 @@ function LoginPage() {
               Sign in to access the Smart Disaster Relief System
             </p>
 
+            {formError && (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {formError}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
               <div className="login-form-group">
                 <label>Email</label>
@@ -476,6 +551,7 @@ function LoginPage() {
                   placeholder="officer@dmc.gov.lk"
                   required
                   disabled={isLoading}
+                  autoComplete="email"
                 />
               </div>
 
@@ -488,6 +564,7 @@ function LoginPage() {
                   placeholder="Enter password"
                   required
                   disabled={isLoading}
+                  autoComplete="current-password"
                 />
               </div>
 
@@ -559,6 +636,7 @@ function LoginPage() {
                 onClick={() => {
                   setShowForgotPassword(false);
                   setForgotPasswordEmail('');
+                  setFormError('');
                 }}
               >
                 ✕
@@ -567,6 +645,11 @@ function LoginPage() {
 
             <form onSubmit={handleForgotPassword} className="p-6 space-y-4">
               <>
+                {formError && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {formError}
+                  </div>
+                )}
                 <p className="text-slate-600 text-sm">
                   Enter your email address and we will send you a password reset link.
                 </p>
@@ -580,6 +663,7 @@ function LoginPage() {
                     required
                     disabled={isLoading}
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoComplete="email"
                   />
                 </div>
                 <button

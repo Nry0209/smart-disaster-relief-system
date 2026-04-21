@@ -10,6 +10,18 @@ import {
 import "./Pages.css";
 
 const DEFAULT_ITEM = { itemName: "", quantity: "" };
+const MAX_NOTE_LENGTH = 300;
+const MAX_ADDRESS_LENGTH = 200;
+const MIN_ADDRESS_LENGTH = 10;
+const MAX_ITEM_NAME_LENGTH = 80;
+const MIN_ITEM_NAME_LENGTH = 2;
+const MAX_REQUEST_QUANTITY = 999999;
+
+function getTodayDateLocal() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
 
 export default function ResourceRequestPage() {
   const [disasters, setDisasters] = useState([]);
@@ -88,12 +100,49 @@ export default function ResourceRequestPage() {
       return;
     }
 
+    if (new Date(form.deliveryDate).getTime() < new Date(getTodayDateLocal()).getTime()) {
+      setError("Delivery date cannot be in the past.");
+      return;
+    }
+
+    const normalizedAddress = form.deliveryAddress.trim();
+    if (normalizedAddress.length < MIN_ADDRESS_LENGTH || normalizedAddress.length > MAX_ADDRESS_LENGTH) {
+      setError(`Delivery address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`);
+      return;
+    }
+
+    const hasNegativeQuantity = form.items.some((item) => Number(item.quantity) < 0);
+    if (hasNegativeQuantity) {
+      setError("Invalid count. Quantity cannot be negative.");
+      return;
+    }
+
     const cleanedItems = form.items
       .map((item) => ({
         itemName: String(item.itemName || "").trim(),
         quantity: Number(item.quantity),
       }))
       .filter((item) => item.itemName && Number.isFinite(item.quantity) && item.quantity > 0);
+
+    const duplicateItem = cleanedItems.find(
+      (item, index) =>
+        cleanedItems.findIndex((candidate) => candidate.itemName.toLowerCase() === item.itemName.toLowerCase()) !== index
+    );
+
+    if (duplicateItem) {
+      setError(`Requested item names must be unique. Duplicate found: ${duplicateItem.itemName}.`);
+      return;
+    }
+
+    if (cleanedItems.some((item) => item.itemName.length < MIN_ITEM_NAME_LENGTH || item.itemName.length > MAX_ITEM_NAME_LENGTH)) {
+      setError(`Each item name must be between ${MIN_ITEM_NAME_LENGTH} and ${MAX_ITEM_NAME_LENGTH} characters.`);
+      return;
+    }
+
+    if (cleanedItems.some((item) => !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > MAX_REQUEST_QUANTITY)) {
+      setError(`Each item quantity must be a whole number between 1 and ${MAX_REQUEST_QUANTITY}.`);
+      return;
+    }
 
     if (!cleanedItems.length) {
       setError("Add at least one valid requested item.");
@@ -123,7 +172,7 @@ export default function ResourceRequestPage() {
         urgency: form.urgency,
         requestedItems,
         deliveryDate: form.deliveryDate,
-        deliveryAddress: form.deliveryAddress.trim(),
+        deliveryAddress: normalizedAddress,
         notes: form.notes.trim(),
       });
 
@@ -145,30 +194,46 @@ export default function ResourceRequestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-6 py-7 text-slate-900">
-      <PageHeader
-        role="Inventory Officer / Resource Requests"
-        title="Resource Request"
-        description="Create shortage-driven NGO requests directly from pending disaster reports."
-      />
+    <div className="resource-request-page min-h-screen bg-slate-50 px-6 py-7 text-slate-900">
+      <div className="mx-auto w-full max-w-5xl">
+        <PageHeader
+          role="Inventory Officer / Resource Requests"
+          title="Resource Request"
+          description="Create shortage-driven NGO requests directly from pending disaster reports."
+        />
 
-      {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+        {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
 
-      {success && (
-        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-          <div className="flex items-center gap-2 font-semibold">
-            <CheckCircle size={18} /> Request submitted successfully
+        {success && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle size={18} /> Request submitted successfully
+            </div>
+            <p className="mt-1">Request ID: {success._id}</p>
+            <p>Email dispatch status: {success.emailSentAt ? "Sent" : "Pending / fallback mode"}</p>
           </div>
-          <p className="mt-1">Request ID: {success._id}</p>
-          <p>Email dispatch status: {success.emailSentAt ? "Sent" : "Pending / fallback mode"}</p>
-        </div>
-      )}
+        )}
 
-      <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="professional-form-shell mt-6 rounded-3xl p-6">
         {loading ? (
           <p className="text-sm text-slate-500">Loading disasters and partners...</p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="shared-stepper">
+              <div className="step-chip active">
+                <span>1</span>
+                <p>Context</p>
+              </div>
+              <div className="step-chip active">
+                <span>2</span>
+                <p>Logistics</p>
+              </div>
+              <div className="step-chip active">
+                <span>3</span>
+                <p>Items & Submit</p>
+              </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
               <label className="form-group">
                 <span>Disaster Report *</span>
@@ -221,7 +286,7 @@ export default function ResourceRequestPage() {
                 <input
                   type="date"
                   value={form.deliveryDate}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={getTodayDateLocal()}
                   onChange={(e) => updateField("deliveryDate", e.target.value)}
                   required
                 />
@@ -235,12 +300,14 @@ export default function ResourceRequestPage() {
                 value={form.deliveryAddress}
                 onChange={(e) => updateField("deliveryAddress", e.target.value)}
                 required
+                minLength={MIN_ADDRESS_LENGTH}
+                maxLength={MAX_ADDRESS_LENGTH}
               />
             </label>
 
             <label className="form-group">
               <span>Notes</span>
-              <textarea rows={2} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} />
+              <textarea rows={2} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} maxLength={MAX_NOTE_LENGTH} />
             </label>
 
             <div>
@@ -255,14 +322,19 @@ export default function ResourceRequestPage() {
                 {form.items.map((item, index) => (
                   <div key={index} className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">
                     <input
+                      className="resource-line-input"
                       type="text"
                       placeholder="Item name"
                       value={item.itemName}
                       onChange={(e) => updateItem(index, "itemName", e.target.value)}
+                      minLength={MIN_ITEM_NAME_LENGTH}
+                      maxLength={MAX_ITEM_NAME_LENGTH}
                     />
                     <input
+                      className="resource-line-input"
                       type="number"
-                      min="1"
+                      min="0"
+                      step="1"
                       placeholder="Quantity"
                       value={item.quantity}
                       onChange={(e) => updateItem(index, "quantity", e.target.value)}
@@ -280,6 +352,7 @@ export default function ResourceRequestPage() {
             </button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

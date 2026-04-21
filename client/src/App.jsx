@@ -18,7 +18,22 @@ import DisasterEventPage from "./pages/DisasterEventPage";
 import CreateDisasterReportPage from "./pages/CreateDisasterReportPage";
 import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import { useAuth } from "./context/AuthContext";
 import "./App.css";
+
+function DmcOnlyRoute({ children }) {
+  const { user, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role !== "dmc_officer") {
+    return <Navigate to="/disaster-events" replace />;
+  }
+
+  return children;
+}
 
 function App() {
   return (
@@ -85,7 +100,9 @@ function App() {
       } />
       <Route path="/disaster-report/create" element={
         <DashboardLayout>
-          <CreateDisasterReportPage />
+          <DmcOnlyRoute>
+            <CreateDisasterReportPage />
+          </DmcOnlyRoute>
         </DashboardLayout>
       } />
       <Route path="/reports-analytics" element={
