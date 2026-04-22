@@ -26,6 +26,11 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.DMC],
   },
   {
+    label: "Delivery Verification",
+    path: "/dmc-delivery-verification",
+    roles: [ROLES.DMC],
+  },
+  {
     label: "Create Disaster Report",
 //create disaster report
     path: "/disaster-report/create",
@@ -60,7 +65,7 @@ export const SIDEBAR_ITEMS = [
   {
     label: "Distribution Tracking",
     path: "/distribution-tracking",
-    roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.DMC],
+    roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.CHARITY],
   },
   {
     label: "User Management",
@@ -68,14 +73,9 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.ADMIN, ROLES.INVENTORY],
   },
   {
-    label: "Predictive Estimation",
-    path: "/prediction",
-    roles: [ROLES.ADMIN, ROLES.DMC, ROLES.INVENTORY, ROLES.ALLOCATION],
-  },
-  {
     label: "Reports",
     path: "/reports-analytics",
-    roles: [ROLES.ADMIN, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
+    roles: [ROLES.ADMIN, ROLES.INVENTORY, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
   },
   {
     label: "Audit Logs",

@@ -1,10 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { SIDEBAR_ITEMS } from "../../utils/constants";
 import { useAuth } from "../../context/AuthContext";
-import logo1 from "../../assets/images/logo1.png";
+import logo2 from "../../assets/images/logo2.png";
 import "./layout.css";
 
-function Sidebar() {
+function Sidebar({ collapsed = false }) {
   const { user } = useAuth();
 
   const allowedItems = SIDEBAR_ITEMS.filter((item) =>
@@ -12,12 +12,12 @@ function Sidebar() {
   );
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? "sidebar-collapsed" : ""}`}>
       <div className="sidebar-brand">
         <div className="sidebar-logo">
-          <img src={logo1} alt="Smart Relief Logo" style={{ width: '120%', height: '120%', objectFit: 'cover' }} />
+          <img src={logo2} alt="Smart Relief Logo" />
         </div>
-        <div className="sidebar-text">
+        <div className={`sidebar-text ${collapsed ? "is-collapsed" : ""}`}>
           <h2>Smart Relief</h2>
           <p>Disaster Management System</p>
         </div>
@@ -31,13 +31,14 @@ function Sidebar() {
             className={({ isActive }) =>
               isActive ? "sidebar-link active" : "sidebar-link"
             }
+            title={collapsed ? item.label : undefined}
           >
-            {item.label}
+            <span className="sidebar-link-label">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className="sidebar-footer">
+      <div className={`sidebar-footer ${collapsed ? "is-collapsed" : ""}`}>
         <p>Authorized internal access only</p>
       </div>
     </aside>

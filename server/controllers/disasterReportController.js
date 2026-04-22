@@ -2,6 +2,8 @@ const DisasterReport = require("../models/DisasterReport");
 const mongoose = require("mongoose");
 
 const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
+const MIN_AFFECTED_POPULATION = 1;
+const MAX_AFFECTED_POPULATION = 10000000;
 const UPDATABLE_FIELDS = [
   "disasterType",
   "location",
@@ -11,73 +13,124 @@ const UPDATABLE_FIELDS = [
   "priority",
   "description",
   "immediateNeeds",
-  "resourceRequirements",
-  "allocatedResources",
   "status",
   "reportedBy",
-  "contactPhone",
-  "contactEmail",
+  "allocatedResources",
 ];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
 }
 
-function sanitizeNeeds(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
+function toIsoDateOrNull(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function sanitizeResourceRequirements(value) {
-  if (!Array.isArray(value)) {
-    return [];
+function parseAffectedPopulation(value) {
+  const population = Number(value);
+
+  if (
+    !Number.isInteger(population) ||
+    population < MIN_AFFECTED_POPULATION ||
+    population > MAX_AFFECTED_POPULATION
+  ) {
+    return null;
   }
 
-  const seen = new Set();
-
-  return value
-    .map((item) => {
-      const name = String(item?.name || "").trim();
-      const quantity = Number(item?.quantity);
-
-      if (!name || seen.has(name)) {
-        return null;
-      }
-
-      seen.add(name);
-
-      return {
-        name,
-        quantity: Number.isFinite(quantity) && quantity > 0 ? Math.round(quantity) : 1,
-      };
-    })
-    .filter(Boolean);
+  return population;
 }
 
-function syncNeedsAndRequirements(needs, requirements) {
-  const requirementMap = new Map(
-    requirements.map((item) => [item.name, Number(item.quantity) > 0 ? Number(item.quantity) : 1])
-  );
-  const mergedNeeds = [...new Set([...needs, ...requirementMap.keys()])];
+function normalizeAllocatedResources(value) {
+  if (value === null) {
+    return null;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("allocatedResources must be an object or null.");
+  }
+
+  const rawQuantities =
+    value.quantities && typeof value.quantities === "object" && !Array.isArray(value.quantities)
+      ? value.quantities
+      : {};
+
+  const quantities = {};
+  Object.entries(rawQuantities).forEach(([key, qty]) => {
+    const parsedQty = Number(qty);
+    if (!Number.isFinite(parsedQty) || parsedQty < 0) {
+      throw new Error("allocatedResources quantities must be non-negative numbers.");
+    }
+    quantities[key] = parsedQty;
+  });
+
+  const rawLineItems = Array.isArray(value.lineItems) ? value.lineItems : [];
+  const lineItems = rawLineItems.map((item) => {
+    const quantity = Number(item.quantity);
+    const itemId = String(item.itemId || "").trim();
+    const itemName = String(item.itemName || "").trim();
+
+    if (!itemId || !itemName || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error("allocatedResources lineItems contain invalid data.");
+    }
+
+    return {
+      itemId,
+      itemName,
+      quantity,
+      category: String(item.category || "").trim(),
+    };
+  });
+
+  const allocatedDate = value.allocatedDate ? toIsoDateOrNull(value.allocatedDate) : new Date();
+  if (value.allocatedDate && !allocatedDate) {
+    throw new Error("allocatedResources allocatedDate is invalid.");
+  }
+
+  const lastUpdated = value.lastUpdated ? toIsoDateOrNull(value.lastUpdated) : new Date();
+  if (value.lastUpdated && !lastUpdated) {
+    throw new Error("allocatedResources lastUpdated is invalid.");
+  }
 
   return {
-    immediateNeeds: mergedNeeds,
-    resourceRequirements: mergedNeeds.map((name) => ({
-      name,
-      quantity: requirementMap.has(name) ? requirementMap.get(name) : 1,
-    })),
+    quantities,
+    lineItems,
+    message: String(value.message || "").trim(),
+    allocatedDate,
+    allocatedBy: String(value.allocatedBy || "Allocation Officer").trim(),
+    lastUpdated,
   };
 }
 
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+function formatAllocatedResources(allocatedResources) {
+  if (!allocatedResources) {
+    return null;
+  }
 
-function isValidPhone(value) {
-  return /^[0-9+()\-\s]{7,20}$/.test(value);
+  const quantities = allocatedResources.quantities;
+  const normalizedQuantities =
+    quantities instanceof Map
+      ? Object.fromEntries(quantities.entries())
+      : quantities && typeof quantities === "object"
+        ? quantities
+        : {};
+
+  return {
+    quantities: normalizedQuantities,
+    lineItems: Array.isArray(allocatedResources.lineItems)
+      ? allocatedResources.lineItems.map((item) => ({
+          itemId: item.itemId,
+          itemName: item.itemName,
+          quantity: item.quantity,
+          category: item.category,
+        }))
+      : [],
+    message: allocatedResources.message || "",
+    allocatedDate: allocatedResources.allocatedDate || null,
+    allocatedBy: allocatedResources.allocatedBy || "",
+    lastUpdated: allocatedResources.lastUpdated || null,
+  };
 }
 
 function formatReport(report) {
@@ -91,12 +144,9 @@ function formatReport(report) {
     priority: report.priority,
     description: report.description,
     immediateNeeds: report.immediateNeeds,
-    resourceRequirements: report.resourceRequirements,
-    allocatedResources: report.allocatedResources,
     status: report.status,
     reportedBy: report.reportedBy,
-    contactPhone: report.contactPhone,
-    contactEmail: report.contactEmail,
+    allocatedResources: formatAllocatedResources(report.allocatedResources),
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -113,54 +163,23 @@ async function createDisasterReport(req, res) {
       priority,
       description,
       immediateNeeds,
-      resourceRequirements,
-      allocatedResources,
       status,
       reportedBy,
-      contactPhone,
-      contactEmail,
     } = req.body;
 
     if (!disasterType || !location || !eventDate) {
       return res.status(400).json({ message: "disasterType, location, and eventDate are required." });
     }
 
+    const parsedPopulation = parseAffectedPopulation(affectedPopulation);
+    if (parsedPopulation === null) {
+      return res.status(400).json({
+        message: `affectedPopulation must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`,
+      });
+    }
+
     if (status && !ALLOWED_STATUSES.includes(status)) {
       return res.status(400).json({ message: "Invalid status value." });
-    }
-
-    if (immediateNeeds !== undefined && !Array.isArray(immediateNeeds)) {
-      return res.status(400).json({ message: "immediateNeeds must be an array." });
-    }
-
-    if (resourceRequirements !== undefined && !Array.isArray(resourceRequirements)) {
-      return res.status(400).json({ message: "resourceRequirements must be an array." });
-    }
-
-    if (
-      allocatedResources !== undefined &&
-      allocatedResources !== null &&
-      (typeof allocatedResources !== "object" || Array.isArray(allocatedResources))
-    ) {
-      return res.status(400).json({ message: "allocatedResources must be an object or null." });
-    }
-
-    const normalizedReporter = String(reportedBy || "").trim();
-    const normalizedPhone = String(contactPhone || "").trim();
-    const normalizedEmail = String(contactEmail || "")
-      .trim()
-      .toLowerCase();
-
-    if (!normalizedReporter) {
-      return res.status(400).json({ message: "reportedBy is required." });
-    }
-
-    if (!normalizedPhone || !isValidPhone(normalizedPhone)) {
-      return res.status(400).json({ message: "A valid contactPhone is required." });
-    }
-
-    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-      return res.status(400).json({ message: "A valid contactEmail is required." });
     }
 
     if (!isDbConnected()) {
@@ -169,26 +188,17 @@ async function createDisasterReport(req, res) {
       });
     }
 
-    const syncedNeedsAndRequirements = syncNeedsAndRequirements(
-      sanitizeNeeds(immediateNeeds),
-      sanitizeResourceRequirements(resourceRequirements)
-    );
-
     const report = await DisasterReport.create({
       disasterType,
       location,
       severity,
-      affectedPopulation,
+      affectedPopulation: parsedPopulation,
       eventDate,
       priority,
       description,
-      immediateNeeds: syncedNeedsAndRequirements.immediateNeeds,
-      resourceRequirements: syncedNeedsAndRequirements.resourceRequirements,
-      allocatedResources: allocatedResources ?? null,
+      immediateNeeds,
       status,
-      reportedBy: normalizedReporter,
-      contactPhone: normalizedPhone,
-      contactEmail: normalizedEmail,
+      reportedBy,
     });
 
     return res.status(201).json(formatReport(report));
@@ -222,8 +232,6 @@ async function listDisasterReports(req, res) {
         { location: { $regex: search, $options: "i" } },
         { disasterType: { $regex: search, $options: "i" } },
         { reportedBy: { $regex: search, $options: "i" } },
-        { contactPhone: { $regex: search, $options: "i" } },
-        { contactEmail: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -294,9 +302,11 @@ async function updateDisasterReport(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "affectedPopulation")) {
-      const population = Number(updates.affectedPopulation);
-      if (!Number.isFinite(population) || population <= 0) {
-        return res.status(400).json({ message: "affectedPopulation must be greater than 0." });
+      const population = parseAffectedPopulation(updates.affectedPopulation);
+      if (population === null) {
+        return res.status(400).json({
+          message: `affectedPopulation must be a whole number between ${MIN_AFFECTED_POPULATION} and ${MAX_AFFECTED_POPULATION}.`,
+        });
       }
       updates.affectedPopulation = population;
     }
@@ -305,73 +315,27 @@ async function updateDisasterReport(req, res) {
       if (!Array.isArray(updates.immediateNeeds)) {
         return res.status(400).json({ message: "immediateNeeds must be an array." });
       }
-      updates.immediateNeeds = sanitizeNeeds(updates.immediateNeeds);
-    }
-
-    if (Object.prototype.hasOwnProperty.call(updates, "resourceRequirements")) {
-      if (!Array.isArray(updates.resourceRequirements)) {
-        return res.status(400).json({ message: "resourceRequirements must be an array." });
-      }
-      updates.resourceRequirements = sanitizeResourceRequirements(updates.resourceRequirements);
+      updates.immediateNeeds = updates.immediateNeeds
+        .map((item) => String(item).trim())
+        .filter(Boolean);
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "allocatedResources")) {
-      if (
-        updates.allocatedResources !== null &&
-        (typeof updates.allocatedResources !== "object" || Array.isArray(updates.allocatedResources))
-      ) {
-        return res.status(400).json({ message: "allocatedResources must be an object or null." });
+      try {
+        updates.allocatedResources = normalizeAllocatedResources(updates.allocatedResources);
+      } catch (error) {
+        return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
       }
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, "reportedBy")) {
-      updates.reportedBy = String(updates.reportedBy || "").trim();
-      if (!updates.reportedBy) {
-        return res.status(400).json({ message: "reportedBy cannot be empty." });
-      }
-    }
-
-    if (Object.prototype.hasOwnProperty.call(updates, "contactPhone")) {
-      updates.contactPhone = String(updates.contactPhone || "").trim();
-      if (!updates.contactPhone || !isValidPhone(updates.contactPhone)) {
-        return res.status(400).json({ message: "A valid contactPhone is required." });
-      }
-    }
-
-    if (Object.prototype.hasOwnProperty.call(updates, "contactEmail")) {
-      updates.contactEmail = String(updates.contactEmail || "")
-        .trim()
-        .toLowerCase();
-      if (!updates.contactEmail || !isValidEmail(updates.contactEmail)) {
-        return res.status(400).json({ message: "A valid contactEmail is required." });
-      }
-    }
-
-    const report = await DisasterReport.findById(id);
+    const report = await DisasterReport.findByIdAndUpdate(id, updates, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!report) {
       return res.status(404).json({ message: "Disaster report not found." });
     }
-
-    if (
-      Object.prototype.hasOwnProperty.call(updates, "immediateNeeds") ||
-      Object.prototype.hasOwnProperty.call(updates, "resourceRequirements")
-    ) {
-      const syncedNeedsAndRequirements = syncNeedsAndRequirements(
-        Object.prototype.hasOwnProperty.call(updates, "immediateNeeds")
-          ? updates.immediateNeeds
-          : sanitizeNeeds(report.immediateNeeds),
-        Object.prototype.hasOwnProperty.call(updates, "resourceRequirements")
-          ? updates.resourceRequirements
-          : sanitizeResourceRequirements(report.resourceRequirements)
-      );
-
-      updates.immediateNeeds = syncedNeedsAndRequirements.immediateNeeds;
-      updates.resourceRequirements = syncedNeedsAndRequirements.resourceRequirements;
-    }
-
-    Object.assign(report, updates);
-    await report.save();
 
     return res.json(formatReport(report));
   } catch (error) {
@@ -405,10 +369,171 @@ async function deleteDisasterReport(req, res) {
   }
 }
 
+async function allocateResources(req, res) {
+  try {
+    const { id } = req.params;
+    const { allocatedResources, allocatedBy, message } = req.body;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    if (!allocatedResources) {
+      return res.status(400).json({ message: "allocatedResources is required." });
+    }
+
+    // Normalize and validate allocation data
+    let normalizedResources;
+    try {
+      normalizedResources = normalizeAllocatedResources({
+        ...allocatedResources,
+        allocatedBy: allocatedBy || "Allocation Officer",
+        message: message || "",
+        allocatedDate: new Date(),
+        lastUpdated: new Date(),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
+    }
+
+    // Update the disaster report with allocated resources
+    const report = await DisasterReport.findByIdAndUpdate(
+      id,
+      {
+        allocatedResources: normalizedResources,
+        status: "allocated",
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    return res.json({
+      message: "Resources allocated successfully.",
+      report: formatReport(report),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to allocate resources.", error: error.message });
+  }
+}
+
+async function updateAllocation(req, res) {
+  try {
+    const { id } = req.params;
+    const { allocatedResources, allocatedBy, message } = req.body;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    const report = await DisasterReport.findById(id);
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    if (!report.allocatedResources) {
+      return res.status(400).json({ message: "No resources allocated to this report yet." });
+    }
+
+    // Normalize and validate allocation data
+    let normalizedResources;
+    try {
+      normalizedResources = normalizeAllocatedResources({
+        ...allocatedResources,
+        allocatedBy: allocatedBy || report.allocatedResources.allocatedBy,
+        message: message || report.allocatedResources.message,
+        allocatedDate: report.allocatedResources.allocatedDate,
+        lastUpdated: new Date(),
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
+    }
+
+    // Update the allocated resources
+    const updatedReport = await DisasterReport.findByIdAndUpdate(
+      id,
+      {
+        allocatedResources: normalizedResources,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    return res.json({
+      message: "Allocation updated successfully.",
+      report: formatReport(updatedReport),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to update allocation.", error: error.message });
+  }
+}
+
+async function deallocateResources(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid report ID." });
+    }
+
+    const report = await DisasterReport.findByIdAndUpdate(
+      id,
+      {
+        allocatedResources: null,
+        status: "pending_inventory",
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    return res.json({
+      message: "Resources deallocated successfully.",
+      report: formatReport(report),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to deallocate resources.", error: error.message });
+  }
+}
+
 module.exports = {
   createDisasterReport,
   listDisasterReports,
   getDisasterReportById,
   updateDisasterReport,
   deleteDisasterReport,
+  allocateResources,
+  updateAllocation,
+  deallocateResources,
 };

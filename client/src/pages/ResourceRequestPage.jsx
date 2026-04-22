@@ -1,323 +1,359 @@
-import React, { useState } from "react";
-import { Package, Send, CheckCircle, Plus, Trash2, AlertTriangle } from "lucide-react";
-import './Pages.css';
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle, Plus, Send, Trash2 } from "lucide-react";
+import PageHeader from "../components/PageHeader";
+import { fetchDisasterReports } from "../services/disasterReportService";
+import {
+  checkStockAvailability,
+  createResourceRequest,
+  fetchPartners,
+} from "../services/workflowService";
+import "./Pages.css";
 
-const ResourceRequestPage = () => {
-  const [formData, setFormData] = useState({
-    disasterType: "",
-    location: "",
+const DEFAULT_ITEM = { itemName: "", quantity: "" };
+const MAX_NOTE_LENGTH = 300;
+const MAX_ADDRESS_LENGTH = 200;
+const MIN_ADDRESS_LENGTH = 10;
+const MAX_ITEM_NAME_LENGTH = 80;
+const MIN_ITEM_NAME_LENGTH = 2;
+const MAX_REQUEST_QUANTITY = 999999;
+
+function getTodayDateLocal() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+export default function ResourceRequestPage() {
+  const [disasters, setDisasters] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(null);
+
+  const [form, setForm] = useState({
+    disasterId: "",
+    ngoId: "",
     urgency: "high",
-    contactName: "",
-    contactEmail: "",
-    contactPhone: "",
     deliveryDate: "",
     deliveryAddress: "",
-    items: [
-      { name: "", quantity: "", category: "water" }
-    ]
+    notes: "",
+    items: [{ ...DEFAULT_ITEM }],
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [reports, partnerList] = await Promise.all([
+          fetchDisasterReports({ status: "pending_inventory" }),
+          fetchPartners({ status: "active" }),
+        ]);
 
-  const categories = ["water", "food", "medical", "shelter", "clothing", "other"];
-  const disasters = ["Flood", "Earthquake", "Hurricane", "Wildfire", "Other"];
+        setDisasters(Array.isArray(reports) ? reports : []);
+        setPartners(Array.isArray(partnerList) ? partnerList : []);
+      } catch (loadError) {
+        setError(loadError.message || "Failed to load request dependencies.");
+      } finally {
+        setLoading(false);
+      }
+    }
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+    loadData();
+  }, []);
 
-  const handleItemChange = (index, field, value) => {
-    const updatedItems = [...formData.items];
-    updatedItems[index][field] = value;
-    setFormData(prev => ({ ...prev, items: updatedItems }));
-  };
+  const selectedDisaster = useMemo(
+    () => disasters.find((d) => d.id === form.disasterId),
+    [disasters, form.disasterId]
+  );
 
-  const addItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      items: [...prev.items, { name: "", quantity: "", category: "water" }]
-    }));
-  };
+  function updateField(name, value) {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
 
-  const removeItem = (index) => {
-    const updatedItems = formData.items.filter((_, i) => i !== index);
-    setFormData(prev => ({ ...prev, items: updatedItems }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitted(true);
-    }, 1500);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      disasterType: "",
-      location: "",
-      urgency: "high",
-      contactName: "",
-      contactEmail: "",
-      contactPhone: "",
-      deliveryDate: "",
-      deliveryAddress: "",
-      items: [{ name: "", quantity: "", category: "water" }]
+  function updateItem(index, field, value) {
+    setForm((prev) => {
+      const nextItems = [...prev.items];
+      nextItems[index] = { ...nextItems[index], [field]: value };
+      return { ...prev, items: nextItems };
     });
-    setSubmitted(false);
-  };
+  }
 
-  if (submitted) {
-    return (
-      <div className="resource-request-page">
-        <div className="success-container">
-          <div className="success-card">
-            <div className="success-icon">
-              <CheckCircle size={48} color="#16a34a" />
-            </div>
-            <h1>Request Submitted!</h1>
-            <p>Your resource request has been sent to partner NGOs. You'll receive updates on the status.</p>
-            
-            <div className="success-summary">
-              <div className="summary-item">
-                <span>Request ID:</span>
-                <strong>REQ-{Date.now()}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Disaster:</span>
-                <strong>{formData.disasterType}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Location:</span>
-                <strong>{formData.location}</strong>
-              </div>
-              <div className="summary-item">
-                <span>Items:</span>
-                <strong>{formData.items.filter(item => item.name).length} requested</strong>
-              </div>
-            </div>
+  function addItem() {
+    setForm((prev) => ({ ...prev, items: [...prev.items, { ...DEFAULT_ITEM }] }));
+  }
 
-            <div className="success-actions">
-              <button className="btn-primary" onClick={resetForm}>
-                New Request
-              </button>
-              <button className="btn-secondary" onClick={() => window.location.href = "/inventory"}>
-                Back to Inventory
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+  function removeItem(index) {
+    setForm((prev) => {
+      const nextItems = prev.items.filter((_, i) => i !== index);
+      return { ...prev, items: nextItems.length ? nextItems : [{ ...DEFAULT_ITEM }] };
+    });
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setSuccess(null);
+
+    if (!form.disasterId || !form.ngoId || !form.deliveryDate || !form.deliveryAddress.trim()) {
+      setError("Please complete all required fields.");
+      return;
+    }
+
+    if (new Date(form.deliveryDate).getTime() < new Date(getTodayDateLocal()).getTime()) {
+      setError("Delivery date cannot be in the past.");
+      return;
+    }
+
+    const normalizedAddress = form.deliveryAddress.trim();
+    if (normalizedAddress.length < MIN_ADDRESS_LENGTH || normalizedAddress.length > MAX_ADDRESS_LENGTH) {
+      setError(`Delivery address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`);
+      return;
+    }
+
+    const hasNegativeQuantity = form.items.some((item) => Number(item.quantity) < 0);
+    if (hasNegativeQuantity) {
+      setError("Invalid count. Quantity cannot be negative.");
+      return;
+    }
+
+    const cleanedItems = form.items
+      .map((item) => ({
+        itemName: String(item.itemName || "").trim(),
+        quantity: Number(item.quantity),
+      }))
+      .filter((item) => item.itemName && Number.isFinite(item.quantity) && item.quantity > 0);
+
+    const duplicateItem = cleanedItems.find(
+      (item, index) =>
+        cleanedItems.findIndex((candidate) => candidate.itemName.toLowerCase() === item.itemName.toLowerCase()) !== index
     );
+
+    if (duplicateItem) {
+      setError(`Requested item names must be unique. Duplicate found: ${duplicateItem.itemName}.`);
+      return;
+    }
+
+    if (cleanedItems.some((item) => item.itemName.length < MIN_ITEM_NAME_LENGTH || item.itemName.length > MAX_ITEM_NAME_LENGTH)) {
+      setError(`Each item name must be between ${MIN_ITEM_NAME_LENGTH} and ${MAX_ITEM_NAME_LENGTH} characters.`);
+      return;
+    }
+
+    if (cleanedItems.some((item) => !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > MAX_REQUEST_QUANTITY)) {
+      setError(`Each item quantity must be a whole number between 1 and ${MAX_REQUEST_QUANTITY}.`);
+      return;
+    }
+
+    if (!cleanedItems.length) {
+      setError("Add at least one valid requested item.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      const stockChecks = await checkStockAvailability(cleanedItems);
+
+      const requestedItems = cleanedItems.map((item) => {
+        const check = stockChecks.find((entry) =>
+          String(entry.itemName || "").toLowerCase() === item.itemName.toLowerCase()
+        );
+
+        return {
+          itemName: item.itemName,
+          quantity: item.quantity,
+          resourceId: check?.inventoryItemId || null,
+        };
+      });
+
+      const created = await createResourceRequest({
+        ngoId: form.ngoId,
+        disasterId: form.disasterId,
+        urgency: form.urgency,
+        requestedItems,
+        deliveryDate: form.deliveryDate,
+        deliveryAddress: normalizedAddress,
+        notes: form.notes.trim(),
+      });
+
+      setSuccess(created);
+      setForm({
+        disasterId: "",
+        ngoId: "",
+        urgency: "high",
+        deliveryDate: "",
+        deliveryAddress: "",
+        notes: "",
+        items: [{ ...DEFAULT_ITEM }],
+      });
+    } catch (submitError) {
+      setError(submitError.message || "Failed to submit resource request.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <div className="resource-request-page">
-      
-      {/* HEADER */}
-      <div className="page-header">
-        <div className="header-content">
-          <div className="header-icon">
-            <Package size={32} color="#2563eb" />
-          </div>
-          <div>
-            <h1>Resource Request</h1>
-            <p>Request essential resources from partner NGOs when inventory is insufficient</p>
-          </div>
-        </div>
-      </div>
+    <div className="resource-request-page min-h-screen bg-slate-50 px-6 py-7 text-slate-900">
+      <div className="mx-auto w-full max-w-5xl">
+        <PageHeader
+          role="Inventory Officer / Resource Requests"
+          title="Resource Request"
+          description="Create shortage-driven NGO requests directly from pending disaster reports."
+        />
 
-      {/* FORM */}
-      <div className="form-container">
-        <form onSubmit={handleSubmit} className="request-form">
-          
-          {/* EMERGENCY INFO */}
-          <div className="form-section">
-            <h2>Emergency Information</h2>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Disaster Type *</label>
-                <select name="disasterType" value={formData.disasterType} onChange={handleInputChange} required>
-                  <option value="">Select disaster type</option>
-                  {disasters.map(type => (
-                    <option key={type} value={type}>{type}</option>
+        {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+
+        {success && (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle size={18} /> Request submitted successfully
+            </div>
+            <p className="mt-1">Request ID: {success._id}</p>
+            <p>Email dispatch status: {success.emailSentAt ? "Sent" : "Pending / fallback mode"}</p>
+          </div>
+        )}
+
+        <div className="professional-form-shell mt-6 rounded-3xl p-6">
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading disasters and partners...</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="shared-stepper">
+              <div className="step-chip active">
+                <span>1</span>
+                <p>Context</p>
+              </div>
+              <div className="step-chip active">
+                <span>2</span>
+                <p>Logistics</p>
+              </div>
+              <div className="step-chip active">
+                <span>3</span>
+                <p>Items & Submit</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="form-group">
+                <span>Disaster Report *</span>
+                <select
+                  value={form.disasterId}
+                  onChange={(e) => updateField("disasterId", e.target.value)}
+                  required
+                >
+                  <option value="">Select a pending disaster report</option>
+                  {disasters.map((report) => (
+                    <option key={report.id} value={report.id}>
+                      {report.disasterType} - {report.location}
+                    </option>
                   ))}
                 </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Urgency *</label>
-                <select name="urgency" value={formData.urgency} onChange={handleInputChange}>
-                  <option value="critical">Critical - Life threatening</option>
-                  <option value="high">High - Urgent need</option>
-                  <option value="medium">Medium - Within 48 hours</option>
-                  <option value="low">Low - Within 1 week</option>
+              </label>
+
+              <label className="form-group">
+                <span>NGO / Partner *</span>
+                <select value={form.ngoId} onChange={(e) => updateField("ngoId", e.target.value)} required>
+                  <option value="">Select partner from internal directory</option>
+                  {partners.map((partner) => (
+                    <option key={partner._id} value={partner._id}>
+                      {partner.organizationName} ({partner.email})
+                    </option>
+                  ))}
                 </select>
-              </div>
+              </label>
             </div>
 
-            <div className="form-group">
-              <label>Location *</label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleInputChange}
-                placeholder="City, State, Country"
-                required
-              />
-            </div>
-          </div>
-
-          {/* CONTACT INFO */}
-          <div className="form-section">
-            <h2>Contact Information</h2>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Your Name *</label>
-                <input
-                  type="text"
-                  name="contactName"
-                  value={formData.contactName}
-                  onChange={handleInputChange}
-                  placeholder="Full name"
-                  required
-                />
+            {selectedDisaster && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                Severity: {selectedDisaster.severity} | Affected Population: {selectedDisaster.affectedPopulation}
               </div>
-              
-              <div className="form-group">
-                <label>Email *</label>
-                <input
-                  type="email"
-                  name="contactEmail"
-                  value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  placeholder="your.email@organization.com"
-                  required
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="form-group">
-              <label>Phone *</label>
-              <input
-                type="tel"
-                name="contactPhone"
-                value={formData.contactPhone}
-                onChange={handleInputChange}
-                placeholder="+1 (555) 123-4567"
-                required
-              />
-            </div>
-          </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="form-group">
+                <span>Urgency *</span>
+                <select value={form.urgency} onChange={(e) => updateField("urgency", e.target.value)}>
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </label>
 
-          {/* REQUESTED ITEMS */}
-          <div className="form-section">
-            <h2>Requested Items</h2>
-            
-            {formData.items.map((item, index) => (
-              <div key={index} className="item-row">
-                <div className="item-grid">
-                  <div className="form-group">
-                    <label>Category</label>
-                    <select 
-                      value={item.category} 
-                      onChange={(e) => handleItemChange(index, "category", e.target.value)}
-                    >
-                      {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>Item Name *</label>
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => handleItemChange(index, "name", e.target.value)}
-                      placeholder="e.g., Water Bottles, Medical Kits"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>Quantity *</label>
-                    <input
-                      type="number"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                
-                {formData.items.length > 1 && (
-                  <button 
-                    type="button" 
-                    className="btn-remove"
-                    onClick={() => removeItem(index)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-            
-            <button type="button" className="btn-add" onClick={addItem}>
-              <Plus size={16} /> Add Another Item
-            </button>
-          </div>
-
-          {/* DELIVERY INFO */}
-          <div className="form-section">
-            <h2>Delivery Information</h2>
-            
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Delivery Date *</label>
+              <label className="form-group">
+                <span>Delivery Date *</span>
                 <input
                   type="date"
-                  name="deliveryDate"
-                  value={formData.deliveryDate}
-                  onChange={handleInputChange}
-                  min={new Date().toISOString().split('T')[0]}
+                  value={form.deliveryDate}
+                  min={getTodayDateLocal()}
+                  onChange={(e) => updateField("deliveryDate", e.target.value)}
                   required
                 />
+              </label>
+            </div>
+
+            <label className="form-group">
+              <span>Delivery Address *</span>
+              <textarea
+                rows={3}
+                value={form.deliveryAddress}
+                onChange={(e) => updateField("deliveryAddress", e.target.value)}
+                required
+                minLength={MIN_ADDRESS_LENGTH}
+                maxLength={MAX_ADDRESS_LENGTH}
+              />
+            </label>
+
+            <label className="form-group">
+              <span>Notes</span>
+              <textarea rows={2} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} maxLength={MAX_NOTE_LENGTH} />
+            </label>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">Requested Items</h3>
+                <button type="button" className="btn-add" onClick={addItem}>
+                  <Plus size={14} /> Add item
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {form.items.map((item, index) => (
+                  <div key={index} className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">
+                    <input
+                      className="resource-line-input"
+                      type="text"
+                      placeholder="Item name"
+                      value={item.itemName}
+                      onChange={(e) => updateItem(index, "itemName", e.target.value)}
+                      minLength={MIN_ITEM_NAME_LENGTH}
+                      maxLength={MAX_ITEM_NAME_LENGTH}
+                    />
+                    <input
+                      className="resource-line-input"
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="Quantity"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                    />
+                    <button type="button" className="btn-remove" onClick={() => removeItem(index)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Delivery Address *</label>
-              <textarea
-                name="deliveryAddress"
-                value={formData.deliveryAddress}
-                onChange={handleInputChange}
-                placeholder="Complete delivery address"
-                rows={3}
-                required
-              />
-            </div>
-          </div>
-
-          {/* SUBMIT */}
-          <div className="form-actions">
-            <button type="button" className="btn-secondary" onClick={resetForm}>
-              Clear Form
+            <button type="submit" className="btn-primary" disabled={submitting}>
+              {submitting ? "Submitting..." : "Submit Request"} <Send size={16} />
             </button>
-            <button type="submit" className="btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit Request"} <Send size={16} />
-            </button>
-          </div>
-        </form>
+          </form>
+        )}
+        </div>
       </div>
     </div>
   );
-};
-
-export default ResourceRequestPage;
+}

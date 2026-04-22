@@ -1,66 +1,234 @@
 const mongoose = require("mongoose");
 const Allocation = require("../models/Allocation");
 const DisasterReport = require("../models/DisasterReport");
+const InventoryItem = require("../models/InventoryItem");
+const InventoryActivity = require("../models/InventoryActivity");
+const TrackingRecord = require("../models/TrackingRecord");
 
-const REPORT_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
-
-function isDbConnected() {
+const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
-}
+};
 
-function normalizeQuantities(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
+// Create allocation plan (Allocation Officer)
+async function createAllocation(req, res) {
+  try {
+    const { disasterId, items, notes } = req.body;
 
-  return Object.entries(value).reduce((acc, [name, quantity]) => {
-    const normalizedName = String(name || "").trim();
-    const normalizedQuantity = Number(quantity);
-
-    if (!normalizedName || !Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
-      return acc;
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
     }
 
-    acc[normalizedName] = Math.round(normalizedQuantity);
-    return acc;
-  }, {});
-}
+    // Validate required fields
+    if (!disasterId || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ 
+        message: "Disaster ID and items array are required." 
+      });
+    }
 
-function mapToObject(value) {
-  if (value instanceof Map) {
-    return Object.fromEntries(value.entries());
+    // Validate disaster exists
+    const disaster = await DisasterReport.findById(disasterId);
+    if (!disaster) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    // Check if allocation already exists for this disaster
+    const existingAllocation = await Allocation.findOne({ 
+      disasterId, 
+      status: { $in: ["draft", "confirmed"] } 
+    });
+    
+    if (existingAllocation) {
+      return res.status(400).json({ 
+        message: "Allocation already exists for this disaster." 
+      });
+    }
+
+    // Validate and check stock for each item
+    const allocationItems = [];
+    const stockChecks = [];
+
+    for (const item of items) {
+      if (!item.inventoryItemId || !item.quantityAllocated || item.quantityAllocated <= 0) {
+        return res.status(400).json({ 
+          message: "Each item must have valid inventoryItemId and quantityAllocated." 
+        });
+      }
+
+      const inventoryItem = await InventoryItem.findById(item.inventoryItemId);
+      if (!inventoryItem) {
+        return res.status(404).json({ 
+          message: `Inventory item not found: ${item.inventoryItemId}` 
+        });
+      }
+
+      if (inventoryItem.stock < item.quantityAllocated) {
+        return res.status(400).json({ 
+          message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.stock}, Requested: ${item.quantityAllocated}` 
+        });
+      }
+
+      allocationItems.push({
+        inventoryItemId: item.inventoryItemId,
+        itemName: inventoryItem.name,
+        quantityAllocated: item.quantityAllocated,
+        unit: inventoryItem.unit
+      });
+
+      stockChecks.push({
+        itemName: inventoryItem.name,
+        allocatedQuantity: item.quantityAllocated,
+        availableStock: inventoryItem.stock,
+        remainingStock: inventoryItem.stock - item.quantityAllocated
+      });
+    }
+
+    // Create allocation
+    const allocation = new Allocation({
+      disasterId,
+      createdBy: req.user.id,
+      items: allocationItems,
+      notes: notes || "",
+      status: "draft"
+    });
+
+    await allocation.save();
+
+    return res.status(201).json({
+      message: "Allocation plan created successfully.",
+      allocation,
+      stockChecks
+    });
+
+  } catch (error) {
+    console.error("Create allocation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to create allocation plan.", 
+      error: error.message 
+    });
   }
+}
 
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
+// Confirm allocation and update inventory (Allocation Officer)
+async function confirmAllocation(req, res) {
+  try {
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid allocation ID." });
+    }
+
+    const allocation = await Allocation.findById(id).populate('disasterId');
+    if (!allocation) {
+      return res.status(404).json({ message: "Allocation not found." });
+    }
+
+    if (allocation.status !== "draft") {
+      return res.status(400).json({ 
+        message: "Only draft allocations can be confirmed." 
+      });
+    }
+
+    // Check stock availability again before confirming
+    const stockUpdates = [];
+    
+    for (const item of allocation.items) {
+      const inventoryItem = await InventoryItem.findById(item.inventoryItemId);
+      
+      if (!inventoryItem) {
+        return res.status(404).json({ 
+          message: `Inventory item not found: ${item.inventoryItemId}` 
+        });
+      }
+
+      if (inventoryItem.stock < item.quantityAllocated) {
+        return res.status(400).json({ 
+          message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.stock}, Required: ${item.quantityAllocated}` 
+        });
+      }
+
+      stockUpdates.push({
+        inventoryItemId: item.inventoryItemId,
+        itemName: inventoryItem.name,
+        previousStock: inventoryItem.stock,
+        allocatedQuantity: item.quantityAllocated,
+        newStock: inventoryItem.stock - item.quantityAllocated
+      });
+    }
+
+    // Update inventory stock and create activity records
+    for (const update of stockUpdates) {
+      const inventoryItem = await InventoryItem.findById(update.inventoryItemId);
+      
+      // Update stock
+      inventoryItem.stock = update.newStock;
+      inventoryItem.lastUpdatedBy = req.user.id;
+      await inventoryItem.save();
+
+      // Create inventory activity record
+      const activity = new InventoryActivity({
+        inventoryItemId: update.inventoryItemId,
+        itemName: update.itemName,
+        category: inventoryItem.category,
+        type: "allocation",
+        quantity: update.allocatedQuantity,
+        previousStock: update.previousStock,
+        newStock: update.newStock,
+        referenceId: allocation._id,
+        referenceType: "allocation",
+        performedBy: req.user.id,
+        performedByName: req.user.fullName || req.user.name,
+        notes: `Allocated for disaster: ${allocation.disasterId.disasterType} at ${allocation.disasterId.location}`
+      });
+
+      await activity.save();
+    }
+
+    // Update allocation status
+    allocation.status = "confirmed";
+    await allocation.save();
+
+    // Update disaster report status
+    await DisasterReport.findByIdAndUpdate(allocation.disasterId._id, {
+      status: "allocated",
+      allocatedResources: {
+        quantities: new Map(),
+        lineItems: allocation.items.map(item => ({
+          itemId: item.inventoryItemId.toString(),
+          itemName: item.itemName,
+          quantity: item.quantityAllocated,
+          category: ""
+        })),
+        message: allocation.notes,
+        allocatedDate: new Date(),
+        allocatedBy: req.user.fullName || req.user.name,
+        lastUpdated: new Date()
+      }
+    });
+
+    return res.json({
+      message: "Allocation confirmed successfully. Inventory updated.",
+      allocation,
+      stockUpdates
+    });
+
+  } catch (error) {
+    console.error("Confirm allocation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to confirm allocation.", 
+      error: error.message 
+    });
   }
-
-  return value;
 }
 
-function formatAllocation(allocation) {
-  return {
-    id: allocation._id.toString(),
-    disasterReportId: allocation.disasterReportId.toString(),
-    quantities: mapToObject(allocation.quantities),
-    message: allocation.message,
-    allocatedBy: allocation.allocatedBy,
-    allocatedDate: allocation.allocatedDate,
-    lastUpdated: allocation.lastUpdated,
-    createdAt: allocation.createdAt,
-    updatedAt: allocation.updatedAt,
-  };
-}
-
-function formatReportSummary(report) {
-  return {
-    id: report._id.toString(),
-    status: report.status,
-    allocatedResources: report.allocatedResources,
-    updatedAt: report.updatedAt,
-  };
-}
-
+// Get all allocations
 async function listAllocations(req, res) {
   try {
     if (!isDbConnected()) {
@@ -69,24 +237,42 @@ async function listAllocations(req, res) {
       });
     }
 
+    const { page = 1, limit = 10, status, disasterId } = req.query;
     const filter = {};
-    const { reportId } = req.query;
 
-    if (reportId) {
-      if (!mongoose.Types.ObjectId.isValid(reportId)) {
-        return res.status(400).json({ message: "Invalid reportId query parameter." });
+    if (status) filter.status = status;
+    if (disasterId) filter.disasterId = disasterId;
+
+    const allocations = await Allocation.find(filter)
+      .populate('disasterId', 'disasterType location severityLevel affectedPopulation')
+      .populate('createdBy', 'fullName email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Allocation.countDocuments(filter);
+
+    return res.json({
+      allocations,
+      pagination: {
+        current: parseInt(page),
+        pageSize: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
       }
-      filter.disasterReportId = reportId;
-    }
+    });
 
-    const allocations = await Allocation.find(filter).sort({ updatedAt: -1 });
-    return res.json(allocations.map(formatAllocation));
   } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch allocations.", error: error.message });
+    console.error("List allocations error:", error);
+    return res.status(500).json({ 
+      message: "Failed to retrieve allocations.", 
+      error: error.message 
+    });
   }
 }
 
-async function getAllocationByReport(req, res) {
+// Get allocation by ID
+async function getAllocationById(req, res) {
   try {
     if (!isDbConnected()) {
       return res.status(503).json({
@@ -94,23 +280,40 @@ async function getAllocationByReport(req, res) {
       });
     }
 
-    const { reportId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(reportId)) {
-      return res.status(400).json({ message: "Invalid report ID." });
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid allocation ID." });
     }
 
-    const allocation = await Allocation.findOne({ disasterReportId: reportId });
+    const allocation = await Allocation.findById(id)
+      .populate('disasterId', 'disasterType location severityLevel affectedPopulation status')
+      .populate('createdBy', 'fullName email')
+      .populate('items.inventoryItemId', 'name category unit');
+
     if (!allocation) {
-      return res.status(404).json({ message: "Allocation not found for this report." });
+      return res.status(404).json({ message: "Allocation not found." });
     }
 
-    return res.json(formatAllocation(allocation));
+    // Check if tracking record exists
+    const trackingRecord = await TrackingRecord.findOne({ allocationId: id });
+
+    return res.json({ 
+      allocation, 
+      hasTrackingRecord: !!trackingRecord 
+    });
+
   } catch (error) {
-    return res.status(500).json({ message: "Failed to fetch allocation.", error: error.message });
+    console.error("Get allocation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to retrieve allocation.", 
+      error: error.message 
+    });
   }
 }
 
-async function upsertAllocationByReport(req, res) {
+// Update allocation (draft only)
+async function updateAllocation(req, res) {
   try {
     if (!isDbConnected()) {
       return res.status(503).json({
@@ -118,61 +321,76 @@ async function upsertAllocationByReport(req, res) {
       });
     }
 
-    const { reportId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(reportId)) {
-      return res.status(400).json({ message: "Invalid report ID." });
+    const { id } = req.params;
+    const { items, notes } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid allocation ID." });
     }
 
-    const report = await DisasterReport.findById(reportId);
-    if (!report) {
-      return res.status(404).json({ message: "Disaster report not found." });
+    const allocation = await Allocation.findById(id);
+    if (!allocation) {
+      return res.status(404).json({ message: "Allocation not found." });
     }
 
-    const quantities = normalizeQuantities(req.body.quantities);
-    if (!Object.keys(quantities).length) {
-      return res.status(400).json({ message: "At least one positive allocation quantity is required." });
+    if (allocation.status !== "draft") {
+      return res.status(400).json({ 
+        message: "Only draft allocations can be updated." 
+      });
     }
 
-    const message = String(req.body.message || "").trim();
-    const allocatedBy = String(req.body.allocatedBy || "Allocation Officer").trim() || "Allocation Officer";
-    const status = String(req.body.status || "allocated").trim();
+    // Update items if provided
+    if (items && Array.isArray(items)) {
+      const allocationItems = [];
+      
+      for (const item of items) {
+        if (!item.inventoryItemId || !item.quantityAllocated || item.quantityAllocated <= 0) {
+          return res.status(400).json({ 
+            message: "Each item must have valid inventoryItemId and quantityAllocated." 
+          });
+        }
 
-    if (!REPORT_STATUSES.includes(status)) {
-      return res.status(400).json({ message: "Invalid status value." });
+        const inventoryItem = await InventoryItem.findById(item.inventoryItemId);
+        if (!inventoryItem) {
+          return res.status(404).json({ 
+            message: `Inventory item not found: ${item.inventoryItemId}` 
+          });
+        }
+
+        allocationItems.push({
+          inventoryItemId: item.inventoryItemId,
+          itemName: inventoryItem.name,
+          quantityAllocated: item.quantityAllocated,
+          unit: inventoryItem.unit
+        });
+      }
+
+      allocation.items = allocationItems;
     }
 
-    const existingAllocation = await Allocation.findOne({ disasterReportId: reportId });
-    const now = new Date();
+    // Update notes if provided
+    if (notes !== undefined) {
+      allocation.notes = notes;
+    }
 
-    const allocation = existingAllocation || new Allocation({ disasterReportId: reportId });
-    allocation.quantities = quantities;
-    allocation.message = message;
-    allocation.allocatedBy = allocatedBy;
-    allocation.allocatedDate = existingAllocation?.allocatedDate || now;
-    allocation.lastUpdated = now;
     await allocation.save();
 
-    report.status = status;
-    report.allocatedResources = {
-      quantities,
-      message,
-      allocatedBy,
-      allocatedDate: allocation.allocatedDate,
-      lastUpdated: now,
-    };
-    await report.save();
-
     return res.json({
-      message: existingAllocation ? "Allocation updated successfully." : "Allocation created successfully.",
-      allocation: formatAllocation(allocation),
-      report: formatReportSummary(report),
+      message: "Allocation updated successfully.",
+      allocation
     });
+
   } catch (error) {
-    return res.status(500).json({ message: "Failed to save allocation.", error: error.message });
+    console.error("Update allocation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to update allocation.", 
+      error: error.message 
+    });
   }
 }
 
-async function clearAllocationByReport(req, res) {
+// Cancel allocation (draft only)
+async function cancelAllocation(req, res) {
   try {
     if (!isDbConnected()) {
       return res.status(503).json({
@@ -180,39 +398,93 @@ async function clearAllocationByReport(req, res) {
       });
     }
 
-    const { reportId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(reportId)) {
-      return res.status(400).json({ message: "Invalid report ID." });
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid allocation ID." });
     }
 
-    const report = await DisasterReport.findById(reportId);
-    if (!report) {
-      return res.status(404).json({ message: "Disaster report not found." });
+    const allocation = await Allocation.findById(id);
+    if (!allocation) {
+      return res.status(404).json({ message: "Allocation not found." });
     }
 
-    const nextStatus = String(req.body?.status || "active").trim();
-    if (!REPORT_STATUSES.includes(nextStatus)) {
-      return res.status(400).json({ message: "Invalid status value." });
+    if (allocation.status !== "draft") {
+      return res.status(400).json({ 
+        message: "Only draft allocations can be cancelled." 
+      });
     }
 
-    await Allocation.findOneAndDelete({ disasterReportId: reportId });
-
-    report.status = nextStatus;
-    report.allocatedResources = null;
-    await report.save();
+    allocation.status = "cancelled";
+    await allocation.save();
 
     return res.json({
-      message: "Allocation cleared successfully.",
-      report: formatReportSummary(report),
+      message: "Allocation cancelled successfully.",
+      allocation
     });
+
   } catch (error) {
-    return res.status(500).json({ message: "Failed to clear allocation.", error: error.message });
+    console.error("Cancel allocation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to cancel allocation.", 
+      error: error.message 
+    });
+  }
+}
+
+// Get allocation statistics
+async function getAllocationStatistics(req, res) {
+  try {
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    const statusStats = await Allocation.aggregate([
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const totalAllocated = await Allocation.aggregate([
+      {
+        $match: { status: "confirmed" }
+      },
+      {
+        $unwind: "$items"
+      },
+      {
+        $group: {
+          _id: null,
+          totalItems: { $sum: "$items.quantityAllocated" }
+        }
+      }
+    ]);
+
+    return res.json({
+      statusStats,
+      totalAllocated: totalAllocated[0]?.totalItems || 0
+    });
+
+  } catch (error) {
+    console.error("Get allocation statistics error:", error);
+    return res.status(500).json({ 
+      message: "Failed to retrieve allocation statistics.", 
+      error: error.message 
+    });
   }
 }
 
 module.exports = {
+  createAllocation,
+  confirmAllocation,
   listAllocations,
-  getAllocationByReport,
-  upsertAllocationByReport,
-  clearAllocationByReport,
+  getAllocationById,
+  updateAllocation,
+  cancelAllocation,
+  getAllocationStatistics
 };

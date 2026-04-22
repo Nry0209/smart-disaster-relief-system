@@ -1,11 +1,49 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Package, AlertTriangle, Warehouse, RefreshCw, Search } from "lucide-react";
-import { adjustInventoryItem, createInventoryItem, fetchInventoryItems } from "../services/inventoryService";
-import './Pages.css';
+import { Search, Package, AlertTriangle, Warehouse, RefreshCw } from "lucide-react";
+import PageHeader from "../components/PageHeader";
+import {
+  fetchInventoryItems,
+  fetchInventoryActivity,
+  createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
+  adjustInventoryStock,
+} from "../services/inventoryService";
+import "./Pages.css";
+
+const CATEGORY_OPTIONS = ["Water", "Food", "Medical", "Shelter", "Clothing", "Other"];
+
+const DEFAULT_ITEM_FORM = {
+  id: "",
+  name: "",
+  category: "Water",
+  stock: "",
+  min: "",
+  warehouse: "Warehouse 1",
+  unit: "units",
+};
+
+const DEFAULT_ACTION_FORM = {
+  itemId: "",
+  quantity: "",
+  destinationWarehouse: "Warehouse 1",
+  note: "",
+};
+
+const MAX_ITEM_NAME_LENGTH = 80;
+const MIN_ITEM_NAME_LENGTH = 2;
+const MIN_WAREHOUSE_LENGTH = 2;
+const MAX_WAREHOUSE_LENGTH = 60;
+const MIN_UNIT_LENGTH = 1;
+const MAX_UNIT_LENGTH = 20;
+const MAX_ACTION_NOTE_LENGTH = 300;
 
 function getStatus(stock, min) {
-  const safeMin = min > 0 ? min : 1;
-  const ratio = stock / safeMin;
+  if (min <= 0) {
+    return { label: "Good", color: "#16a34a", bg: "#dcfce7" };
+  }
+
+  const ratio = stock / min;
   if (ratio >= 1) return { label: "Good", color: "#16a34a", bg: "#dcfce7" };
   if (ratio >= 0.7) return { label: "Warning", color: "#d97706", bg: "#fef3c7" };
   if (ratio >= 0.4) return { label: "Low", color: "#ea580c", bg: "#ffedd5" };
@@ -13,270 +51,469 @@ function getStatus(stock, min) {
 }
 
 function barColor(label) {
-  return label === "Good" ? "#22c55e" : label === "Warning" ? "#f59e0b" : label === "Low" ? "#f97316" : "#ef4444";
+  return label === "Good"
+    ? "#22c55e"
+    : label === "Warning"
+      ? "#f59e0b"
+      : label === "Low"
+        ? "#f97316"
+        : "#ef4444";
 }
 
-const CATEGORIES = ["All", "Water", "Food", "Medical", "Shelter"];
-const WAREHOUSES = ["Warehouse 1", "Warehouse 2", "Warehouse 3", "Warehouse 4", "Warehouse 5"];
-const ADD_ITEM_CATEGORIES = ["Water", "Food", "Medical", "Shelter", "Other"];
-const INITIAL_ADD_FORM = {
-  name: "",
-  category: "Water",
-  customCategory: "",
-  stock: "",
-  min: "",
-};
+function formatActivityEntry(activity) {
+  const ACTION_LABELS = {
+    create: "Created",
+    update: "Updated",
+    adjust: "Adjusted",
+    donation: "Donation",
+    transfer: "Transferred",
+    consume: "Consumed",
+    restock: "Restocked",
+    delete: "Deleted",
+  };
+
+  const actionLabel = ACTION_LABELS[activity.action] || "Updated";
+  const quantity = Number(activity.quantity) || 0;
+  const quantityLabel = quantity > 0 ? `+${quantity}` : `${quantity}`;
+  const when = activity.createdAt
+    ? new Date(activity.createdAt).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "just now";
+
+  return `${actionLabel} ${activity.itemName} (${quantityLabel} units) - ${when}`;
+}
+
+function getModalTitle(modal) {
+  if (modal === "add") return "Add New Stock Item";
+  if (modal === "edit") return "Edit Stock Item";
+  if (modal === "adjust") return "Adjust Stock";
+  if (modal === "transfer") return "Transfer Stock";
+  if (modal === "donate") return "Record Donation";
+  return "Inventory Action";
+}
+
+function getModalSubmitLabel(modal) {
+  if (modal === "add") return "Add Item";
+  if (modal === "edit") return "Save Changes";
+  if (modal === "adjust") return "Apply Adjustment";
+  if (modal === "transfer") return "Record Transfer";
+  if (modal === "donate") return "Record Donation";
+  return "Confirm";
+}
 
 export default function InventoryPage() {
   const [items, setItems] = useState([]);
+  const [activityLog, setActivityLog] = useState([]);
   const [activeCat, setActiveCat] = useState("All");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null);
+  const [itemForm, setItemForm] = useState(DEFAULT_ITEM_FORM);
+  const [actionForm, setActionForm] = useState(DEFAULT_ACTION_FORM);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [form, setForm] = useState({ ...INITIAL_ADD_FORM });
-  const [actionForm, setActionForm] = useState({ itemId: "", quantity: "", destination: WAREHOUSES[0] });
-  const [isAddingItem, setIsAddingItem] = useState(false);
-  const [log, setLog] = useState([
-    "Medicine Kits fell below minimum threshold.",
-    "Tents stock updated - 40 units added.",
-    "Blankets transferred to Warehouse 3.",
-  ]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
-  const loadInventory = async () => {
-    setIsLoading(true);
-    setErrorMessage("");
-    try {
-      const response = await fetchInventoryItems();
-      setItems(Array.isArray(response) ? response : []);
-    } catch (error) {
-      setItems([]);
-      setErrorMessage(error.message || "Failed to load inventory items.");
-    } finally {
-      setIsLoading(false);
+  async function loadInventoryData(showLoader = true) {
+    if (showLoader) {
+      setIsLoading(true);
     }
-  };
+
+    try {
+      const [fetchedItems, fetchedActivity] = await Promise.all([
+        fetchInventoryItems(),
+        fetchInventoryActivity(25),
+      ]);
+
+      setItems(Array.isArray(fetchedItems) ? fetchedItems : []);
+      setActivityLog(Array.isArray(fetchedActivity) ? fetchedActivity : []);
+      setError("");
+    } catch (fetchError) {
+      setError(fetchError.message || "Failed to load inventory data.");
+    } finally {
+      if (showLoader) {
+        setIsLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
-    loadInventory();
+    loadInventoryData(true);
   }, []);
 
-  const totalItems = items.length;
-  const lowCount = items.filter((i) => i.stock < i.min).length;
-  const hasItems = items.length > 0;
+  const categoryFilters = useMemo(() => {
+    const existing = items.map((item) => item.category).filter(Boolean);
+    return ["All", ...new Set([...CATEGORY_OPTIONS, ...existing])];
+  }, [items]);
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (i) =>
-          (activeCat === "All" || i.category === activeCat) &&
-          i.name.toLowerCase().includes(search.toLowerCase())
-      ),
-    [items, activeCat, search]
+  useEffect(() => {
+    if (!categoryFilters.includes(activeCat)) {
+      setActiveCat("All");
+    }
+  }, [activeCat, categoryFilters]);
+
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return items.filter((item) => {
+      const matchesCategory = activeCat === "All" || item.category === activeCat;
+      const matchesSearch =
+        !query ||
+        item.name.toLowerCase().includes(query) ||
+        item.category.toLowerCase().includes(query) ||
+        item.warehouse.toLowerCase().includes(query);
+
+      return matchesCategory && matchesSearch;
+    });
+  }, [items, activeCat, search]);
+
+  const selectedActionItem = useMemo(
+    () => items.find((item) => item.id === actionForm.itemId) || null,
+    [items, actionForm.itemId]
   );
 
-  const addItemDraft = useMemo(() => {
-    const name = String(form.name || "").trim();
-    const selectedCategory = String(form.category || "").trim();
-    const customCategory = String(form.customCategory || "").trim();
-    const category = selectedCategory === "Other" ? customCategory : selectedCategory;
+  const totalItems = items.length;
+  const lowCount = items.filter((item) => item.stock < item.min).length;
+  const warehouseCount = new Set(items.map((item) => item.warehouse)).size;
 
-    const hasStockInput = String(form.stock || "").trim() !== "";
-    const hasMinInput = String(form.min || "").trim() !== "";
-    const stockValue = hasStockInput ? Number(form.stock) : Number.NaN;
-    const minValue = hasMinInput ? Number(form.min) : Number.NaN;
-    const stock = Number.isFinite(stockValue) ? Math.round(stockValue) : Number.NaN;
-    const min = Number.isFinite(minValue) ? Math.round(minValue) : Number.NaN;
+  function closeModal() {
+    setModal(null);
+    setItemForm(DEFAULT_ITEM_FORM);
+    setActionForm(DEFAULT_ACTION_FORM);
+  }
 
-    let validationError = "";
-
-    if (!name) {
-      validationError = "Item name is required.";
-    } else if (name.length < 2) {
-      validationError = "Item name must be at least 2 characters.";
-    } else if (!category) {
-      validationError = "Category is required.";
-    } else if (!Number.isInteger(stock) || stock < 0) {
-      validationError = "Stock quantity must be a whole number greater than or equal to 0.";
-    } else if (!Number.isInteger(min) || min < 0) {
-      validationError = "Minimum threshold must be a whole number greater than or equal to 0.";
-    }
-
-    const duplicateName = items.some(
-      (item) => String(item.name || "").trim().toLowerCase() === name.toLowerCase()
-    );
-
-    if (!validationError && duplicateName) {
-      validationError = "An inventory item with this name already exists.";
-    }
-
-    return {
-      name,
-      category,
-      stock,
-      min,
-      validationError,
-      hasThresholdWarning:
-        Number.isInteger(stock) && Number.isInteger(min) && min > stock,
-      statusPreview:
-        Number.isInteger(stock) && Number.isInteger(min) ? getStatus(stock, min) : null,
-    };
-  }, [form, items]);
-
-  function openModal(type) {
-    setErrorMessage("");
+  function openActionModal(type) {
     setModal(type);
-
-    if (type === "add") {
-      setForm({ ...INITIAL_ADD_FORM });
-      return;
-    }
-
     setActionForm({
-      itemId: items[0]?.id ? String(items[0].id) : "",
-      quantity: "",
-      destination: WAREHOUSES[0],
+      ...DEFAULT_ACTION_FORM,
+      itemId: items[0]?.id || "",
     });
   }
 
-  async function handleAdd() {
-    if (addItemDraft.validationError) {
-      setErrorMessage(addItemDraft.validationError);
+  function openEditModal(item) {
+    setModal("edit");
+    setItemForm({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      stock: String(item.stock),
+      min: String(item.min),
+      warehouse: item.warehouse || "Warehouse 1",
+      unit: item.unit || "units",
+    });
+  }
+
+  async function handleSaveItem() {
+    const normalizedName = itemForm.name.trim();
+    const stock = Number(itemForm.stock);
+    const min = Number(itemForm.min);
+    const normalizedWarehouse = itemForm.warehouse.trim();
+    const normalizedUnit = itemForm.unit.trim();
+
+    const duplicateName = items.find(
+      (item) =>
+        item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
+        String(item.id) !== String(itemForm.id || "")
+    );
+
+    if (!normalizedName) {
+      setError("Item name is required.");
       return;
     }
 
-    setErrorMessage("");
-    setIsAddingItem(true);
+    if (normalizedName.length < 2) {
+      setError("Item name must be at least 2 characters.");
+      return;
+    }
+
+    if (normalizedName.length > MAX_ITEM_NAME_LENGTH) {
+      setError(`Item name cannot exceed ${MAX_ITEM_NAME_LENGTH} characters.`);
+      return;
+    }
+
+    if (duplicateName) {
+      setError("An inventory item with this name already exists.");
+      return;
+    }
+
+    if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
+      setError("Stock and minimum values must be whole numbers (0 or greater).");
+      return;
+    }
+
+    if (!normalizedWarehouse) {
+      setError("Warehouse is required.");
+      return;
+    }
+
+    if (normalizedWarehouse.length < MIN_WAREHOUSE_LENGTH) {
+      setError(`Warehouse must be at least ${MIN_WAREHOUSE_LENGTH} characters.`);
+      return;
+    }
+
+    if (normalizedWarehouse.length > MAX_WAREHOUSE_LENGTH) {
+      setError(`Warehouse cannot exceed ${MAX_WAREHOUSE_LENGTH} characters.`);
+      return;
+    }
+
+    if (!normalizedUnit) {
+      setError("Unit is required.");
+      return;
+    }
+
+    if (normalizedUnit.length < MIN_UNIT_LENGTH) {
+      setError(`Unit must be at least ${MIN_UNIT_LENGTH} character.`);
+      return;
+    }
+
+    if (normalizedUnit.length > MAX_UNIT_LENGTH) {
+      setError(`Unit cannot exceed ${MAX_UNIT_LENGTH} characters.`);
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
-      await createInventoryItem({
-        name: addItemDraft.name,
-        category: addItemDraft.category,
-        stock: addItemDraft.stock,
-        min: addItemDraft.min,
-      });
+      const payload = {
+        name: normalizedName,
+        category: itemForm.category,
+        stock,
+        min,
+        warehouse: normalizedWarehouse,
+        unit: normalizedUnit,
+      };
 
-      setLog((prev) => [`Added "${addItemDraft.name}" - ${addItemDraft.stock.toLocaleString()} units.`, ...prev]);
-      setForm({ ...INITIAL_ADD_FORM });
-      setModal(null);
-      await loadInventory();
-    } catch (error) {
-      setErrorMessage(error.message || "Failed to add inventory item.");
+      if (modal === "edit") {
+        await updateInventoryItem(itemForm.id, {
+          ...payload,
+          note: "Updated from inventory dashboard.",
+          performedBy: "Inventory Officer",
+        });
+        setNotice("Inventory item updated successfully.");
+      } else {
+        await createInventoryItem({
+          ...payload,
+          performedBy: "Inventory Officer",
+        });
+        setNotice("Inventory item created successfully.");
+      }
+
+      await loadInventoryData(false);
+      closeModal();
+      setError("");
+    } catch (saveError) {
+      setError(saveError.message || "Failed to save inventory item.");
     } finally {
-      setIsAddingItem(false);
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDeleteItem(item) {
+    const shouldDelete = window.confirm(`Delete ${item.name} from inventory?`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await deleteInventoryItem(item.id);
+      setNotice(`${item.name} deleted from inventory.`);
+      setError("");
+      await loadInventoryData(false);
+    } catch (deleteError) {
+      setError(deleteError.message || "Failed to delete inventory item.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleApplyAction() {
+    const quantity = Number(actionForm.quantity);
+    const selectedItem = items.find((item) => item.id === actionForm.itemId);
+    const normalizedNote = actionForm.note.trim();
+    const normalizedDestination = actionForm.destinationWarehouse.trim();
+
+    if (!actionForm.itemId) {
+      setError("Please select an inventory item.");
+      return;
+    }
+
+    if (!selectedItem) {
+      setError("Selected inventory item is no longer available. Refresh and try again.");
+      return;
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      setError("Invalid count. Quantity cannot be negative.");
+      return;
+    }
+
+    if (quantity === 0) {
+      setError("Quantity must be greater than zero.");
+      return;
+    }
+
+    if (normalizedNote.length > MAX_ACTION_NOTE_LENGTH) {
+      setError(`Notes cannot exceed ${MAX_ACTION_NOTE_LENGTH} characters.`);
+      return;
+    }
+
+    if (modal === "adjust" && quantity > Number(selectedItem.stock || 0)) {
+      setError(`Cannot adjust ${quantity}. Available stock for ${selectedItem.name} is ${selectedItem.stock}.`);
+      return;
+    }
+
+    if (modal === "transfer" && !normalizedDestination) {
+      setError("Destination warehouse is required for transfer.");
+      return;
+    }
+
+    if (
+      modal === "transfer" &&
+      normalizedDestination.toLowerCase() === String(selectedItem.warehouse || "").trim().toLowerCase()
+    ) {
+      setError("Destination warehouse must be different from current warehouse.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        quantity,
+        note: normalizedNote || undefined,
+        performedBy: "Inventory Officer",
+      };
+
+      if (modal === "adjust") {
+        payload.actionType = "adjust";
+      }
+
+      if (modal === "donate") {
+        payload.actionType = "donation";
+      }
+
+      if (modal === "transfer") {
+        payload.actionType = "transfer";
+        payload.destinationWarehouse = normalizedDestination;
+      }
+
+      await adjustInventoryStock(actionForm.itemId, payload);
+      await loadInventoryData(false);
+      closeModal();
+      setError("");
+
+      if (modal === "adjust") {
+        setNotice("Stock adjustment recorded.");
+      }
+
+      if (modal === "donate") {
+        setNotice("Donation entry recorded.");
+      }
+
+      if (modal === "transfer") {
+        setNotice("Warehouse transfer recorded.");
+      }
+    } catch (actionError) {
+      setError(actionError.message || "Failed to apply inventory action.");
+    } finally {
+      setIsSaving(false);
     }
   }
 
   function handleExport() {
+    if (!filteredItems.length) {
+      setError("No inventory rows available to export.");
+      return;
+    }
+
+    const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
     const rows = [
-      "Item,Category,Stock,Min,Status",
-      ...items.map((i) => `${i.name},${i.category},${i.stock},${i.min},${getStatus(i.stock, i.min).label}`),
-    ].join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([rows], { type: "text/csv" }));
-    a.download = "inventory_report.csv";
-    a.click();
+      ["Item", "Category", "Stock", "Minimum", "Warehouse", "Unit", "Status"],
+      ...filteredItems.map((item) => {
+        const status = getStatus(item.stock, item.min).label;
+        return [item.name, item.category, item.stock, item.min, item.warehouse, item.unit, status];
+      }),
+    ];
+
+    const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "inventory_report.csv";
+    link.click();
+
+    URL.revokeObjectURL(url);
+    setError("");
   }
 
-  async function handleStockAction(type) {
-    const selected = items.find((entry) => String(entry.id) === String(actionForm.itemId));
-    const quantity = Math.round(Number(actionForm.quantity));
-
-    if (!selected) {
-      setErrorMessage("Please select an inventory item.");
-      return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setErrorMessage("Please enter a valid quantity greater than zero.");
-      return;
-    }
-
-    let delta = 0;
-    let reason = "manual_adjustment";
-    let logMessage = "Stock updated";
-
-    if (type === "adjust") {
-      delta = -quantity;
-      reason = "damage_adjustment";
-      logMessage = `Damage adjustment for ${selected.name}: ${quantity} units reduced.`;
-    }
-
-    if (type === "transfer") {
-      delta = -quantity;
-      reason = `transfer_to_${String(actionForm.destination || "warehouse").replace(/\s+/g, "_").toLowerCase()}`;
-      logMessage = `${selected.name} transferred to ${actionForm.destination}: ${quantity} units.`;
-    }
-
-    if (type === "donate") {
-      delta = quantity;
-      reason = "donation_received";
-      logMessage = `Donation received for ${selected.name}: ${quantity} units added.`;
-    }
-
-    try {
-      await adjustInventoryItem(selected.id, { delta, reason });
-      setLog((prev) => [logMessage, ...prev]);
-      setModal(null);
-      await loadInventory();
-    } catch (error) {
-      setErrorMessage(error.message || "Failed to update inventory stock.");
-    }
-  }
+  const isActionModal = modal === "adjust" || modal === "transfer" || modal === "donate";
 
   return (
     <div className="inventory-page">
+      <PageHeader
+        role="Inventory Officer / Stock Management"
+        title="Inventory Management"
+        description="Track stock, apply operational updates, and keep the allocation pipeline supplied"
+      />
 
-      {/* HEADER */}
-      <div className="inventory-header">
-        <h1>Inventory Management</h1>
-        <p>Track and manage your disaster relief supplies</p>
-      </div>
+      {error && <div className="inventory-inline-alert error">{error}</div>}
+      {notice && <div className="inventory-inline-alert success">{notice}</div>}
 
-      {errorMessage && (
-        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
-          {errorMessage}
-        </div>
-      )}
-
-      {/* STATS */}
       <div className="inventory-stats">
         {[
           { icon: <Package size={16} color="#2563eb" />, bg: "#eff6ff", lbl: "Total Items", val: totalItems },
           { icon: <AlertTriangle size={16} color="#dc2626" />, bg: "#fef2f2", lbl: "Low Stock", val: lowCount },
-          { icon: <Warehouse size={16} color="#16a34a" />, bg: "#f0fdf4", lbl: "Warehouses", val: 5 },
-          { icon: <RefreshCw size={16} color="#7c3aed" />, bg: "#f5f3ff", lbl: "Recent Updates", val: log.length },
-        ].map((s) => (
-          <div className="stat-card" key={s.lbl}>
-            <div className="stat-icon" style={{ background: s.bg }}>{s.icon}</div>
+          { icon: <Warehouse size={16} color="#16a34a" />, bg: "#f0fdf4", lbl: "Warehouses", val: warehouseCount },
+          { icon: <RefreshCw size={16} color="#7c3aed" />, bg: "#f5f3ff", lbl: "Recent Updates", val: activityLog.length },
+        ].map((stat) => (
+          <div className="stat-card" key={stat.lbl}>
+            <div className="stat-icon" style={{ background: stat.bg }}>{stat.icon}</div>
             <div className="stat-content">
-              <h3>{s.lbl}</h3>
-              <p>{s.val}</p>
+              <h3>{stat.lbl}</h3>
+              <p>{stat.val}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ACTIONS AND FILTERS */}
       <div className="inventory-actions">
         <div className="filter-controls">
           <div className="search-input">
             <Search size={14} />
             <input
-              placeholder="Search inventory items..."
+              placeholder="Search by item name, category, warehouse"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
             />
           </div>
+          <button
+            type="button"
+            className="category-btn"
+            onClick={() => loadInventoryData(false)}
+            disabled={isSaving}
+          >
+            Refresh
+          </button>
         </div>
+
         <div className="category-filters">
-          {CATEGORIES.map((c) => (
-            <button key={c} className={`category-btn${activeCat === c ? " active" : ""}`} onClick={() => setActiveCat(c)}>{c}</button>
+          {categoryFilters.map((category) => (
+            <button
+              key={category}
+              className={`category-btn${activeCat === category ? " active" : ""}`}
+              onClick={() => setActiveCat(category)}
+            >
+              {category}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="inventory-table-container">
         <table className="inventory-table">
           <thead>
@@ -285,136 +522,147 @@ export default function InventoryPage() {
               <th>Category</th>
               <th>Current Stock</th>
               <th>Minimum Required</th>
+              <th>Warehouse</th>
               <th>Stock Level</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
+
           <tbody>
-            {isLoading ? (
+            {isLoading && (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
-                  Loading inventory...
+                <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+                  Loading inventory data...
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            )}
+
+            {!isLoading && filteredItems.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
-                  No items found matching your criteria.
+                <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  No inventory items found for the selected filters.
                 </td>
               </tr>
-            ) : (
-              filtered.map((item) => {
-                const s = getStatus(item.stock, item.min);
-                const safeMin = item.min > 0 ? item.min : 1;
-                const pct = Math.min(100, Math.round((item.stock / safeMin) * 100));
+            )}
+
+            {!isLoading &&
+              filteredItems.map((item) => {
+                const status = getStatus(item.stock, item.min);
+                const percentage = item.min <= 0 ? 100 : Math.min(100, Math.round((item.stock / item.min) * 100));
+
                 return (
                   <tr key={item.id}>
                     <td><span className="item-name">{item.name}</span></td>
                     <td><span className="category-badge">{item.category}</span></td>
                     <td><span className="stock-quantity">{item.stock.toLocaleString()}</span></td>
                     <td><span className="min-quantity">{item.min.toLocaleString()}</span></td>
+                    <td><span className="min-quantity">{item.warehouse}</span></td>
                     <td>
                       <div className="progress-bar">
                         <div className="progress-track">
-                          <div className="progress-fill" style={{ width: `${pct}%`, background: barColor(s.label) }} />
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${percentage}%`, background: barColor(status.label) }}
+                          />
                         </div>
-                        <span className="progress-percentage">{pct}%</span>
+                        <span className="progress-percentage">{percentage}%</span>
                       </div>
                     </td>
                     <td>
-                      <span className={`status-badge ${s.label.toLowerCase()}`}>{s.label}</span>
+                      <span className={`status-badge ${status.label.toLowerCase()}`}>{status.label}</span>
+                    </td>
+                    <td>
+                      <div className="inventory-row-actions">
+                        <button
+                          type="button"
+                          className="inventory-row-btn edit"
+                          onClick={() => openEditModal(item)}
+                          disabled={isSaving}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="inventory-row-btn delete"
+                          onClick={() => handleDeleteItem(item)}
+                          disabled={isSaving}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
-              })
-            )}
+              })}
           </tbody>
         </table>
       </div>
 
-      {/* QUICK ACTIONS */}
       <div className="quick-actions">
         <h2>Quick Actions</h2>
         <div className="action-buttons">
-          {[
-            { label: "➕ Add New Item", class: "add", fn: () => openModal("add") },
-            { label: "⚠ Update Stock", class: "adjust", fn: () => openModal("adjust") },
-            { label: "↔ Transfer Items", class: "transfer", fn: () => openModal("transfer") },
-            { label: "🎁 Record Donation", class: "donate", fn: () => openModal("donate") },
-            { label: "📊 Export Report", class: "export", fn: handleExport },
-            { label: "🔄 Refresh", class: "export", fn: loadInventory },
-          ].map((a) => (
-            <button key={a.label} className={`action-btn ${a.class}`} onClick={a.fn}>{a.label}</button>
-          ))}
+          <button className="action-btn add" onClick={() => setModal("add")}>Add New Item</button>
+          <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Update Stock</button>
+          <button className="action-btn transfer" onClick={() => openActionModal("transfer")}>Transfer Items</button>
+          <button className="action-btn donate" onClick={() => openActionModal("donate")}>Record Donation</button>
+          <button className="action-btn export" onClick={handleExport}>Export Report</button>
         </div>
         <p style={{ fontSize: 13, color: "#64748b", marginTop: 16, textAlign: "center" }}>
-          All actions are automatically logged for audit purposes.
+          Inventory actions are persisted and tracked in activity logs.
         </p>
       </div>
 
-      {/* ACTIVITY LOG */}
       <div className="activity-log">
         <h2>Recent Activity</h2>
         <div className="log-items">
-          {log.slice(0, 5).map((entry, index) => <div key={index} className="log-item">{entry}</div>)}
+          {activityLog.length === 0 && <div className="log-item">No activity yet.</div>}
+          {activityLog.slice(0, 8).map((entry) => (
+            <div key={entry.id} className="log-item">{formatActivityEntry(entry)}</div>
+          ))}
         </div>
       </div>
 
-      {/* MODAL */}
       {modal && (
-        <div className="inventory-modal-overlay" onClick={() => setModal(null)}>
-          <div className="inventory-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="inventory-modal-overlay" onClick={closeModal}>
+          <div className="inventory-modal" onClick={(event) => event.stopPropagation()}>
             <div className="inventory-modal-header">
-              <h2>
-                {modal === "add" && "➕ Add New Stock Item"}
-                {modal === "adjust" && "⚠️ Adjust for Damage"}
-                {modal === "transfer" && "↔️ Transfer Stock"}
-                {modal === "donate" && "🎁 Apply Donation"}
-              </h2>
-              <button className="close-btn" onClick={() => setModal(null)}>×</button>
+              <h2>{getModalTitle(modal)}</h2>
+              <button className="close-btn" onClick={closeModal}>x</button>
             </div>
 
             <div className="inventory-modal-body">
-              {modal === "add" ? (
+              {(modal === "add" || modal === "edit") && (
                 <>
                   <div className="form-group">
                     <label>Item Name</label>
                     <input
                       placeholder="e.g. Bottled Water"
-                      value={form.name}
-                      maxLength={80}
-                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      value={itemForm.name}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, name: event.target.value }))}
+                      minLength={MIN_ITEM_NAME_LENGTH}
+                      maxLength={MAX_ITEM_NAME_LENGTH}
                     />
                   </div>
                   <div className="form-group">
                     <label>Category</label>
                     <select
-                      value={form.category}
-                      onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+                      value={itemForm.category}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, category: event.target.value }))}
                     >
-                      {ADD_ITEM_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                      {CATEGORY_OPTIONS.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
                     </select>
                   </div>
-                  {form.category === "Other" && (
-                    <div className="form-group">
-                      <label>Custom Category</label>
-                      <input
-                        placeholder="e.g. Hygiene"
-                        value={form.customCategory}
-                        maxLength={40}
-                        onChange={(e) => setForm((prev) => ({ ...prev, customCategory: e.target.value }))}
-                      />
-                    </div>
-                  )}
                   <div className="form-group">
-                    <label>Stock Quantity</label>
+                    <label>Current Stock</label>
                     <input
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="0"
-                      value={form.stock}
-                      onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
+                      value={itemForm.stock}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, stock: event.target.value }))}
                     />
                   </div>
                   <div className="form-group">
@@ -423,84 +671,94 @@ export default function InventoryPage() {
                       type="number"
                       min="0"
                       step="1"
-                      placeholder="0"
-                      value={form.min}
-                      onChange={(e) => setForm((prev) => ({ ...prev, min: e.target.value }))}
+                      value={itemForm.min}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, min: event.target.value }))}
                     />
                   </div>
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      borderRadius: "10px",
-                      border: "1px solid #e2e8f0",
-                      background: "#f8fafc",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 12, color: "#334155", fontWeight: 700 }}>
-                      Initial Stock Preview
-                    </p>
-                    {addItemDraft.statusPreview ? (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: addItemDraft.statusPreview.color }}>
-                        Status: {addItemDraft.statusPreview.label}
-                      </p>
-                    ) : (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-                        Enter stock and minimum threshold to preview status.
-                      </p>
-                    )}
-                    {addItemDraft.hasThresholdWarning && (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#d97706" }}>
-                        Minimum threshold is higher than current stock. This item will appear as low stock immediately.
-                      </p>
-                    )}
-                    {addItemDraft.validationError && (
-                      <p style={{ margin: "4px 0 0", fontSize: 12, color: "#dc2626" }}>
-                        {addItemDraft.validationError}
-                      </p>
-                    )}
+                  <div className="form-group">
+                    <label>Warehouse</label>
+                    <input
+                      value={itemForm.warehouse}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, warehouse: event.target.value }))}
+                      minLength={MIN_WAREHOUSE_LENGTH}
+                      maxLength={MAX_WAREHOUSE_LENGTH}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Unit</label>
+                    <input
+                      value={itemForm.unit}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, unit: event.target.value }))}
+                      minLength={MIN_UNIT_LENGTH}
+                      maxLength={MAX_UNIT_LENGTH}
+                    />
                   </div>
                 </>
-              ) : (
+              )}
+
+              {isActionModal && (
                 <>
-                  {!hasItems ? (
-                    <p style={{ fontSize: 14, color: "#dc2626", marginBottom: 20 }}>
-                      No inventory items available. Add an item first.
+                  {!items.length && (
+                    <p style={{ fontSize: 14, color: "#64748b" }}>
+                      Add at least one inventory item before applying this action.
                     </p>
-                  ) : (
+                  )}
+
+                  {items.length > 0 && (
                     <>
-                      <p style={{ fontSize: 14, color: "#64748b", marginBottom: 20 }}>This action will be logged in the activity feed.</p>
                       <div className="form-group">
                         <label>Select Item</label>
                         <select
                           value={actionForm.itemId}
-                          onChange={(e) => setActionForm((prev) => ({ ...prev, itemId: e.target.value }))}
+                          onChange={(event) => setActionForm((prev) => ({ ...prev, itemId: event.target.value }))}
                         >
-                          {items.map((i) => (
-                            <option key={i.id} value={String(i.id)}>{i.name}</option>
+                          {items.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name} ({item.stock} units)
+                            </option>
                           ))}
                         </select>
                       </div>
+
                       <div className="form-group">
                         <label>Quantity</label>
                         <input
                           type="number"
-                          min="1"
-                          placeholder="0"
+                          min="0"
+                          step="1"
                           value={actionForm.quantity}
-                          onChange={(e) => setActionForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                          onChange={(event) => setActionForm((prev) => ({ ...prev, quantity: event.target.value }))}
                         />
                       </div>
+
                       {modal === "transfer" && (
                         <div className="form-group">
                           <label>Destination Warehouse</label>
-                          <select
-                            value={actionForm.destination}
-                            onChange={(e) => setActionForm((prev) => ({ ...prev, destination: e.target.value }))}
-                          >
-                            {WAREHOUSES.map((name) => <option key={name}>{name}</option>)}
-                          </select>
+                          <input
+                            value={actionForm.destinationWarehouse}
+                            onChange={(event) =>
+                              setActionForm((prev) => ({ ...prev, destinationWarehouse: event.target.value }))
+                            }
+                            minLength={MIN_WAREHOUSE_LENGTH}
+                            maxLength={MAX_WAREHOUSE_LENGTH}
+                          />
                         </div>
+                      )}
+
+                      <div className="form-group">
+                        <label>Notes</label>
+                        <input
+                          placeholder="Optional notes for audit trail"
+                          value={actionForm.note}
+                          onChange={(event) => setActionForm((prev) => ({ ...prev, note: event.target.value }))}
+                          maxLength={MAX_ACTION_NOTE_LENGTH}
+                        />
+                      </div>
+
+                      {selectedActionItem && (
+                        <p style={{ fontSize: 13, color: "#64748b" }}>
+                          Selected: {selectedActionItem.name} | Stock: {selectedActionItem.stock} | Warehouse: {selectedActionItem.warehouse}
+                        </p>
                       )}
                     </>
                   )}
@@ -509,18 +767,23 @@ export default function InventoryPage() {
             </div>
 
             <div className="inventory-modal-footer">
-              <button className="btn-cancel" onClick={() => setModal(null)}>Cancel</button>
-              <button
-                className="btn-confirm"
-                onClick={modal === "add" ? handleAdd : () => handleStockAction(modal)}
-                disabled={
-                  modal === "add"
-                    ? Boolean(addItemDraft.validationError) || isAddingItem
-                    : !hasItems
-                }
-              >
-                {modal === "add" ? (isAddingItem ? "Adding..." : "Add Item") : "Confirm"}
-              </button>
+              <button className="btn-cancel" onClick={closeModal}>Cancel</button>
+
+              {(modal === "add" || modal === "edit") && (
+                <button className="btn-confirm" onClick={handleSaveItem} disabled={isSaving}>
+                  {isSaving ? "Saving..." : getModalSubmitLabel(modal)}
+                </button>
+              )}
+
+              {isActionModal && (
+                <button
+                  className="btn-confirm"
+                  onClick={handleApplyAction}
+                  disabled={isSaving || !items.length}
+                >
+                  {isSaving ? "Processing..." : getModalSubmitLabel(modal)}
+                </button>
+              )}
             </div>
           </div>
         </div>

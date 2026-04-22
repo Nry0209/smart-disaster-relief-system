@@ -1,13 +1,19 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, MapPin, Calendar } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
 import { fetchDisasterReports } from "../services/disasterReportService";
-import { adjustInventoryItem, fetchInventoryItems } from "../services/inventoryService";
-import { clearAllocationForReport, upsertAllocationForReport } from "../services/allocationService";
 import "./Pages.css";
 
+// Mock inventory data (same as InventoryPage)
+const initialInventory = [
+  { id: 1, name: "Bottled Water",  category: "Water",   stock: 4500, min: 6000 },
+  { id: 2, name: "Dry Ration",     category: "Food",    stock: 3900, min: 3500 },
+  { id: 3, name: "Blankets",       category: "Shelter", stock: 2600, min: 2000 },
+  { id: 4, name: "Tents",          category: "Shelter", stock: 240,  min: 400  },
+  { id: 5, name: "Medicine Kits",  category: "Medical", stock: 310,  min: 500  },
+];
+
 function getStatus(stock, min) {
-  const safeMin = min > 0 ? min : 1;
-  const ratio = stock / safeMin;
+  const ratio = stock / min;
   if (ratio >= 1)   return { label: "Good",     color: "#16a34a", bg: "#dcfce7" };
   if (ratio >= 0.7) return { label: "Warning",  color: "#d97706", bg: "#fef3c7" };
   if (ratio >= 0.4) return { label: "Low",      color: "#ea580c", bg: "#ffedd5" };
@@ -15,25 +21,34 @@ function getStatus(stock, min) {
 }
 
 function getUrgencyColor(urgency) {
-  switch(urgency) {
-    case 'critical': return { color: "#dc2626", bg: "#fee2e2" };
-    case 'high': return { color: "#ea580c", bg: "#ffedd5" };
-    case 'medium': return { color: "#d97706", bg: "#fef3c7" };
-    case 'low': return { color: "#16a34a", bg: "#dcfce7" };
-    default: return { color: "#6b7280", bg: "#f3f4f6" };
+  switch (urgency) {
+    case "critical":
+      return { color: "#dc2626", bg: "#fee2e2" };
+    case "high":
+      return { color: "#ea580c", bg: "#ffedd5" };
+    case "medium":
+      return { color: "#d97706", bg: "#fef3c7" };
+    case "low":
+      return { color: "#16a34a", bg: "#dcfce7" };
+    default:
+      return { color: "#6b7280", bg: "#f3f4f6" };
   }
 }
 
 function getStatusColor(status) {
-  switch(status) {
-    case 'pending_inventory': return { color: "#1d4ed8", bg: "#dbeafe" };
-    case 'active': return { color: "#0f766e", bg: "#ccfbf1" };
-    case 'allocated': return { color: "#16a34a", bg: "#dcfce7" };
-    case 'monitoring': return { color: "#d97706", bg: "#fef3c7" };
-    case 'resolved': return { color: "#0891b2", bg: "#cffafe" };
-    case 'pending': return { color: "#d97706", bg: "#fef3c7" };
-    case 'rejected': return { color: "#dc2626", bg: "#fee2e2" };
-    default: return { color: "#6b7280", bg: "#f3f4f6" };
+  switch (status) {
+    case "pending_inventory":
+      return { color: "#1d4ed8", bg: "#dbeafe" };
+    case "active":
+      return { color: "#0f766e", bg: "#ccfbf1" };
+    case "allocated":
+      return { color: "#166534", bg: "#dcfce7" };
+    case "monitoring":
+      return { color: "#d97706", bg: "#fef3c7" };
+    case "resolved":
+      return { color: "#0891b2", bg: "#cffafe" };
+    default:
+      return { color: "#6b7280", bg: "#f3f4f6" };
   }
 }
 
@@ -53,499 +68,242 @@ function formatEventDate(value) {
   return date.toLocaleDateString("en-IN");
 }
 
-function normalizeRequestedResources(event) {
-  const requirements = Array.isArray(event?.resourceRequirements) ? event.resourceRequirements : [];
-
-  if (requirements.length > 0) {
-    return requirements
-      .map((item) => ({
-        name: String(item?.name || "").trim(),
-        quantity: Number(item?.quantity) > 0 ? Math.round(Number(item.quantity)) : 0,
-      }))
-      .filter((item) => item.name);
-  }
-
-  const immediateNeeds = Array.isArray(event?.immediateNeeds) ? event.immediateNeeds : [];
-  return immediateNeeds
-    .map((need) => String(need).trim())
-    .filter(Boolean)
-    .map((name) => ({ name, quantity: 0 }));
-}
-
-function buildInitialAllocationQuantities(event) {
-  return normalizeRequestedResources(event).reduce((acc, item) => {
-    if (item.quantity > 0) {
-      acc[item.name] = item.quantity;
-    }
-    return acc;
-  }, {});
-}
-
-function normalizeAllocationQuantities(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return Object.entries(value).reduce((acc, [name, quantity]) => {
-    const normalizedName = String(name || "").trim();
-    const normalizedQuantity = Number(quantity);
-
-    if (!normalizedName || !Number.isFinite(normalizedQuantity) || normalizedQuantity < 0) {
-      return acc;
-    }
-
-    acc[normalizedName] = Math.round(normalizedQuantity);
-    return acc;
-  }, {});
-}
-
-function normalizeLookupKey(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase();
-}
-
-function toReasonToken(value) {
-  const token = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return token || "value";
-}
-
-const INVENTORY_ALIAS_MAP = {
-  water: "Bottled Water",
-  "meal packs": "Dry Ration",
-  "medical kits": "Medicine Kits",
-};
-
 export default function AllocationPage() {
-  const [inventory, setInventory] = useState([]);
-  const [isLoadingInventory, setIsLoadingInventory] = useState(true);
-  const [inventoryError, setInventoryError] = useState("");
+  const [inventory, setInventory] = useState(initialInventory);
   const [disasterEvents, setDisasterEvents] = useState([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
   const [eventsError, setEventsError] = useState("");
+  const [inventoryError, setInventoryError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [predictedResources, setPredictedResources] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState("");
   const [allocationModal, setAllocationModal] = useState(false);
+  const [predictionPreviewModal, setPredictionPreviewModal] = useState(false);
+  const [predictionPreviewEvent, setPredictionPreviewEvent] = useState(null);
   const [allocationQuantities, setAllocationQuantities] = useState({});
   const [allocationMessage, setAllocationMessage] = useState("");
   const [existingAllocation, setExistingAllocation] = useState(null);
-  const [isSubmittingAllocation, setIsSubmittingAllocation] = useState(false);
-  const [allocationError, setAllocationError] = useState("");
 
   const statusFilters = [
     { value: "all", label: "All" },
-    { value: "pending_inventory", label: "Pending Allocation" },
     { value: "active", label: "Active" },
+    { value: "pending_inventory", label: "Pending Allocation" },
     { value: "allocated", label: "Allocated" },
     { value: "monitoring", label: "Monitoring" },
   ];
 
-  const loadDisasterEvents = useCallback(async () => {
-    setIsLoadingEvents(true);
-    setEventsError("");
-
-    try {
-      const reports = await fetchDisasterReports();
-      setDisasterEvents(Array.isArray(reports) ? reports : []);
-    } catch (error) {
-      setDisasterEvents([]);
-      setEventsError(error.message || "Failed to load disaster events.");
-    } finally {
-      setIsLoadingEvents(false);
-    }
-  }, []);
-
-  const loadInventory = useCallback(async () => {
-    setIsLoadingInventory(true);
-    setInventoryError("");
-
-    try {
-      const items = await fetchInventoryItems();
-      setInventory(Array.isArray(items) ? items : []);
-    } catch (error) {
-      setInventory([]);
-      setInventoryError(error.message || "Failed to load inventory.");
-    } finally {
-      setIsLoadingInventory(false);
-    }
-  }, []);
-
   useEffect(() => {
+    let isMounted = true;
+
+    const loadDisasterEvents = async () => {
+      setIsLoadingEvents(true);
+      setEventsError("");
+
+      try {
+        const reports = await fetchDisasterReports();
+        if (!isMounted) return;
+        setDisasterEvents(Array.isArray(reports) ? reports : []);
+      } catch (error) {
+        if (!isMounted) return;
+        setDisasterEvents([]);
+        setEventsError(error.message || "Failed to load disaster events.");
+      } finally {
+        if (isMounted) {
+          setIsLoadingEvents(false);
+        }
+      }
+    };
+
     loadDisasterEvents();
-    loadInventory();
-  }, [loadDisasterEvents, loadInventory]);
 
-  const filteredEvents = useMemo(
-    () =>
-      disasterEvents.filter((event) => {
-        const query = searchTerm.trim().toLowerCase();
-        const matchesSearch =
-          !query ||
-          event.location?.toLowerCase().includes(query) ||
-          event.disasterType?.toLowerCase().includes(query) ||
-          event.reportedBy?.toLowerCase().includes(query) ||
-          event.contactPhone?.toLowerCase().includes(query) ||
-          event.contactEmail?.toLowerCase().includes(query);
-        const matchesFilter = filterStatus === "all" || event.status === filterStatus;
-        return matchesSearch && matchesFilter;
-      }),
-    [disasterEvents, searchTerm, filterStatus]
-  );
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const stats = useMemo(
-    () => ({
-      totalEvents: disasterEvents.length,
-      activeEvents: disasterEvents.filter((e) => e.status === "active").length,
-      allocatedEvents: disasterEvents.filter((e) => e.status === "allocated").length,
-      criticalEvents: disasterEvents.filter((e) => e.priority === "critical").length,
-      lowStockItems: inventory.filter((item) => item.stock < item.min).length,
-    }),
-    [disasterEvents, inventory]
-  );
+  const filteredEvents = disasterEvents.filter(event => {
+    const query = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      event.location?.toLowerCase().includes(query) ||
+      event.disasterType?.toLowerCase().includes(query) ||
+      event.reportedBy?.toLowerCase().includes(query);
+    const matchesFilter = filterStatus === "all" || event.status === filterStatus;
+    return matchesSearch && matchesFilter;
+  });
 
-  const selectedEventRequestedResources = useMemo(
-    () => normalizeRequestedResources(selectedEvent),
-    [selectedEvent]
-  );
+  const stats = {
+    totalEvents: disasterEvents.length,
+    activeEvents: disasterEvents.filter(e => e.status === "active").length,
+    allocatedEvents: disasterEvents.filter(e => e.status === "allocated").length,
+    criticalEvents: disasterEvents.filter(e => e.priority === "critical").length,
+    lowStockItems: inventory.filter(item => item.stock < item.min).length
+  };
 
-  const modalResourceRows = useMemo(() => {
-    const requested = selectedEventRequestedResources;
-    const existingQuantities = normalizeAllocationQuantities(existingAllocation?.quantities || {});
-    const names = new Set(requested.map((resource) => resource.name));
-
-    Object.keys(existingQuantities).forEach((name) => names.add(name));
-
-    return Array.from(names).map((name) => ({
-      name,
-      quantity: requested.find((resource) => resource.name === name)?.quantity || 0,
-    }));
-  }, [selectedEventRequestedResources, existingAllocation]);
-
-  const findInventoryItemForNeed = useCallback(
-    (resourceName) => {
-      const normalizedNeed = normalizeLookupKey(resourceName);
-      if (!normalizedNeed) {
-        return null;
-      }
-
-      const alias = INVENTORY_ALIAS_MAP[normalizedNeed];
-      if (alias) {
-        const aliasItem = inventory.find(
-          (item) => normalizeLookupKey(item.name) === normalizeLookupKey(alias)
-        );
-        if (aliasItem) {
-          return aliasItem;
-        }
-      }
-
-      const exactByName = inventory.find(
-        (item) => normalizeLookupKey(item.name) === normalizedNeed
-      );
-      if (exactByName) {
-        return exactByName;
-      }
-
-      const exactByCategory = inventory.find(
-        (item) => normalizeLookupKey(item.category) === normalizedNeed
-      );
-      if (exactByCategory) {
-        return exactByCategory;
-      }
-
-      const partialByName = inventory.find((item) => {
-        const normalizedItemName = normalizeLookupKey(item.name);
-        return (
-          normalizedItemName.includes(normalizedNeed) ||
-          normalizedNeed.includes(normalizedItemName)
-        );
-      });
-
-      return partialByName || null;
-    },
-    [inventory]
-  );
-
-  const getExistingAllocationQuantity = useCallback(
-    (resourceName) => {
-      const normalizedNeed = normalizeLookupKey(resourceName);
-      const quantities = normalizeAllocationQuantities(existingAllocation?.quantities || {});
-
-      for (const [name, quantity] of Object.entries(quantities)) {
-        if (normalizeLookupKey(name) === normalizedNeed) {
-          return quantity;
-        }
-      }
-
-      return 0;
-    },
-    [existingAllocation]
-  );
-
-  const closeAllocationModal = (forceClose = false) => {
-    if (isSubmittingAllocation && !forceClose) {
-      return;
+  const handleAllocate = (eventId) => {
+    const event = disasterEvents.find(e => e.id === eventId);
+    setSelectedEvent(event);
+    
+    // Check if there's an existing allocation
+    if (event.allocatedResources) {
+      setExistingAllocation(event.allocatedResources);
+      setAllocationQuantities(event.allocatedResources.quantities || {});
+      setAllocationMessage(event.allocatedResources.message || "");
+    } else {
+      setExistingAllocation(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
     }
+    
+    setAllocationModal(true);
+    fetchPredictionForEvent(event);
+  };
 
+  const confirmAllocation = () => {
+    if (!selectedEvent) return;
+    
+    // Update inventory stock based on allocation quantities
+    const updatedInventory = inventory.map(item => {
+      const allocatedQty = allocationQuantities[item.name] || 0;
+      const existingQty = existingAllocation?.quantities?.[item.name] || 0;
+      const stockChange = allocatedQty - existingQty;
+      const newStock = Math.max(0, item.stock - stockChange);
+      return { ...item, stock: newStock };
+    });
+    
+    // Create allocation record
+    const allocationRecord = {
+      quantities: allocationQuantities,
+      message: allocationMessage,
+      allocatedDate: new Date().toISOString(),
+      allocatedBy: "Allocation Officer"
+    };
+    
+    // Update event with allocation
+    const updatedEvents = disasterEvents.map(event => 
+      event.id === selectedEvent.id 
+        ? { 
+            ...event, 
+            status: "allocated",
+            allocatedResources: allocationRecord
+          }
+        : event
+    );
+    
+    setInventory(updatedInventory);
+    setDisasterEvents(updatedEvents);
     setAllocationModal(false);
     setSelectedEvent(null);
     setAllocationQuantities({});
     setAllocationMessage("");
     setExistingAllocation(null);
-    setAllocationError("");
-    setIsSubmittingAllocation(false);
   };
 
-  const handleAllocate = (eventId) => {
-    const event = disasterEvents.find((e) => e.id === eventId);
-    if (!event) {
+  const updateAllocation = () => {
+    if (!selectedEvent || !existingAllocation) return;
+    
+    // Update inventory stock based on quantity changes
+    const updatedInventory = inventory.map(item => {
+      const newQty = allocationQuantities[item.name] || 0;
+      const oldQty = existingAllocation.quantities[item.name] || 0;
+      const stockChange = newQty - oldQty;
+      const newStock = item.stock - stockChange;
+      return { ...item, stock: Math.max(0, newStock) };
+    });
+    
+    // Update allocation record
+    const updatedAllocation = {
+      ...existingAllocation,
+      quantities: allocationQuantities,
+      message: allocationMessage,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Update event
+    const updatedEvents = disasterEvents.map(event => 
+      event.id === selectedEvent.id 
+        ? { ...event, allocatedResources: updatedAllocation }
+        : event
+    );
+    
+    setInventory(updatedInventory);
+    setDisasterEvents(updatedEvents);
+    setAllocationModal(false);
+    setSelectedEvent(null);
+    setAllocationQuantities({});
+    setAllocationMessage("");
+    setExistingAllocation(null);
+  };
+
+  const deleteAllocation = () => {
+    if (!selectedEvent || !existingAllocation) return;
+    
+    // Return allocated quantities to inventory
+    const updatedInventory = inventory.map(item => {
+      const allocatedQty = existingAllocation.quantities[item.name] || 0;
+      return { ...item, stock: item.stock + allocatedQty };
+    });
+    
+    // Remove allocation from event
+    const updatedEvents = disasterEvents.map(event => 
+      event.id === selectedEvent.id 
+        ? { 
+            ...event, 
+            status: "active",
+            allocatedResources: null
+          }
+        : event
+    );
+    
+    setInventory(updatedInventory);
+    setDisasterEvents(updatedEvents);
+    setAllocationModal(false);
+    setSelectedEvent(null);
+    setAllocationQuantities({});
+    setAllocationMessage("");
+    setExistingAllocation(null);
+  };
+
+  const handleDeleteAllocationFromTable = async (eventId) => {
+    const event = disasterEvents.find((candidate) => candidate.id === eventId);
+    if (!event || !event.allocatedResources) {
+      setActionError("Allocation record was not found for this report.");
       return;
     }
 
-    setSelectedEvent(event);
-    setAllocationError("");
-    
-    // Check if there's an existing allocation
-    if (event.allocatedResources && typeof event.allocatedResources === "object") {
-      const normalizedExisting = normalizeAllocationQuantities(event.allocatedResources.quantities || {});
-      setExistingAllocation(event.allocatedResources);
-      setAllocationQuantities(normalizedExisting);
-      setAllocationMessage(String(event.allocatedResources.message || ""));
-    } else {
-      setExistingAllocation(null);
-      const initialQuantities = buildInitialAllocationQuantities(event);
-      const adjustedDefaults = Object.entries(initialQuantities).reduce((acc, [name, quantity]) => {
-        acc[name] = findInventoryItemForNeed(name) ? quantity : 0;
-        return acc;
-      }, {});
-      setAllocationQuantities(adjustedDefaults);
-      setAllocationMessage("");
-    }
-    
-    setAllocationModal(true);
-  };
-
-  const buildAllocationPlan = useCallback(
-    (targetValues) => {
-      const previousQuantities = normalizeAllocationQuantities(existingAllocation?.quantities || {});
-      const targetQuantities = normalizeAllocationQuantities(targetValues);
-      const resourceNames = new Set([
-        ...Object.keys(previousQuantities),
-        ...Object.keys(targetQuantities),
-      ]);
-
-      const operations = [];
-
-      resourceNames.forEach((resourceName) => {
-        const previousQuantity = previousQuantities[resourceName] || 0;
-        const nextQuantity = targetQuantities[resourceName] || 0;
-
-        if (previousQuantity === nextQuantity) {
-          return;
-        }
-
-        const matchedInventoryItem = findInventoryItemForNeed(resourceName);
-        if (!matchedInventoryItem) {
-          throw new Error(
-            `No matching inventory item found for "${resourceName}". Add this item in inventory first.`
-          );
-        }
-
-        const inventoryDelta = previousQuantity - nextQuantity;
-        const reducingStock = inventoryDelta < 0;
-
-        if (reducingStock && matchedInventoryItem.stock < Math.abs(inventoryDelta)) {
-          throw new Error(
-            `Insufficient stock for "${matchedInventoryItem.name}". Available: ${matchedInventoryItem.stock}, requested additional: ${Math.abs(inventoryDelta)}.`
-          );
-        }
-
-        operations.push({
-          resourceName,
-          item: matchedInventoryItem,
-          delta: inventoryDelta,
-        });
-      });
-
-      const totalAllocated = Object.values(targetQuantities).reduce(
-        (sum, quantity) => sum + (Number(quantity) || 0),
-        0
-      );
-
-      return {
-        targetQuantities,
-        operations,
-        totalAllocated,
-      };
-    },
-    [existingAllocation, findInventoryItemForNeed]
-  );
-
-  const applyInventoryOperations = async (operations, reasonPrefix) => {
-    const appliedOperations = [];
-
-    for (const operation of operations) {
-      if (!operation.delta) {
-        continue;
-      }
-
-      await adjustInventoryItem(operation.item.id, {
-        delta: operation.delta,
-        reason: `${reasonPrefix}_${toReasonToken(operation.resourceName)}`,
-      });
-
-      appliedOperations.push(operation);
-    }
-
-    return appliedOperations;
-  };
-
-  const rollbackInventoryOperations = async (operations, reasonPrefix) => {
-    const reverseOperations = [...operations].reverse();
-
-    for (const operation of reverseOperations) {
-      await adjustInventoryItem(operation.item.id, {
-        delta: -operation.delta,
-        reason: `${reasonPrefix}_${toReasonToken(operation.resourceName)}`,
-      });
-    }
-  };
-
-  const persistAllocation = async ({ targetQuantities, status, clearAllocation }) => {
-    if (!selectedEvent) {
+    if (event.status !== "allocated") {
+      setActionError("Only allocated reports can be deleted.");
       return;
     }
 
-    setAllocationError("");
-    setIsSubmittingAllocation(true);
-
-    let appliedOperations = [];
-
-    try {
-      const { targetQuantities: normalizedQuantities, operations, totalAllocated } =
-        buildAllocationPlan(targetQuantities);
-
-      if (!clearAllocation && totalAllocated === 0) {
-        throw new Error("Allocate at least one resource quantity greater than 0.");
-      }
-
-      const eventToken = toReasonToken(selectedEvent.id || "event");
-      appliedOperations = await applyInventoryOperations(
-        operations,
-        `allocation_${eventToken}`
-      );
-
-      const nowIso = new Date().toISOString();
-      const nextAllocationRecord = clearAllocation
-        ? null
-        : {
-            ...(existingAllocation && typeof existingAllocation === "object" ? existingAllocation : {}),
-            quantities: normalizedQuantities,
-            message: String(allocationMessage || "").trim(),
-            allocatedDate: existingAllocation?.allocatedDate || nowIso,
-            allocatedBy: existingAllocation?.allocatedBy || "Allocation Officer",
-            lastUpdated: existingAllocation ? nowIso : undefined,
-          };
-
-      if (nextAllocationRecord && !nextAllocationRecord.lastUpdated) {
-        delete nextAllocationRecord.lastUpdated;
-      }
-
-      if (clearAllocation) {
-        await clearAllocationForReport(selectedEvent.id, {
-          status,
-        });
-      } else {
-        await upsertAllocationForReport(selectedEvent.id, {
-          quantities: normalizedQuantities,
-          message: String(allocationMessage || "").trim(),
-          allocatedBy: nextAllocationRecord.allocatedBy,
-          status,
-        });
-      }
-
-      await Promise.all([loadDisasterEvents(), loadInventory()]);
-      closeAllocationModal(true);
-    } catch (error) {
-      let rollbackMessage = "";
-
-      if (appliedOperations.length > 0) {
-        try {
-          await rollbackInventoryOperations(appliedOperations, "allocation_rollback");
-        } catch (rollbackError) {
-          rollbackMessage = ` Inventory rollback failed: ${rollbackError.message}`;
-        }
-      }
-
-      setAllocationError(`${error.message || "Failed to persist allocation."}${rollbackMessage}`.trim());
-      await loadInventory();
-    } finally {
-      setIsSubmittingAllocation(false);
-    }
-  };
-
-  const confirmAllocation = async () => {
-    if (!selectedEvent) return;
-
-    await persistAllocation({
-      targetQuantities: allocationQuantities,
-      status: "allocated",
-      clearAllocation: false,
-    });
-  };
-
-  const updateAllocation = async () => {
-    if (!selectedEvent || !existingAllocation) return;
-
-    await persistAllocation({
-      targetQuantities: allocationQuantities,
-      status: "allocated",
-      clearAllocation: false,
-    });
-  };
-
-  const deleteAllocation = async () => {
-    if (!selectedEvent || !existingAllocation) return;
-
-    await persistAllocation({
-      targetQuantities: {},
-      status: "active",
-      clearAllocation: true,
-    });
-  };
-
-  const handleQuantityChange = (resourceName, value) => {
-    const qty = parseInt(value) || 0;
-    setAllocationQuantities(prev => ({
-      ...prev,
-      [resourceName]: qty
-    }));
+    await deleteAllocationForEvent(event, false);
   };
 
   const getAvailableStock = (itemName) => {
-    const item = findInventoryItemForNeed(itemName);
-    const allocatedQty = getExistingAllocationQuantity(itemName);
-
-    if (!item) {
-      return allocatedQty;
-    }
-
-    return item.stock + allocatedQty;
+    const item = inventory.find(inv => inv.name.toLowerCase() === itemName.toLowerCase());
+    const allocatedQty = existingAllocation?.quantities?.[item?.name] || 0;
+    return item ? item.stock + allocatedQty : 0;
   };
 
   return (
     <div className="allocation-page">
-      {/* HEADER */}
-      <div className="allocation-header">
-        <h1>Resource Allocation</h1>
-        <p>Manage and allocate resources to DMC officer requests based on available inventory</p>
-      </div>
+      <PageHeader
+        role="Allocation Officer / Resource Planning"
+        title="Resource Allocation"
+        description="Receive DMC requests, allocate from live inventory, and synchronize status updates across departments"
+      />
 
-      {/* STATS CARDS */}
+      {actionMessage && <div className="allocation-inline-alert success">{actionMessage}</div>}
+      {actionError && <div className="allocation-inline-alert error">{actionError}</div>}
+
       <div className="allocation-stats">
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#eff6ff" }}>
@@ -556,17 +314,17 @@ export default function AllocationPage() {
             <p>{stats.totalEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#fef3c7" }}>
             <Clock size={24} color="#d97706" />
           </div>
           <div className="stat-content">
-            <h3>Active</h3>
-            <p>{stats.activeEvents}</p>
+            <h3>Pending Queue</h3>
+            <p>{stats.pendingEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#dcfce7" }}>
             <CheckCircle size={24} color="#16a34a" />
@@ -576,70 +334,62 @@ export default function AllocationPage() {
             <p>{stats.allocatedEvents}</p>
           </div>
         </div>
-        
+
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#fee2e2" }}>
             <AlertTriangle size={24} color="#dc2626" />
           </div>
           <div className="stat-content">
-            <h3>Critical Priority</h3>
-            <p>{stats.criticalEvents}</p>
+            <h3>Low Stock Items</h3>
+            <p>{stats.lowStockItems}</p>
           </div>
         </div>
       </div>
 
-      {/* INVENTORY SECTION */}
       <div className="allocation-inventory-section">
         <h2>
           <Package size={24} color="#2563eb" />
           Current Inventory Status
         </h2>
-        {isLoadingInventory ? (
-          <div style={{ padding: "24px", color: "#64748b" }}>Loading inventory...</div>
-        ) : inventoryError ? (
-          <div style={{ padding: "24px", color: "#dc2626" }}>{inventoryError}</div>
-        ) : (
-          <div className="allocation-inventory-grid">
-            {inventory.map((item) => {
-              const status = getStatus(item.stock, item.min);
-              const canAllocate = item.stock > 0;
-
-              return (
-                <div key={item.id} className="allocation-inventory-item">
-                  <div className="item-header">
-                    <div className="item-info">
-                      <h3>{item.name}</h3>
-                      <span className="category">{item.category}</span>
-                    </div>
-                    <div className="stock-info">
-                      <div className="stock-amount">{item.stock}</div>
-                      <div className="min-label">Minimum: {item.min}</div>
-                    </div>
+        <div className="allocation-inventory-grid">
+          {inventory.map(item => {
+            const status = getStatus(item.stock, item.min);
+            const canAllocate = item.stock > 0;
+            
+            return (
+              <div key={item.id} className="allocation-inventory-item">
+                <div className="item-header">
+                  <div className="item-info">
+                    <h3>{item.name}</h3>
+                    <span className="category">{item.category}</span>
                   </div>
-                  <div className="status-info">
-                    <span className={`status-badge ${status.label.toLowerCase()}`} style={{ color: status.color, background: status.bg }}>
-                      {status.label}
-                    </span>
-                    <span className="availability" style={{ color: canAllocate ? "#16a34a" : "#dc2626" }}>
-                      {canAllocate ? "Available" : "Out of Stock"}
-                    </span>
+                  <div className="stock-info">
+                    <div className="stock-amount">{item.stock}</div>
+                    <div className="min-label">Minimum: {item.min}</div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="status-info">
+                  <span className={`status-badge ${status.label.toLowerCase()}`} style={{ color: status.color, background: status.bg }}>
+                    {status.label}
+                  </span>
+                  <span className="availability" style={{ color: canAllocate ? '#16a34a' : '#dc2626' }}>
+                    {canAllocate ? 'Available' : 'Out of Stock'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* FILTERS AND SEARCH */}
       <div className="allocation-filters-section">
         <div className="allocation-search-bar">
           <Search size={18} />
           <input
             type="text"
-            placeholder="Search by location, disaster type, or contact name..."
+            placeholder="Search by location, disaster type, or reporting officer..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
         <div className="allocation-filter-buttons">
@@ -652,10 +402,16 @@ export default function AllocationPage() {
               {status.label}
             </button>
           ))}
+          <button
+            className="allocation-filter-btn"
+            onClick={() => loadPageData(false)}
+            disabled={isProcessing}
+          >
+            <RefreshCcw size={14} /> Refresh
+          </button>
         </div>
       </div>
 
-      {/* DISASTER EVENTS TABLE */}
       <div className="allocation-requests-section">
         <h2>DMC Disaster Events</h2>
         <div className="requests-table-container">
@@ -666,18 +422,18 @@ export default function AllocationPage() {
                 <th>Disaster Type</th>
                 <th>Location</th>
                 <th>Priority</th>
-                <th>Contact</th>
-                <th>Resources Needed</th>
+                <th>Reported By</th>
+                <th>Requested Needs</th>
                 <th>Event Date</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {isLoadingEvents ? (
+              {isLoadingData ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
-                    Loading disaster events...
+                    Loading synced DMC and inventory data...
                   </td>
                 </tr>
               ) : eventsError ? (
@@ -693,11 +449,11 @@ export default function AllocationPage() {
                   </td>
                 </tr>
               ) : (
-                filteredEvents.map(event => {
+                filteredEvents.map((event) => {
                   const priorityStyle = getUrgencyColor(event.priority);
                   const statusStyle = getStatusColor(event.status);
                   const canAllocate = ["active", "pending_inventory"].includes(event.status);
-                  const requestedResources = normalizeRequestedResources(event);
+                  const needs = Array.isArray(event.immediateNeeds) ? event.immediateNeeds : [];
                   
                   return (
                     <tr key={event.id}>
@@ -717,7 +473,6 @@ export default function AllocationPage() {
                       <td>
                         <div className="contact-info">
                           <div className="contact-name">{event.reportedBy || "DMC Officer"}</div>
-                          <div className="contact-email">{event.contactPhone || "-"}</div>
                           <div className="contact-email">{event.contactEmail || "-"}</div>
                         </div>
                       </td>
@@ -726,10 +481,9 @@ export default function AllocationPage() {
                           {requestedResources.length === 0 ? (
                             <div className="item-line">No items listed</div>
                           ) : (
-                            requestedResources.map((resource, idx) => (
-                              <div key={`${resource.name}-${idx}`} className="item-line">
-                                {resource.name}
-                                {resource.quantity > 0 ? ` x ${resource.quantity}` : ""}
+                            needs.map((need, idx) => (
+                              <div key={idx} className="item-line">
+                                {need}
                               </div>
                             ))
                           )}
@@ -747,33 +501,68 @@ export default function AllocationPage() {
                         </span>
                       </td>
                       <td>
-                        <div className="action-buttons">
-                          {canAllocate && (
-                            <button 
+                        <div className="allocation-table-actions">
+                          <button
+                            className="update-btn"
+                            onClick={() => handlePreviewPrediction(event.id)}
+                            disabled={isProcessing}
+                          >
+                            Predict
+                          </button>
+
+                          {["active", "pending_inventory"].includes(event.status) && (
+                            <button
                               className="allocate-btn"
                               onClick={() => handleAllocate(event.id)}
+                              disabled={isProcessing || !!inventoryError || inventory.length === 0}
                             >
                               <ArrowRight size={14} /> Allocate
                             </button>
                           )}
+
                           {event.status === "allocated" && (
                             <div className="allocated-actions">
-                              <button 
+                              <button
                                 className="update-btn"
                                 onClick={() => handleAllocate(event.id)}
+                                disabled={isProcessing || !!inventoryError || inventory.length === 0}
                               >
-                                <ArrowRight size={14} /> Update
+                                <ArrowRight size={14} /> Manage
                               </button>
-                              <button 
+                              <button
+                                className="finalize-btn"
+                                onClick={() => finalizeAllocation(event.id)}
+                                disabled={isProcessing}
+                              >
+                                <CheckCircle size={14} /> Mark Monitoring
+                              </button>
+                              <button
                                 className="delete-btn"
-                                onClick={() => handleAllocate(event.id)}
+                                onClick={() => handleDeleteAllocationFromTable(event.id)}
+                                disabled={isProcessing}
                               >
                                 Delete
                               </button>
+                              <button
+                                className="finalize-btn"
+                                onClick={() => handleExportAllocationReport(event)}
+                                disabled={isProcessing}
+                              >
+                                Export Report
+                              </button>
                             </div>
                           )}
-                          {!canAllocate && event.status === "monitoring" && (
-                            <span className="monitoring-text">📋 Monitoring</span>
+
+                          {event.status === "monitoring" && (
+                            <span className="monitoring-text">Monitoring</span>
+                          )}
+
+                          {event.status === "active" && (
+                            <span className="monitoring-text">Awaiting DMC Queue</span>
+                          )}
+
+                          {event.status === "resolved" && (
+                            <span className="monitoring-text">Resolved</span>
                           )}
                         </div>
                       </td>
@@ -786,15 +575,97 @@ export default function AllocationPage() {
         </div>
       </div>
 
-      {/* ALLOCATION MODAL */}
+      {predictionPreviewModal && predictionPreviewEvent && (
+        <div className="modal-overlay" onClick={closePredictionPreview}>
+          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Prediction Preview</h2>
+              <button className="close-btn" onClick={closePredictionPreview}>x</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="request-summary">
+                <h3>Disaster Event Details</h3>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span>Event ID:</span>
+                    <strong>{predictionPreviewEvent.id}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Disaster:</span>
+                    <strong>{predictionPreviewEvent.disasterType}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Location:</span>
+                    <strong>{predictionPreviewEvent.location}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Priority:</span>
+                    <strong>{String(predictionPreviewEvent.priority || "-").toUpperCase()}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Affected Population:</span>
+                    <strong>{Number(predictionPreviewEvent.affectedPopulation || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Status:</span>
+                    <strong>{formatStatusLabel(predictionPreviewEvent.status)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="allocation-prediction-section">
+                <h3>Prediction-Based Recommendation</h3>
+
+                {predictionLoading ? (
+                  <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
+                ) : predictionError ? (
+                  <p className="allocation-error-inline">{predictionError}</p>
+                ) : predictedResources ? (
+                  <div className="prediction-grid">
+                    <div className="prediction-card">
+                      <span className="prediction-label">Food Needed</span>
+                      <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                    </div>
+
+                    <div className="prediction-card">
+                      <span className="prediction-label">Water Needed</span>
+                      <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                    </div>
+
+                    <div className="prediction-card">
+                      <span className="prediction-label">Medicine Needed</span>
+                      <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="allocation-info-inline">No prediction available.</p>
+                )}
+
+                <div className="prediction-note">
+                  This preview is available before allocation is created. Use Allocate/Manage
+                  actions when you are ready to set final quantities.
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={closePredictionPreview}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {allocationModal && selectedEvent && (
-        <div className="modal-overlay" onClick={closeAllocationModal}>
+        <div className="modal-overlay" onClick={() => setAllocationModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{existingAllocation ? 'Manage Allocation' : 'Allocate Resources'}</h2>
-              <button className="close-btn" onClick={closeAllocationModal}>×</button>
+              <button className="close-btn" onClick={() => setAllocationModal(false)}>×</button>
             </div>
-            
+
             <div className="modal-body">
               {allocationError && (
                 <div style={{ marginBottom: "16px", color: "#dc2626", fontWeight: 700 }}>
@@ -819,7 +690,7 @@ export default function AllocationPage() {
                   </div>
                   <div className="summary-item">
                     <span>Priority:</span>
-                    <strong>{String(selectedEvent.priority || "unknown").toUpperCase()}</strong>
+                    <strong>{selectedEvent.priority.toUpperCase()}</strong>
                   </div>
                   <div className="summary-item">
                     <span>Affected Population:</span>
@@ -827,42 +698,85 @@ export default function AllocationPage() {
                   </div>
                   <div className="summary-item">
                     <span>Reported By:</span>
-                    <strong>{selectedEvent.reportedBy || "DMC Officer"}</strong>
-                  </div>
-                  <div className="summary-item">
-                    <span>Contact Number:</span>
-                    <strong>{selectedEvent.contactPhone || "-"}</strong>
-                  </div>
-                  <div className="summary-item">
-                    <span>Email:</span>
-                    <strong>{selectedEvent.contactEmail || "-"}</strong>
+                    <strong>{selectedEvent.reportedBy}</strong>
                   </div>
                 </div>
               </div>
-              
+
+              <div className="allocation-requested-needs">
+                <h3>DMC Requested Needs</h3>
+                <div className="items-summary">
+                  {Array.isArray(selectedEvent.immediateNeeds) && selectedEvent.immediateNeeds.length > 0 ? (
+                    selectedEvent.immediateNeeds.map((need, idx) => (
+                      <div key={`${selectedEvent.id}-modal-need-${idx}`} className="item-line">
+                        {need}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="item-line">No specific needs listed by DMC.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="allocation-prediction-section">
+                <h3>Prediction-Based Recommendation</h3>
+
+                {predictionLoading ? (
+                  <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
+                ) : predictionError ? (
+                  <p className="allocation-error-inline">{predictionError}</p>
+                ) : predictedResources ? (
+                  <>
+                    <div className="prediction-grid">
+                      <div className="prediction-card">
+                        <span className="prediction-label">Food Needed</span>
+                        <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                      </div>
+
+                      <div className="prediction-card">
+                        <span className="prediction-label">Water Needed</span>
+                        <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                      </div>
+
+                      <div className="prediction-card">
+                        <span className="prediction-label">Medicine Needed</span>
+                        <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                      </div>
+                    </div>
+
+                    <div className="prediction-actions">
+                      <button
+                        type="button"
+                        className="prediction-apply-btn"
+                        onClick={applyPredictionAsSuggestion}
+                        disabled={isProcessing}
+                      >
+                        Use Prediction as Suggested Allocation
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="allocation-info-inline">No prediction available.</p>
+                )}
+
+                <div className="prediction-note">
+                  These values are system-generated recommendations based on disaster type,
+                  severity, and affected population. The Allocation Officer can adjust final
+                  quantities according to current inventory availability.
+                </div>
+              </div>
+
               <div className="allocation-details">
                 <h3>Resource Allocation</h3>
-                {modalResourceRows.length === 0 ? (
-                  <p style={{ color: "#64748b", marginBottom: "12px" }}>
-                    No requested resources listed for this event.
-                  </p>
-                ) : (
-                  modalResourceRows.map((resource, index) => {
-                  const need = resource.name;
+                {selectedEvent.immediateNeeds.map((need, index) => {
                   const available = getAvailableStock(need);
-                  const currentQty =
-                    allocationQuantities[need] ?? (resource.quantity > 0 ? resource.quantity : 0);
+                  const currentQty = allocationQuantities[need] || 0;
                   const hasStock = currentQty <= available;
-                  
+
                   return (
-                    <div key={index} className="allocation-item">
+                    <div key={item.id} className="allocation-item">
                       <div className="item-info">
                         <span className="item-name">{need}</span>
-                        {resource.quantity > 0 && (
-                          <span className="item-quantity">
-                            Requested: {resource.quantity.toLocaleString()} units
-                          </span>
-                        )}
                         <span className="item-quantity">Available: {available.toLocaleString()}</span>
                       </div>
                       <div className="quantity-input">
@@ -871,51 +785,35 @@ export default function AllocationPage() {
                           min="0"
                           max={Math.max(available, 0)}
                           value={currentQty}
-                          onChange={(e) => handleQuantityChange(need, e.target.value)}
-                          placeholder="0"
-                          className={`qty-input ${hasStock ? 'valid' : 'invalid'}`}
+                          onChange={(event) => handleQuantityChange(item.id, event.target.value)}
+                          className={hasStock ? "valid" : "invalid"}
                         />
-                        <span className="unit-label">units</span>
+                        <span className="unit-label">{item.unit || "units"}</span>
                       </div>
                       <div className="stock-info">
-                        <span className={`available-stock ${hasStock ? 'sufficient' : 'insufficient'}`}>
-                          {hasStock ? '✓ Available' : '⚠ Insufficient'}
+                        <span className={`available-stock ${hasStock ? "sufficient" : "insufficient"}`}>
+                          {hasStock ? "Available" : "Insufficient"}
                         </span>
-                        {!hasStock && currentQty > available && (
-                          <AlertTriangle size={16} color="#dc2626" />
-                        )}
+                        {!hasStock && <AlertTriangle size={16} color="#dc2626" />}
                       </div>
                     </div>
                   );
                 })
                 )}
               </div>
-              
+
               <div className="message-section">
-                <h3>Allocation Notes & Instructions</h3>
+                <h3>Allocation Notes</h3>
                 <textarea
                   value={allocationMessage}
-                  onChange={(e) => setAllocationMessage(e.target.value)}
-                  placeholder="Enter detailed instructions for this allocation, special handling requirements, delivery access points, or any other important notes..."
+                  onChange={(event) => setAllocationMessage(event.target.value)}
+                  placeholder="Add handling notes, handover instructions, or location specific details..."
                   className="message-textarea"
                   rows="4"
+                  maxLength={MAX_ALLOCATION_NOTE_LENGTH}
                 />
-                <div className="message-options">
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.sendSMS || false} />
-                    Send SMS updates to contact person
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.sendEmail || false} />
-                    Send email confirmation
-                  </label>
-                  <label className="checkbox-label">
-                    <input type="checkbox" defaultChecked={existingAllocation?.requireSignature || false} />
-                    Require signature on delivery
-                  </label>
-                </div>
               </div>
-              
+
               {existingAllocation && (
                 <div className="allocation-info">
                   <h4>Current Allocation Details</h4>
@@ -937,30 +835,27 @@ export default function AllocationPage() {
                   </div>
                 </div>
               )}
-              
+
               <div className="warning-message">
                 <AlertTriangle size={16} color="#d97706" />
                 <span>
-                  {existingAllocation 
-                    ? "Updating this allocation will adjust inventory stock accordingly."
-                    : "This will allocate resources and update inventory stock."
-                  }
+                  Saving this allocation will update inventory stock and sync the status for DMC officers.
                 </span>
               </div>
             </div>
-            
+
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={closeAllocationModal} disabled={isSubmittingAllocation}>
+              <button className="btn-secondary" onClick={() => setAllocationModal(false)}>
                 Cancel
               </button>
+
               {existingAllocation ? (
                 <>
                   <button 
                     className="btn-primary"
                     onClick={updateAllocation}
-                    disabled={isSubmittingAllocation}
                   >
-                    {isSubmittingAllocation ? "Updating..." : "Update Allocation"}
+                    Update Allocation
                   </button>
                   <button 
                     className="btn-danger"
@@ -969,21 +864,17 @@ export default function AllocationPage() {
                         deleteAllocation();
                       }
                     }}
-                    disabled={isSubmittingAllocation}
                   >
-                    {isSubmittingAllocation ? "Deleting..." : "Delete Allocation"}
+                    Delete Allocation
                   </button>
                 </>
               ) : (
                 <button 
                   className="btn-primary"
                   onClick={confirmAllocation}
-                  disabled={
-                    isSubmittingAllocation ||
-                    Object.values(allocationQuantities).every((qty) => qty === 0)
-                  }
+                  disabled={Object.values(allocationQuantities).every(qty => qty === 0)}
                 >
-                  {isSubmittingAllocation ? "Allocating..." : "Confirm Allocation"}
+                  Confirm Allocation
                 </button>
               )}
             </div>

@@ -1,39 +1,62 @@
 const mongoose = require("mongoose");
 
+const allocationItemSchema = new mongoose.Schema(
+  {
+    inventoryItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "InventoryItem",
+      required: true,
+    },
+    itemName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    quantityAllocated: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+    unit: {
+      type: String,
+      default: "units",
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
 const allocationSchema = new mongoose.Schema(
   {
-    disasterReportId: {
+    disasterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "DisasterReport",
       required: true,
-      unique: true,
-      index: true,
     },
-    quantities: {
-      type: Map,
-      of: {
-        type: Number,
-        min: 0,
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    items: {
+      type: [allocationItemSchema],
+      required: true,
+      validate: {
+        validator: function (items) {
+          return Array.isArray(items) && items.length > 0;
+        },
+        message: "At least one allocated item is required.",
       },
-      default: {},
     },
-    message: {
+    status: {
       type: String,
+      enum: ["draft", "confirmed", "cancelled"],
+      default: "draft",
+    },
+    notes: {
+      type: String,
+      trim: true,
       default: "",
-      trim: true,
-    },
-    allocatedBy: {
-      type: String,
-      default: "Allocation Officer",
-      trim: true,
-    },
-    allocatedDate: {
-      type: Date,
-      default: Date.now,
-    },
-    lastUpdated: {
-      type: Date,
-      default: Date.now,
     },
   },
   { timestamps: true }

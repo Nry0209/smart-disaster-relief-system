@@ -1,35 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
-async function requestJson(url, options = {}, fallbackMessage = "Request failed.") {
-  try {
-    const response = await fetch(url, options);
-    const rawText = await response.text();
-
-    let data = {};
-    if (rawText) {
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = {};
-      }
-    }
-
-    if (!response.ok) {
-      throw new Error(data.message || fallbackMessage);
-    }
-
-    return data;
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error(
-        "Unable to connect to API server. Start backend server on http://localhost:5000 and try again."
-      );
-    }
-    throw error;
+async function parseJsonResponse(response) {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Inventory request failed.");
   }
+  return data;
 }
 
-export async function fetchInventoryItems(params = {}) {
+function buildQuery(params = {}) {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {
@@ -39,61 +18,64 @@ export async function fetchInventoryItems(params = {}) {
   });
 
   const query = searchParams.toString();
-  const endpoint = query
-    ? `${API_BASE_URL}/api/inventory?${query}`
-    : `${API_BASE_URL}/api/inventory`;
+  return query ? `?${query}` : "";
+}
 
-  return requestJson(endpoint, {}, "Failed to fetch inventory items.");
+export async function fetchInventoryItems(params = {}) {
+  const query = buildQuery(params);
+  const response = await fetch(`${API_BASE_URL}/api/inventory${query}`);
+  return parseJsonResponse(response);
+}
+
+export async function fetchInventoryActivity(limit = 20) {
+  const response = await fetch(`${API_BASE_URL}/api/inventory/activity?limit=${limit}`);
+  return parseJsonResponse(response);
 }
 
 export async function createInventoryItem(payload) {
-  return requestJson(
-    `${API_BASE_URL}/api/inventory`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  const response = await fetch(`${API_BASE_URL}/api/inventory`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-    "Failed to create inventory item."
-  );
+    body: JSON.stringify(payload),
+  });
+
+  return parseJsonResponse(response);
 }
 
 export async function updateInventoryItem(id, payload) {
-  return requestJson(
-    `${API_BASE_URL}/api/inventory/${id}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  const response = await fetch(`${API_BASE_URL}/api/inventory/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
     },
-    "Failed to update inventory item."
-  );
-}
+    body: JSON.stringify(payload),
+  });
 
-export async function adjustInventoryItem(id, payload) {
-  return requestJson(
-    `${API_BASE_URL}/api/inventory/${id}/adjust`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    },
-    "Failed to adjust inventory item."
-  );
+  return parseJsonResponse(response);
 }
 
 export async function deleteInventoryItem(id) {
-  return requestJson(
-    `${API_BASE_URL}/api/inventory/${id}`,
-    {
-      method: "DELETE",
+  const response = await fetch(`${API_BASE_URL}/api/inventory/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
     },
-    "Failed to delete inventory item."
-  );
+    body: JSON.stringify({ performedBy: "Inventory Officer" }),
+  });
+
+  return parseJsonResponse(response);
+}
+
+export async function adjustInventoryStock(id, payload) {
+  const response = await fetch(`${API_BASE_URL}/api/inventory/${id}/adjust`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return parseJsonResponse(response);
 }
