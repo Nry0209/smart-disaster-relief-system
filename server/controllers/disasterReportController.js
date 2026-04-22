@@ -188,10 +188,17 @@ async function createDisasterReport(req, res) {
       });
     }
 
+    const createdBy = req.user?.id;
+    if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy)) {
+      return res.status(401).json({ message: "Invalid user session. Please sign in again." });
+    }
+
     const report = await DisasterReport.create({
       disasterType,
       location,
+      severityLevel: severity,
       severity,
+      affectedPeople: parsedPopulation,
       affectedPopulation: parsedPopulation,
       eventDate,
       priority,
@@ -199,10 +206,22 @@ async function createDisasterReport(req, res) {
       immediateNeeds,
       status,
       reportedBy,
+      createdBy,
     });
 
     return res.status(201).json(formatReport(report));
   } catch (error) {
+    if (error?.name === "ValidationError") {
+      const validationMessage = Object.values(error.errors || {})
+        .map((entry) => entry?.message)
+        .filter(Boolean)
+        .join(" ");
+
+      return res.status(400).json({
+        message: validationMessage || "Invalid disaster report data.",
+      });
+    }
+
     return res.status(500).json({ message: "Failed to create disaster report.", error: error.message });
   }
 }
@@ -309,6 +328,11 @@ async function updateDisasterReport(req, res) {
         });
       }
       updates.affectedPopulation = population;
+      updates.affectedPeople = population;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "severity")) {
+      updates.severityLevel = updates.severity;
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "immediateNeeds")) {
