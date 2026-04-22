@@ -28,7 +28,7 @@ const donationRoutes = require("./routes/donations");
 const partnerRoutes = require("./routes/partners");
 const resourceRequestRoutes = require("./routes/resourceRequests");
 const notificationRoutes = require("./routes/notifications");
-
+const predictionRoutes = require("./routes/predictionRoutes");
 // ================= API ROUTES =================
 app.use("/api/auth", authRoutes);
 app.use("/api/disaster-reports", disasterReportRoutes);
@@ -40,7 +40,7 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/partners", partnerRoutes);
 app.use("/api/resource-requests", resourceRequestRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/predictions", predictionRoutes);
 // ================= HEALTH CHECK =================
 app.get("/health", (req, res) => {
   res.json({
@@ -78,6 +78,7 @@ app.get("/", (req, res) => {
       notifications: "/api/notifications",
       health: "/health",
       docs: "/api/docs",
+      predictions: "/api/predictions",
     },
   });
 });

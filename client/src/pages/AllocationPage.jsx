@@ -1,19 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Package,
-  AlertTriangle,
-  Users,
-  CheckCircle,
-  Clock,
-  ArrowRight,
-  Search,
-  MapPin,
-  Calendar,
-  RefreshCcw,
-} from "lucide-react";
+import {Package,AlertTriangle,Users,CheckCircle,Clock,ArrowRight,Search,MapPin,Calendar,
+  RefreshCcw,} from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { fetchDisasterReports, updateDisasterReport } from "../services/disasterReportService";
 import { fetchInventoryItems, adjustInventoryStock } from "../services/inventoryService";
+import { getResourcePrediction } from "../services/predictionService";
 import "./Pages.css";
 
 const MAX_ALLOCATION_NOTE_LENGTH = 500;
@@ -168,10 +159,15 @@ export default function AllocationPage() {
   const [actionMessage, setActionMessage] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("pending_inventory");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [predictedResources, setPredictedResources] = useState(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState("");
   const [allocationModal, setAllocationModal] = useState(false);
+  const [predictionPreviewModal, setPredictionPreviewModal] = useState(false);
+  const [predictionPreviewEvent, setPredictionPreviewEvent] = useState(null);
   const [allocationQuantities, setAllocationQuantities] = useState({});
   const [allocationMessage, setAllocationMessage] = useState("");
   const [existingAllocation, setExistingAllocation] = useState(null);
@@ -179,6 +175,7 @@ export default function AllocationPage() {
 
   const statusFilters = [
     { value: "all", label: "All" },
+    { value: "active", label: "Active" },
     { value: "pending_inventory", label: "Pending Allocation" },
     { value: "allocated", label: "Allocated" },
     { value: "monitoring", label: "Monitoring" },
@@ -252,14 +249,52 @@ export default function AllocationPage() {
     [existingAllocation, inventory]
   );
 
-  const closeModal = () => {
+    const closeModal = () => {
     setAllocationModal(false);
     setSelectedEvent(null);
     setExistingAllocation(null);
     setAllocationQuantities({});
     setAllocationMessage("");
+    setPredictedResources(null);
+    setPredictionError("");
+    setPredictionLoading(false);
   };
 
+  const closePredictionPreview = () => {
+    setPredictionPreviewModal(false);
+    setPredictionPreviewEvent(null);
+    setPredictedResources(null);
+    setPredictionError("");
+    setPredictionLoading(false);
+  };
+
+    const fetchPredictionForEvent = async (event) => {
+    if (!event) return;
+
+    try {
+      setPredictionLoading(true);
+      setPredictionError("");
+      setPredictedResources(null);
+
+      const prediction = await getResourcePrediction({
+        disasterType: event.disasterType,
+        severity: event.priority
+          ? String(event.priority).charAt(0).toUpperCase() + String(event.priority).slice(1).toLowerCase()
+          : "Medium",
+        affectedPopulation: Number(event.affectedPopulation || 0),
+        disasterId: event.id,
+        location: event.location,
+      });
+
+      setPredictedResources(prediction);
+    } catch (error) {
+      console.error("Prediction fetch failed:", error);
+      setPredictionError("Failed to load recommended resource prediction.");
+    } finally {
+      setPredictionLoading(false);
+    }
+  };
+  
   const handleAllocate = (eventId) => {
     setActionError("");
     setActionMessage("");
@@ -270,8 +305,8 @@ export default function AllocationPage() {
       return;
     }
 
-    if (!["pending_inventory", "allocated"].includes(event.status)) {
-      setActionError("Only pending or allocated reports can be managed in allocation.");
+    if (!["active", "pending_inventory", "allocated"].includes(event.status)) {
+      setActionError("Only active, pending, or allocated reports can be managed in allocation.");
       return;
     }
 
@@ -287,6 +322,22 @@ export default function AllocationPage() {
     setAllocationQuantities(normalizeAllocationQuantities(existing, inventory));
     setAllocationMessage(existing?.message || "");
     setAllocationModal(true);
+    fetchPredictionForEvent(event);
+  };
+
+  const handlePreviewPrediction = (eventId) => {
+    setActionError("");
+    setActionMessage("");
+
+    const event = disasterEvents.find((candidate) => candidate.id === eventId);
+    if (!event) {
+      setActionError("Selected report was not found.");
+      return;
+    }
+
+    setPredictionPreviewEvent(event);
+    setPredictionPreviewModal(true);
+    fetchPredictionForEvent(event);
   };
 
   const handleQuantityChange = (itemId, value) => {
@@ -305,12 +356,103 @@ export default function AllocationPage() {
     return stock + previouslyAllocated;
   };
 
+  const applyPredictionAsSuggestion = () => {
+    if (!predictedResources || !inventory.length) {
+      return;
+    }
+
+    const resourceMappings = [
+      { key: "foodNeeded", keywords: ["food"] },
+      { key: "waterNeeded", keywords: ["water"] },
+      { key: "medicineNeeded", keywords: ["medicine", "medical"] },
+    ];
+
+    const nextQuantities = { ...allocationQuantities };
+    let hasMappedAtLeastOne = false;
+
+    resourceMappings.forEach(({ key, keywords }) => {
+      const predictedValue = Number(predictedResources[key] || 0);
+      if (!Number.isFinite(predictedValue) || predictedValue <= 0) {
+        return;
+      }
+
+      const matchedItem = inventory.find((item) => {
+        const itemName = String(item.name || "").toLowerCase();
+        return keywords.some((keyword) => itemName.includes(keyword));
+      });
+
+      if (!matchedItem) {
+        return;
+      }
+
+      const available = getAvailableStock(matchedItem);
+      const safeQuantity = Math.max(0, Math.min(Math.round(predictedValue), available));
+
+      nextQuantities[matchedItem.id] = safeQuantity;
+      hasMappedAtLeastOne = true;
+    });
+
+    if (!hasMappedAtLeastOne) {
+      setActionError("Prediction could not be mapped to Food/Water/Medicine items in inventory.");
+      setActionMessage("");
+      return;
+    }
+
+    setAllocationQuantities(nextQuantities);
+    setActionError("");
+    setActionMessage("Prediction values applied as suggested allocation quantities.");
+  };
+
+  const handleExportAllocationReport = (event) => {
+    const allocation = event?.allocatedResources;
+    if (!event || !allocation) {
+      setActionError("No allocation report data found for this event.");
+      return;
+    }
+
+    const lineItems = Array.isArray(allocation.lineItems) ? allocation.lineItems : [];
+    const generatedAt = new Date().toISOString();
+    const reportLines = [
+      "Smart Disaster Relief System - Allocation Report",
+      "",
+      `Generated At: ${generatedAt}`,
+      `Event ID: ${event.id}`,
+      `Disaster Type: ${event.disasterType || "-"}`,
+      `Location: ${event.location || "-"}`,
+      `Priority: ${String(event.priority || "-").toUpperCase()}`,
+      `Affected Population: ${Number(event.affectedPopulation || 0).toLocaleString()}`,
+      `Status: ${formatStatusLabel(event.status)}`,
+      `Allocated Date: ${formatEventDate(allocation.allocatedDate)}`,
+      `Allocated By: ${allocation.allocatedBy || "Allocation Officer"}`,
+      "",
+      "Allocated Resources:",
+      ...(lineItems.length
+        ? lineItems.map((item, index) => (
+            `${index + 1}. ${item.itemName}: ${Number(item.quantity || 0).toLocaleString()} ${item.unit || "units"}`
+          ))
+        : ["No line items captured."]),
+      "",
+      "Allocation Notes:",
+      allocation.message || "-",
+    ];
+
+    const blob = new Blob([reportLines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `allocation_report_${event.id}_${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const validateAllocation = () => {
     if (!selectedEvent) {
       return "No disaster report selected for allocation.";
     }
 
-    if (!["pending_inventory", "allocated"].includes(selectedEvent.status)) {
+    if (!["active", "pending_inventory", "allocated"].includes(selectedEvent.status)) {
       return "This report can no longer be processed for allocation. Refresh and try again.";
     }
 
@@ -851,7 +993,15 @@ export default function AllocationPage() {
                       </td>
                       <td>
                         <div className="allocation-table-actions">
-                          {event.status === "pending_inventory" && (
+                          <button
+                            className="update-btn"
+                            onClick={() => handlePreviewPrediction(event.id)}
+                            disabled={isProcessing}
+                          >
+                            Predict
+                          </button>
+
+                          {["active", "pending_inventory"].includes(event.status) && (
                             <button
                               className="allocate-btn"
                               onClick={() => handleAllocate(event.id)}
@@ -884,6 +1034,13 @@ export default function AllocationPage() {
                               >
                                 Delete
                               </button>
+                              <button
+                                className="finalize-btn"
+                                onClick={() => handleExportAllocationReport(event)}
+                                disabled={isProcessing}
+                              >
+                                Export Report
+                              </button>
                             </div>
                           )}
 
@@ -908,6 +1065,89 @@ export default function AllocationPage() {
           </table>
         </div>
       </div>
+
+      {predictionPreviewModal && predictionPreviewEvent && (
+        <div className="modal-overlay" onClick={closePredictionPreview}>
+          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Prediction Preview</h2>
+              <button className="close-btn" onClick={closePredictionPreview}>x</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="request-summary">
+                <h3>Disaster Event Details</h3>
+                <div className="summary-grid">
+                  <div className="summary-item">
+                    <span>Event ID:</span>
+                    <strong>{predictionPreviewEvent.id}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Disaster:</span>
+                    <strong>{predictionPreviewEvent.disasterType}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Location:</span>
+                    <strong>{predictionPreviewEvent.location}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Priority:</span>
+                    <strong>{String(predictionPreviewEvent.priority || "-").toUpperCase()}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Affected Population:</span>
+                    <strong>{Number(predictionPreviewEvent.affectedPopulation || 0).toLocaleString()}</strong>
+                  </div>
+                  <div className="summary-item">
+                    <span>Status:</span>
+                    <strong>{formatStatusLabel(predictionPreviewEvent.status)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="allocation-prediction-section">
+                <h3>Prediction-Based Recommendation</h3>
+
+                {predictionLoading ? (
+                  <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
+                ) : predictionError ? (
+                  <p className="allocation-error-inline">{predictionError}</p>
+                ) : predictedResources ? (
+                  <div className="prediction-grid">
+                    <div className="prediction-card">
+                      <span className="prediction-label">Food Needed</span>
+                      <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                    </div>
+
+                    <div className="prediction-card">
+                      <span className="prediction-label">Water Needed</span>
+                      <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                    </div>
+
+                    <div className="prediction-card">
+                      <span className="prediction-label">Medicine Needed</span>
+                      <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="allocation-info-inline">No prediction available.</p>
+                )}
+
+                <div className="prediction-note">
+                  This preview is available before allocation is created. Use Allocate/Manage
+                  actions when you are ready to set final quantities.
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={closePredictionPreview}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {allocationModal && selectedEvent && (
         <div className="modal-overlay" onClick={closeModal}>
@@ -960,6 +1200,54 @@ export default function AllocationPage() {
                   ) : (
                     <div className="item-line">No specific needs listed by DMC.</div>
                   )}
+                </div>
+              </div>
+
+              <div className="allocation-prediction-section">
+                <h3>Prediction-Based Recommendation</h3>
+
+                {predictionLoading ? (
+                  <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
+                ) : predictionError ? (
+                  <p className="allocation-error-inline">{predictionError}</p>
+                ) : predictedResources ? (
+                  <>
+                    <div className="prediction-grid">
+                      <div className="prediction-card">
+                        <span className="prediction-label">Food Needed</span>
+                        <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                      </div>
+
+                      <div className="prediction-card">
+                        <span className="prediction-label">Water Needed</span>
+                        <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                      </div>
+
+                      <div className="prediction-card">
+                        <span className="prediction-label">Medicine Needed</span>
+                        <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                      </div>
+                    </div>
+
+                    <div className="prediction-actions">
+                      <button
+                        type="button"
+                        className="prediction-apply-btn"
+                        onClick={applyPredictionAsSuggestion}
+                        disabled={isProcessing}
+                      >
+                        Use Prediction as Suggested Allocation
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="allocation-info-inline">No prediction available.</p>
+                )}
+
+                <div className="prediction-note">
+                  These values are system-generated recommendations based on disaster type,
+                  severity, and affected population. The Allocation Officer can adjust final
+                  quantities according to current inventory availability.
                 </div>
               </div>
 
@@ -1051,6 +1339,13 @@ export default function AllocationPage() {
                 <>
                   <button className="btn-primary" onClick={handleSaveAllocation} disabled={isProcessing}>
                     {isProcessing ? "Saving..." : "Update Allocation"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => handleExportAllocationReport(selectedEvent)}
+                    disabled={isProcessing}
+                  >
+                    Export Report
                   </button>
                   <button className="btn-danger" onClick={handleDeleteAllocation} disabled={isProcessing}>
                     {isProcessing ? "Removing..." : "Delete Allocation"}

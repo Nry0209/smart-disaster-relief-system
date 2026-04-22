@@ -24,7 +24,6 @@ function getPageTitle(pathname) {
     "/allocations": "Allocation Plans",
     "/distribution-tracking": "Distribution Tracking",
     "/users": "User Management",
-    "/prediction": "Predictive Estimation",
     "/reports-analytics": "Reports",
     "/audit-logs": "Audit Logs",
   };

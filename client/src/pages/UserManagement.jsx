@@ -4,6 +4,8 @@ import { Calendar, MapPin, Phone, Mail, Building, Users, Search, Filter, X, Uplo
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
 const MIN_NAME_LENGTH = 2;
@@ -34,7 +36,7 @@ const UserManagement = () => {
 
   const [partners, setPartners] = useState([]);
 
-  const [activeTab, setActiveTab] = useState('staff');
+  const [activeTab, setActiveTab] = useState('partners');
 
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -47,6 +49,8 @@ const UserManagement = () => {
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [staffFetchError, setStaffFetchError] = useState('');
+  const [partnerFetchError, setPartnerFetchError] = useState('');
 
   const [staffSearch, setStaffSearch] = useState('');
 
@@ -68,7 +72,14 @@ const UserManagement = () => {
 
   const [selectedPartnerId, setSelectedPartnerId] = useState('');
 
-  const [toastMessage, setToastMessage] = useState('');
+  const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [confirmDialog, setConfirmDialog] = useState({
+    show: false,
+    title: '',
+    message: '',
+    actionType: '',
+    payload: null,
+  });
 
   const [viewModal, setViewModal] = useState({ show: false, type: null, content: null, title: null });
 
@@ -120,6 +131,8 @@ const UserManagement = () => {
   // Check user role for permissions
 
   const isInventoryOfficer = user?.role === 'inventory_officer';
+  const canViewStaff = user?.role === 'admin';
+  const canViewPartners = ['admin', 'inventory_officer'].includes(user?.role);
 
   const canEditUsers = user?.role === 'admin';
 
@@ -127,31 +140,34 @@ const UserManagement = () => {
 
 
 
-  // Auto-show partners tab for inventory officers (they can't see staff)
-
+  // Keep users on tabs they are allowed to access.
   useEffect(() => {
-
-    if (isInventoryOfficer) {
-
+    if (!canViewStaff) {
       setActiveTab('partners');
-
     }
-
-  }, [isInventoryOfficer]);
+  }, [canViewStaff]);
 
 
 
   // Load users from API instead of mock data
   useEffect(() => {
     const fetchUsers = async () => {
+      if (!canViewStaff) {
+        setUsers([]);
+        setStaffFetchError('');
+        return;
+      }
+
       try {
+        setStaffFetchError('');
         const token = localStorage.getItem('token');
         if (!token) {
-          console.error('No authentication token found');
+          setUsers([]);
+          setStaffFetchError('Authentication token missing. Please log in again.');
           return;
         }
 
-        const response = await fetch('http://localhost:5000/api/auth/staff/all', {
+        const response = await fetch(`${API_BASE_URL}/api/auth/staff/all`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -163,25 +179,34 @@ const UserManagement = () => {
           const transformedUsers = extractUsersArray(data).map(mapStaffUser);
           setUsers(transformedUsers);
         } else {
-          console.error('Failed to fetch users:', response.statusText);
-          // Fallback to empty array if API fails
+          const payload = await response.json().catch(() => ({}));
           setUsers([]);
+          setStaffFetchError(payload?.message || 'Failed to fetch staff users from database.');
         }
       } catch (error) {
         console.error('Error fetching users:', error);
         setUsers([]);
+        setStaffFetchError('Failed to fetch staff users from database.');
       }
     };
 
     const fetchPartners = async () => {
+      if (!canViewPartners) {
+        setPartners([]);
+        setPartnerFetchError('');
+        return;
+      }
+
       try {
+        setPartnerFetchError('');
         const token = localStorage.getItem('token');
         if (!token) {
-          console.error('No authentication token found');
+          setPartners([]);
+          setPartnerFetchError('Authentication token missing. Please log in again.');
           return;
         }
 
-        const response = await fetch('http://localhost:5000/api/partners', {
+        const response = await fetch(`${API_BASE_URL}/api/partners`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -193,12 +218,14 @@ const UserManagement = () => {
           const transformedPartners = extractPartnersArray(data).map(mapPartner);
           setPartners(transformedPartners);
         } else {
-          console.error('Failed to fetch partners:', response.statusText);
+          const payload = await response.json().catch(() => ({}));
           setPartners([]);
+          setPartnerFetchError(payload?.message || 'Failed to fetch partner records from database.');
         }
       } catch (error) {
         console.error('Error fetching partners:', error);
         setPartners([]);
+        setPartnerFetchError('Failed to fetch partner records from database.');
       }
     };
 
@@ -210,13 +237,25 @@ const UserManagement = () => {
     }
 
     loadDirectory();
-  }, []);
+  }, [canViewPartners, canViewStaff]);
 
   useEffect(() => {
-    if (!toastMessage) return;
-    const timeout = setTimeout(() => setToastMessage(''), 2600);
+    if (!toast.message) return;
+    const timeout = setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
     return () => clearTimeout(timeout);
-  }, [toastMessage]);
+  }, [toast]);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const openConfirmDialog = ({ title, message, actionType, payload }) => {
+    setConfirmDialog({ show: true, title, message, actionType, payload });
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog({ show: false, title: '', message: '', actionType: '', payload: null });
+  };
 
 
 
@@ -443,11 +482,11 @@ const UserManagement = () => {
           successMsg += `\n\n🔗 DEV MODE SETUP LINK: ${result.data.setupLink}`;
         }
         
-        alert(successMsg);
+        showToast(successMsg, 'success');
         
         // Refresh users list
         const fetchUsers = async () => {
-          const usersResponse = await fetch('http://localhost:5000/api/auth/staff/all', {
+          const usersResponse = await fetch(`${API_BASE_URL}/api/auth/staff/all`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -466,11 +505,11 @@ const UserManagement = () => {
       } else {
         const error = await response.json();
         console.error('Failed to create user:', error.message);
-        alert('Failed to create user: ' + error.message);
+        showToast('Failed to create user: ' + error.message, 'error');
       }
     } catch (error) {
       console.error('Error creating user:', error);
-      alert('Error creating user: ' + error.message);
+      showToast('Error creating user: ' + error.message, 'error');
     }
   };
 
@@ -496,7 +535,7 @@ const UserManagement = () => {
         status: partnerData.status || 'active'
       };
 
-      const response = await fetch('http://localhost:5000/api/partners', {
+      const response = await fetch(`${API_BASE_URL}/api/partners`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -511,7 +550,7 @@ const UserManagement = () => {
         
         // Refresh partners list
         const fetchPartners = async () => {
-          const partnersResponse = await fetch('http://localhost:5000/api/partners', {
+          const partnersResponse = await fetch(`${API_BASE_URL}/api/partners`, {
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -530,11 +569,11 @@ const UserManagement = () => {
       } else {
         const error = await response.json();
         console.error('Failed to create partner:', error.message);
-        alert('Failed to create partner: ' + error.message);
+        showToast('Failed to create partner: ' + error.message, 'error');
       }
     } catch (error) {
       console.error('Error creating partner:', error);
-      alert('Error creating partner: ' + error.message);
+      showToast('Error creating partner: ' + error.message, 'error');
     }
   };
 
@@ -546,7 +585,7 @@ const UserManagement = () => {
 
     ));
 
-    setToastMessage('Staff profile updated successfully.');
+    showToast('Staff profile updated successfully.', 'success');
 
     setEditingUser(null);
 
@@ -556,18 +595,14 @@ const UserManagement = () => {
 
   const handleDeleteUser = async (userId) => {
 
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('Authentication token not found. Please login again.');
+        showToast('Authentication token not found. Please login again.', 'error');
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/auth/users/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -582,42 +617,65 @@ const UserManagement = () => {
       }
 
       setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-      alert(result.message || 'User deleted successfully');
+      showToast(result.message || 'User deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Error deleting user: ' + error.message);
+      showToast('Error deleting user: ' + error.message, 'error');
     }
 
   };
 
 
 
-  const handleToggleUserStatus = (userId) => {
+  const handleToggleUserStatus = async (userId) => {
 
     const selected = users.find((entry) => entry.id === userId);
     if (!selected) return;
 
     const nextStatus = selected.status === 'active' ? 'inactive' : 'active';
-    const confirmationText =
-      nextStatus === 'inactive'
-        ? `Deactivate ${selected.name}?`
-        : `Activate ${selected.name}?`;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        showToast('Authentication token not found. Please login again.', 'error');
+        return;
+      }
 
-    if (!window.confirm(confirmationText)) {
-      return;
+      const response = await fetch(`${API_BASE_URL}/api/auth/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.message || 'Failed to update staff status.');
+      }
+
+      const updatedUser = result?.data?.user;
+      setUsers((prevUsers) =>
+        prevUsers.map((entry) =>
+          entry.id === userId
+            ? {
+                ...entry,
+                status: updatedUser?.status || nextStatus,
+                role: updatedUser?.role || entry.role,
+                name: updatedUser?.fullName || entry.name,
+                email: updatedUser?.email || entry.email,
+                phone: updatedUser?.phone ?? entry.phone,
+                department: updatedUser?.department ?? entry.department,
+              }
+            : entry
+        )
+      );
+
+      showToast(`Staff ${nextStatus === 'active' ? 'activated' : 'deactivated'} successfully.`, 'success');
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      showToast(error.message || 'Failed to update staff status.', 'error');
     }
-
-    setUsers(users.map(user => 
-
-      user.id === userId 
-
-        ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' }
-
-        : user
-
-    ));
-
-    setToastMessage(`Staff ${nextStatus === 'active' ? 'activated' : 'deactivated'} successfully.`);
 
   };
 
@@ -639,18 +697,14 @@ const UserManagement = () => {
 
   const handleDeletePartner = async (partnerId) => {
 
-    if (!window.confirm('Are you sure you want to delete this NGO partner?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        alert('Authentication token not found. Please login again.');
+        showToast('Authentication token not found. Please login again.', 'error');
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/partners/${partnerId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/partners/${partnerId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -665,10 +719,10 @@ const UserManagement = () => {
       }
 
       setPartners((prevPartners) => prevPartners.filter((partner) => partner.id !== partnerId));
-      alert(result.message || 'Partner deleted successfully');
+      showToast(result.message || 'Partner deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting partner:', error);
-      alert('Error deleting partner: ' + error.message);
+      showToast('Error deleting partner: ' + error.message, 'error');
     }
 
   };
@@ -687,6 +741,26 @@ const UserManagement = () => {
 
     ));
 
+  };
+
+  const handleConfirmDialogAction = async () => {
+    const { actionType, payload } = confirmDialog;
+
+    try {
+      if (actionType === 'delete-user') {
+        await handleDeleteUser(payload.userId);
+      }
+
+      if (actionType === 'toggle-user-status') {
+        await handleToggleUserStatus(payload.userId);
+      }
+
+      if (actionType === 'delete-partner') {
+        await handleDeletePartner(payload.partnerId);
+      }
+    } finally {
+      closeConfirmDialog();
+    }
   };
 
 
@@ -1705,7 +1779,7 @@ eligibility for partnership in relief operations.
 
       <div className="directory-tabs">
 
-        {!isInventoryOfficer && (
+        {canViewStaff && (
 
           <button
 
@@ -1827,6 +1901,10 @@ eligibility for partnership in relief operations.
                       <div key={skeleton} className="h-32 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
                     ))}
                   </div>
+                ) : staffFetchError ? (
+                  <div className="no-records">
+                    <p>{staffFetchError}</p>
+                  </div>
                 ) : filteredUsers.length === 0 ? (
                   <div className="no-records">
                     <p>No staff members found for the selected filters.</p>
@@ -1859,8 +1937,32 @@ eligibility for partnership in relief operations.
                             </summary>
                             <div className="absolute right-0 top-7 z-10 min-w-[120px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                               <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => setEditingUser(staffUser)}>Edit</button>
-                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => handleToggleUserStatus(staffUser.id)}>{staffUser.status === 'active' ? 'Deactivate' : 'Activate'}</button>
-                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteUser(staffUser.id)}>Delete</button>
+                              <button
+                                className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100"
+                                onClick={() =>
+                                  openConfirmDialog({
+                                    title: `${staffUser.status === 'active' ? 'Deactivate' : 'Activate'} Staff`,
+                                    message: `${staffUser.status === 'active' ? 'Deactivate' : 'Activate'} ${staffUser.name}?`,
+                                    actionType: 'toggle-user-status',
+                                    payload: { userId: staffUser.id },
+                                  })
+                                }
+                              >
+                                {staffUser.status === 'active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50"
+                                onClick={() =>
+                                  openConfirmDialog({
+                                    title: 'Delete Staff User',
+                                    message: `Are you sure you want to delete ${staffUser.name}? This action cannot be undone.`,
+                                    actionType: 'delete-user',
+                                    payload: { userId: staffUser.id },
+                                  })
+                                }
+                              >
+                                Delete
+                              </button>
                             </div>
                           </details>
                         </div>
@@ -1956,7 +2058,17 @@ eligibility for partnership in relief operations.
                         <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => setEditingUser(selectedStaff)}>
                           Edit Profile
                         </button>
-                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => handleToggleUserStatus(selectedStaff.id)}>
+                        <button
+                          className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800"
+                          onClick={() =>
+                            openConfirmDialog({
+                              title: `${selectedStaff.status === 'active' ? 'Deactivate' : 'Activate'} Staff`,
+                              message: `${selectedStaff.status === 'active' ? 'Deactivate' : 'Activate'} ${selectedStaff.name}?`,
+                              actionType: 'toggle-user-status',
+                              payload: { userId: selectedStaff.id },
+                            })
+                          }
+                        >
                           {selectedStaff.status === 'active' ? 'Deactivate' : 'Activate'} User
                         </button>
                       </div>
@@ -2031,6 +2143,10 @@ eligibility for partnership in relief operations.
                       <div key={skeleton} className="h-32 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
                     ))}
                   </div>
+                ) : partnerFetchError ? (
+                  <div className="no-records">
+                    <p>{partnerFetchError}</p>
+                  </div>
                 ) : filteredPartners.length === 0 ? (
                   <div className="no-records">
                     <p>No NGO partners found</p>
@@ -2074,7 +2190,19 @@ eligibility for partnership in relief operations.
                             <div className="absolute right-0 top-7 z-10 min-w-[120px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                               <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => setEditingPartner(partner)}>Edit</button>
                               <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => handleTogglePartnerStatus(partner.id)}>{partner.status === 'active' ? 'Deactivate' : 'Activate'}</button>
-                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50" onClick={() => handleDeletePartner(partner.id)}>Delete</button>
+                              <button
+                                className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50"
+                                onClick={() =>
+                                  openConfirmDialog({
+                                    title: 'Delete NGO Partner',
+                                    message: `Are you sure you want to delete ${partner.name}? This action cannot be undone.`,
+                                    actionType: 'delete-partner',
+                                    payload: { partnerId: partner.id },
+                                  })
+                                }
+                              >
+                                Delete
+                              </button>
                             </div>
                           </details>
                         </div>
@@ -2184,9 +2312,42 @@ eligibility for partnership in relief operations.
 
       </div>
 
-      {toastMessage && (
-        <div className="fixed bottom-6 left-6 z-50 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 shadow-lg">
-          {toastMessage}
+      {toast.message && (
+        <div
+          className={`fixed bottom-6 left-6 z-50 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${
+            toast.type === 'error'
+              ? 'border-rose-200 bg-rose-50 text-rose-800'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
+      {confirmDialog.show && (
+        <div className="management-modal fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="management-modal-card bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">{confirmDialog.title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{confirmDialog.message}</p>
+            </div>
+            <div className="p-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeConfirmDialog}
+                className="management-secondary-btn px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDialogAction}
+                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-colors"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

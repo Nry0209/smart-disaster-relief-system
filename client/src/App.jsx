@@ -35,6 +35,20 @@ function DmcOnlyRoute({ children }) {
   return children;
 }
 
+function RoleRoute({ children, allowedRoles = [], fallback = "/dashboard" }) {
+  const { user, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allowedRoles.includes(user?.role)) {
+    return <Navigate to={fallback} replace />;
+  }
+
+  return children;
+}
+
 function App() {
   return (
     <Routes>
@@ -78,9 +92,11 @@ function App() {
         </DashboardLayout>
       } />
       <Route path="/users" element={
-        <DashboardLayout>
-          <UserManagement />
-        </DashboardLayout>
+        <RoleRoute allowedRoles={["admin", "inventory_officer"]} fallback="/dashboard">
+          <DashboardLayout>
+            <UserManagement />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="/allocations" element={
         <DashboardLayout>
@@ -110,11 +126,7 @@ function App() {
           <ReportsAnalyticsPage />
         </DashboardLayout>
       } />
-      <Route path="/prediction" element={
-        <DashboardLayout>
-          <ReportsAnalyticsPage />
-        </DashboardLayout>
-      } />
+      <Route path="/prediction" element={<Navigate to="/reports-analytics" replace />} />
       <Route path="/audit-logs" element={
         <DashboardLayout>
           <AuditLogsPage />

@@ -60,16 +60,16 @@ export default function DistributionTracking() {
     loadData();
   }, []);
 
+  const untrackedAllocations = useMemo(() => {
+    const trackedIds = new Set(trackingRecords.map((record) => String(record.allocationId?._id || record.allocationId)));
+    return allocations.filter((allocation) => !trackedIds.has(getAllocationId(allocation)));
+  }, [allocations, trackingRecords]);
+
   useEffect(() => {
     if (!form.allocationId && untrackedAllocations.length > 0) {
       handleAllocationSelect(getAllocationId(untrackedAllocations[0]));
     }
   }, [form.allocationId, untrackedAllocations]);
-
-  const untrackedAllocations = useMemo(() => {
-    const trackedIds = new Set(trackingRecords.map((record) => String(record.allocationId?._id || record.allocationId)));
-    return allocations.filter((allocation) => !trackedIds.has(getAllocationId(allocation)));
-  }, [allocations, trackingRecords]);
 
   function handleAllocationSelect(value) {
     const allocation = allocations.find((item) => getAllocationId(item) === String(value));

@@ -141,8 +141,18 @@ const canSendEmail = () => {
 
 
 const getFrontendUrl = () => process.env.FRONTEND_URL || 'http://localhost:5173';
+const getSenderAddress = () => process.env.EMAIL_USER || process.env.EMAIL_FROM;
+const getSenderName = () => process.env.EMAIL_FROM_NAME || 'ReliefLanka';
 
-const getSenderEmail = () => process.env.EMAIL_USER || process.env.EMAIL_FROM;
+const getSenderEmail = () => {
+  const senderAddress = getSenderAddress();
+  if (!senderAddress) {
+    return undefined;
+  }
+
+  const senderName = getSenderName();
+  return `${senderName} <${senderAddress}>`;
+};
 
 
 

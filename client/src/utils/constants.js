@@ -70,14 +70,9 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.ADMIN, ROLES.INVENTORY],
   },
   {
-    label: "Predictive Estimation",
-    path: "/prediction",
-    roles: [ROLES.ADMIN, ROLES.DMC, ROLES.INVENTORY, ROLES.ALLOCATION],
-  },
-  {
     label: "Reports",
     path: "/reports-analytics",
-    roles: [ROLES.ADMIN, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
+    roles: [ROLES.ADMIN, ROLES.INVENTORY, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
   },
   {
     label: "Audit Logs",
