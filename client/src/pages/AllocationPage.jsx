@@ -774,7 +774,7 @@ export default function AllocationPage() {
                   const hasStock = currentQty <= available;
 
                   return (
-                    <div key={item.id} className="allocation-item">
+                    <div key={`${selectedEvent.id}-allocation-${index}`} className="allocation-item">
                       <div className="item-info">
                         <span className="item-name">{need}</span>
                         <span className="item-quantity">Available: {available.toLocaleString()}</span>
@@ -785,10 +785,10 @@ export default function AllocationPage() {
                           min="0"
                           max={Math.max(available, 0)}
                           value={currentQty}
-                          onChange={(event) => handleQuantityChange(item.id, event.target.value)}
+                          onChange={(event) => handleQuantityChange(need, event.target.value)}
                           className={hasStock ? "valid" : "invalid"}
                         />
-                        <span className="unit-label">{item.unit || "units"}</span>
+                        <span className="unit-label">units</span>
                       </div>
                       <div className="stock-info">
                         <span className={`available-stock ${hasStock ? "sufficient" : "insufficient"}`}>
@@ -798,8 +798,7 @@ export default function AllocationPage() {
                       </div>
                     </div>
                   );
-                })
-                )}
+                })}
               </div>
 
               <div className="message-section">
