@@ -4786,6 +4786,142 @@
   gap: 14px;
 }
 
+.disaster-report-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.disaster-report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid #dbe3ee;
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 42%),
+    linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.disaster-report-card:hover {
+  transform: translateY(-2px);
+  border-color: #bfd3ec;
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.09);
+}
+
+.disaster-report-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.disaster-report-title-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.disaster-report-title-cell h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.disaster-report-title-cell span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.disaster-report-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.disaster-report-badges .table-badge {
+  min-width: auto;
+  padding: 5px 8px;
+  gap: 5px;
+}
+
+.disaster-report-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.disaster-report-date-cell,
+.disaster-report-location-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fbff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+.disaster-report-needs {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+}
+
+.disaster-report-needs h4 {
+  margin: 0 0 8px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.disaster-report-needs p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.disaster-report-needs .needs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.disaster-report-needs .need-tag {
+  background: #eef4ff;
+  color: #1e40af;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.disaster-report-card-footer {
+  border-top: 1px dashed #dbe3ee;
+  padding-top: 10px;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.disaster-report-card-footer .table-badge {
+  min-width: auto;
+}
+
 .disaster-report-table-shell .requests-table-container {
   margin-top: 0;
 }
@@ -4836,7 +4972,7 @@
   color: #94a3b8;
 }
 
-.disaster-report-location-cell {
+.disaster-report-table .disaster-report-location-cell {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4968,6 +5104,20 @@
 
   .pagination-pages {
     justify-content: center;
+  }
+
+  .disaster-report-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .disaster-report-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1240px) {
+  .disaster-report-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -5264,7 +5414,7 @@
 }
 
 /* Events Grid */
-.disaster-event-page .events-grid {
+.disaster-event-page .legacy-events-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 20px;
@@ -5537,7 +5687,7 @@
 
 /* Responsive Design for Disaster Event Page */
 @media (max-width: 1200px) {
-  .disaster-event-page .events-grid {
+  .disaster-event-page .legacy-events-grid {
     grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
   }
 }
@@ -5569,7 +5719,7 @@
     width: 100%;
   }
 
-  .disaster-event-page .events-grid {
+  .disaster-event-page .legacy-events-grid {
     grid-template-columns: 1fr;
   }
 
