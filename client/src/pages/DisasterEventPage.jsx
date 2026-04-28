@@ -24,6 +24,7 @@ import {
   fetchDisasterReports,
   updateDisasterReport,
 } from "../services/disasterReportService";
+import { fetchTrackingRecords } from "../services/workflowService";
 import "./Pages.css";
 
 const INITIAL_FORM = {
@@ -86,6 +87,7 @@ const DisasterEventPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [disasterEvents, setDisasterEvents] = useState([]);
+  const [trackingRecords, setTrackingRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -150,10 +152,33 @@ const DisasterEventPage = () => {
     setErrorMessage("");
 
     try {
-      const reports = await fetchDisasterReports();
-      setDisasterEvents(Array.isArray(reports) ? reports : []);
+      const [reports, tracking] = await Promise.allSettled([
+        fetchDisasterReports(),
+        fetchTrackingRecords(),
+      ]);
+
+      const safeReports = reports.status === "fulfilled" ? reports.value : [];
+      const safeTracking = tracking.status === "fulfilled" ? tracking.value : [];
+
+      setDisasterEvents(Array.isArray(safeReports) ? safeReports : []);
+      setTrackingRecords(Array.isArray(safeTracking) ? safeTracking : []);
+      
+      // Check for new delivery confirmations
+      if (trackingRecords.length > 0) {
+        const newConfirmations = safeTracking.filter(record => 
+          record.status === 'confirmed_delivered' && 
+          !trackingRecords.some(prevRecord => 
+            prevRecord._id === record._id && prevRecord.status === 'confirmed_delivered'
+          )
+        );
+        
+        if (newConfirmations.length > 0) {
+          setActionMessage(`Delivery confirmed for ${newConfirmations.length} disaster event(s). Resources have been successfully delivered.`);
+        }
+      }
     } catch (error) {
       setDisasterEvents([]);
+      setTrackingRecords([]);
       setErrorMessage(error.message || "Failed to load disaster reports.");
     } finally {
       setIsLoading(false);
@@ -189,6 +214,25 @@ const DisasterEventPage = () => {
     const startIndex = (safePage - 1) * itemsPerPage;
     return filteredEvents.slice(startIndex, startIndex + itemsPerPage);
   }, [currentPage, filteredEvents, totalPages]);
+
+  const latestTrackingByDisasterId = useMemo(() => {
+    const map = new Map();
+
+    trackingRecords.forEach((record) => {
+      const disasterId = String(record.disasterId?._id || record.disasterId || "");
+      if (!disasterId) return;
+
+      const existing = map.get(disasterId);
+      const existingTime = existing ? new Date(existing.updatedAt || existing.createdAt || 0).getTime() : 0;
+      const currentTime = new Date(record.updatedAt || record.createdAt || 0).getTime();
+
+      if (!existing || currentTime >= existingTime) {
+        map.set(disasterId, record);
+      }
+    });
+
+    return map;
+  }, [trackingRecords]);
 
   const stats = useMemo(
     () => ({
@@ -370,6 +414,12 @@ const DisasterEventPage = () => {
 
       closeModal();
     } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for disaster report update - handled silently');
+        closeModal();
+        return;
+      }
       setErrorMessage(error.message || "Failed to save disaster report.");
     } finally {
       setIsSubmitting(false);
@@ -391,6 +441,12 @@ const DisasterEventPage = () => {
       setDisasterEvents((prev) => prev.filter((item) => item.id !== id));
       setActionMessage("Disaster report deleted successfully.");
     } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for disaster report deletion - handled silently');
+        setActiveActionId("");
+        return;
+      }
       setErrorMessage(error.message || "Failed to delete disaster report.");
     } finally {
       setActiveActionId("");
@@ -439,6 +495,12 @@ const DisasterEventPage = () => {
 
       setActionMessage("Report sent to allocation queue. Allocation officer will process it.");
     } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for sending report to allocation - handled silently');
+        setActiveAllocationId("");
+        return;
+      }
       setErrorMessage(error.message || "Failed to send report to allocation.");
     } finally {
       setActiveAllocationId("");
@@ -588,77 +650,144 @@ const DisasterEventPage = () => {
           </div>
         ) : (
           <div className="disaster-report-table-shell">
-            <div className="requests-table-container">
-              <table className="requests-table disaster-report-table">
-                <thead>
-                  <tr>
-                    <th>Disaster Type</th>
-                    <th>Location</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Reported Date</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedEvents.map((event) => {
-            const severityStyle = getSeverityStyle(event.severity);
-            const statusStyle = getStatusStyle(event.status);
-            const priorityStyle = getPriorityStyle(event.priority);
-            const SeverityIcon = severityStyle.icon;
-            const immediateNeeds = Array.isArray(event.immediateNeeds)
-              ? event.immediateNeeds
-              : [];
+            <div className="disaster-report-cards-grid">
+              {paginatedEvents.map((event) => {
+                const severityStyle = getSeverityStyle(event.severity);
+                const statusStyle = getStatusStyle(event.status);
+                const priorityStyle = getPriorityStyle(event.priority);
+                const SeverityIcon = severityStyle.icon;
+                const immediateNeeds = Array.isArray(event.immediateNeeds)
+                  ? event.immediateNeeds
+                  : [];
+                const trackingRecord = latestTrackingByDisasterId.get(String(event.id));
+                const needsPreview = immediateNeeds.slice(0, 4);
+                const hasMoreNeeds = immediateNeeds.length > needsPreview.length;
+                const isDeleting = activeActionId === event.id;
+                const isSending = activeAllocationId === event.id;
 
-            return (
-              <tr key={event.id}>
-                <td>
-                  <div className="disaster-report-type-cell">
-                    <strong>{event.disasterType || "-"}</strong>
-                    <span>{event.id}</span>
-                  </div>
-                </td>
-                <td>
-                  <div className="disaster-report-location-cell">
-                    <MapPin size={14} />
-                    <span>{event.location || "Location not specified"}</span>
-                  </div>
-                </td>
-                <td>
-                  <span className="table-badge" style={{ color: priorityStyle.color, background: priorityStyle.bg }}>
-                    {String(event.priority || "unknown").toUpperCase()}
-                  </span>
-                </td>
-                <td>
-                  <span className="table-badge" style={{ color: statusStyle.color, background: statusStyle.bg }}>
-                    {String(event.status || "unknown").toUpperCase()}
-                  </span>
-                </td>
-                <td>{formatDate(event.eventDate)}</td>
-                <td>
-                  <div className="report-row-actions">
-                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="View report">
-                      <Eye size={14} />
-                    </button>
-                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="Edit report">
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="row-icon-btn danger"
-                      onClick={() => handleDelete(event.id)}
-                      disabled={activeActionId === event.id}
-                      aria-label="Delete report"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-                </tbody>
-              </table>
+                return (
+                  <article key={event.id} className="disaster-report-card-pro">
+                    <div className="card-pro-header">
+                      <div>
+                        <p className="card-pro-id">{event.id}</p>
+                        <h3>{event.disasterType || "Unknown disaster"}</h3>
+                      </div>
+                      <span className="card-severity-chip" style={{ color: severityStyle.color, background: severityStyle.bg }}>
+                        <SeverityIcon size={13} />
+                        {String(event.severity || "unknown").toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="card-pro-meta-row card-pro-meta-primary">
+                      <div className="card-pro-meta-item">
+                        <MapPin size={14} />
+                        <span>{event.location || "Location not specified"}</span>
+                      </div>
+                      <div className="card-pro-meta-item">
+                        <Calendar size={14} />
+                        <span>{formatDate(event.eventDate)}</span>
+                      </div>
+                      <div className="card-pro-meta-item">
+                        <Users size={14} />
+                        <span>{formatPopulation(event.affectedPopulation || 0)} affected</span>
+                      </div>
+                    </div>
+
+                    <div className="card-pro-meta-grid">
+                      <div className="card-pro-meta-box">
+                        <span className="meta-box-label">Reported by</span>
+                        <strong>{event.reportedBy || "DMC Officer"}</strong>
+                      </div>
+                      <div className="card-pro-meta-box">
+                        <span className="meta-box-label">Last updated</span>
+                        <strong>{formatDate(event.updatedAt || event.eventDate)}</strong>
+                      </div>
+                    </div>
+
+                    <div className="card-pro-badge-row">
+                      <span className="table-badge" style={{ color: priorityStyle.color, background: priorityStyle.bg }}>
+                        PRIORITY: {String(event.priority || "unknown").toUpperCase()}
+                      </span>
+                      <span className="table-badge" style={{ color: statusStyle.color, background: statusStyle.bg }}>
+                        {String(event.status || "unknown").toUpperCase()}
+                      </span>
+                      {event.status === "allocated" && !trackingRecord && (
+                        <span
+                          className="table-badge ready-for-tracking"
+                          style={{
+                            color: "#059669",
+                            background: "#d1fae5",
+                            fontWeight: "600",
+                            border: "2px solid #10b981",
+                            animation: "pulse 2s infinite",
+                          }}
+                        >
+                          READY FOR TRACKING
+                        </span>
+                      )}
+                      {trackingRecord && (
+                        <span
+                          className={`table-badge ${trackingRecord.status === "confirmed_delivered" ? "delivery-confirmed" : ""}`}
+                          style={{
+                            color: trackingRecord.status === "confirmed_delivered" ? "#166534" : "#1d4ed8",
+                            background: trackingRecord.status === "confirmed_delivered" ? "#dcfce7" : "#dbeafe",
+                            fontWeight: trackingRecord.status === "confirmed_delivered" ? "600" : "normal",
+                            border: trackingRecord.status === "confirmed_delivered" ? "2px solid #16a34a" : "none",
+                          }}
+                        >
+                          {trackingRecord.status === "confirmed_delivered" ? "" : ""}
+                          TRACKING: {String(trackingRecord.status || "unknown").replaceAll("_", " ").toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="card-pro-description">
+                      {event.description
+                        ? String(event.description).slice(0, 180)
+                        : "No description provided for this report."}
+                      {event.description && String(event.description).length > 180 ? "..." : ""}
+                    </p>
+
+                    <div className="card-pro-needs">
+                      {needsPreview.length === 0 ? (
+                        <span className="needs-empty">No immediate needs listed</span>
+                      ) : (
+                        needsPreview.map((need, index) => (
+                          <span key={`${event.id}-need-${index}`} className="need-chip">
+                            {need}
+                          </span>
+                        ))
+                      )}
+                      {hasMoreNeeds && (
+                        <span className="need-chip more">+{immediateNeeds.length - needsPreview.length} more</span>
+                      )}
+                    </div>
+
+                    <div className="card-pro-actions">
+                      <button type="button" className="card-action-btn" onClick={() => openEditModal(event)} aria-label="View report">
+                        <Eye size={14} /> View / Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="card-action-btn danger"
+                        onClick={() => handleDelete(event.id)}
+                        disabled={isDeleting}
+                        aria-label="Delete report"
+                      >
+                        <Trash2 size={14} /> {isDeleting ? "Deleting..." : "Delete"}
+                      </button>
+                      <button
+                        type="button"
+                        className="card-action-btn send-allocation-btn"
+                        onClick={() => handleSendToAllocation(event.id)}
+                        disabled={isSending}
+                      >
+                        <Pencil size={14} /> {isSending ? "Sending..." : "Send to Allocation"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             <div className="pagination-shell">

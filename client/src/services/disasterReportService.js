@@ -24,7 +24,21 @@ export async function createDisasterReport(payload) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || "Failed to create disaster report.");
+    let errorMessage = data.message || "Failed to create disaster report.";
+    
+    // Handle permission errors silently
+    if (response.status === 403 && (
+      errorMessage.includes('Insufficient permissions') || 
+      errorMessage.includes('requires different permissions') ||
+      errorMessage.includes('Access denied')
+    )) {
+      const permissionError = new Error('PERMISSION_DENIED');
+      permissionError.status = 403;
+      permissionError.isPermissionError = true;
+      throw permissionError;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return data;
@@ -50,7 +64,21 @@ export async function fetchDisasterReports(params = {}) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch disaster reports.");
+    let errorMessage = data.message || "Failed to fetch disaster reports.";
+    
+    // Handle permission errors silently
+    if (response.status === 403 && (
+      errorMessage.includes('Insufficient permissions') || 
+      errorMessage.includes('requires different permissions') ||
+      errorMessage.includes('Access denied')
+    )) {
+      const permissionError = new Error('PERMISSION_DENIED');
+      permissionError.status = 403;
+      permissionError.isPermissionError = true;
+      throw permissionError;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return data;
@@ -92,7 +120,21 @@ export async function deleteDisasterReport(id) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.message || "Failed to delete disaster report.");
+    let errorMessage = data.message || "Failed to delete disaster report.";
+    
+    // Handle permission errors silently
+    if (response.status === 403 && (
+      errorMessage.includes('Insufficient permissions') || 
+      errorMessage.includes('requires different permissions') ||
+      errorMessage.includes('Access denied')
+    )) {
+      const permissionError = new Error('PERMISSION_DENIED');
+      permissionError.status = 403;
+      permissionError.isPermissionError = true;
+      throw permissionError;
+    }
+    
+    throw new Error(errorMessage);
   }
 
   return data;

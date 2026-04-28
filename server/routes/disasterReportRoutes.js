@@ -11,17 +11,17 @@ const {
 } = require("../controllers/disasterReportController");
 const {
   authenticateToken,
-  authorizeRoles,
   dmcOfficerOnly,
+  dmcOrAllocationOfficerOnly,
   internalStaffOnly,
 } = require("../config/auth");
 
 const router = express.Router();
 
-router.post("/", authenticateToken, authorizeRoles("dmc_officer"), createDisasterReport);
+router.post("/", authenticateToken, dmcOfficerOnly, createDisasterReport);
 router.get("/", authenticateToken, internalStaffOnly, listDisasterReports);
 router.get("/:id", authenticateToken, internalStaffOnly, getDisasterReportById);
-router.put("/:id", authenticateToken, dmcOfficerOnly, updateDisasterReport);
+router.put("/:id", authenticateToken, dmcOrAllocationOfficerOnly, updateDisasterReport);
 router.delete("/:id", authenticateToken, dmcOfficerOnly, deleteDisasterReport);
 
 // Allocation routes

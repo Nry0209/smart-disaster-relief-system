@@ -5,7 +5,7 @@ const trackingRecordSchema = new mongoose.Schema(
     allocationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Allocation",
-      required: true,
+      default: null,
     },
     disasterId: {
       type: mongoose.Schema.Types.ObjectId,

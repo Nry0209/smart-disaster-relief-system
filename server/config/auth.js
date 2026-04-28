@@ -4,6 +4,12 @@ const User = require('../models/User');
 // JWT Secret (should be in environment variables)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
+const normalizeRole = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -39,10 +45,13 @@ const authorizeRoles = (...roles) => {
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const normalizedUserRole = normalizeRole(req.user.role);
+    const normalizedRoles = roles.map((role) => normalizeRole(role));
+
+    if (!normalizedRoles.includes(normalizedUserRole)) {
       return res.status(403).json({ 
         success: false, 
-        message: 'Insufficient permissions' 
+        message: 'This action requires different permissions. Please contact your administrator if you need access.' 
       });
     }
 
@@ -61,6 +70,9 @@ const inventoryOfficerOnly = authorizeRoles('admin', 'inventory_officer');
 
 // Allocation Officer access
 const allocationOfficerOnly = authorizeRoles('admin', 'allocation_officer');
+
+// DMC and Allocation Officer access (for updating disaster reports)
+const dmcOrAllocationOfficerOnly = authorizeRoles('admin', 'dmc_officer', 'allocation_officer');
 
 // Tracking Officer access
 const trackingOfficerOnly = authorizeRoles('admin', 'tracking_officer');
@@ -91,6 +103,7 @@ module.exports = {
   dmcOfficerOnly,
   inventoryOfficerOnly,
   allocationOfficerOnly,
+  dmcOrAllocationOfficerOnly,
   trackingOfficerOnly,
   charityStaffOnly,
   internalStaffOnly,

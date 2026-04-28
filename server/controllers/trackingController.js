@@ -119,33 +119,74 @@ const createTrackingRecord = async (req, res) => {
       currentLocation
     } = req.body;
 
-    // Validate allocation exists and is confirmed
-    const allocation = await Allocation.findById(allocationId);
-    if (!allocation) {
-      return res.status(404).json({
+    if (!disasterId) {
+      return res.status(400).json({
         success: false,
-        message: 'Allocation not found'
+        message: 'disasterId is required'
       });
     }
 
-    if (allocation.status !== 'confirmed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Can only create tracking records for confirmed allocations'
-      });
-    }
+    let resolvedAllocationId = null;
 
-    // Check if tracking record already exists for this allocation
-    const existingRecord = await TrackingRecord.findOne({ allocationId });
-    if (existingRecord) {
-      return res.status(400).json({
-        success: false,
-        message: 'Tracking record already exists for this allocation'
+    if (allocationId) {
+      // Validate allocation exists and is confirmed when allocationId is provided
+      const allocation = await Allocation.findById(allocationId);
+      if (!allocation) {
+        return res.status(404).json({
+          success: false,
+          message: 'Allocation not found'
+        });
+      }
+
+      if (allocation.status !== 'confirmed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Can only create tracking records for confirmed allocations'
+        });
+      }
+
+      // Check if tracking record already exists for this allocation
+      const existingRecord = await TrackingRecord.findOne({ allocationId });
+      if (existingRecord) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tracking record already exists for this allocation'
+        });
+      }
+
+      resolvedAllocationId = allocation._id;
+    } else {
+      // Fallback path: track directly from allocated disaster report plan
+      const disasterReport = await DisasterReport.findById(disasterId);
+      if (!disasterReport) {
+        return res.status(404).json({
+          success: false,
+          message: 'Disaster report not found'
+        });
+      }
+
+      if (disasterReport.status !== 'allocated' || !disasterReport.allocatedResources) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tracking can only be created from allocated disaster plans'
+        });
+      }
+
+      const existingRecord = await TrackingRecord.findOne({
+        disasterId,
+        status: { $in: ['prepared', 'dispatched', 'in_transit', 'delivered', 'confirmed_delivered'] }
       });
+
+      if (existingRecord) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tracking record already exists for this disaster allocation plan'
+        });
+      }
     }
 
     const trackingRecord = new TrackingRecord({
-      allocationId,
+      allocationId: resolvedAllocationId,
       disasterId,
       createdBy: req.user.id,
       dispatchDate: dispatchDate || new Date(),
@@ -364,6 +405,10 @@ const updateTrackingStatus = async (req, res) => {
       .populate('disasterId', 'disasterType location severity')
       .populate('createdBy', 'fullName email')
       .populate('confirmedBy', 'fullName email');
+
+    await DisasterReport.findByIdAndUpdate(trackingRecord.disasterId, {
+      status: 'resolved',
+    });
 
     res.json({
       success: true,

@@ -1,8 +1,39 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
+function getToken() {
+  return localStorage.getItem("token") || "";
+}
+
+function buildHeaders({ includeJson = true, includeAuth = true } = {}) {
+  const headers = {};
+
+  if (includeJson) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  if (includeAuth) {
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  return headers;
+}
+
 async function requestJson(url, options = {}, fallbackMessage = "Request failed.") {
   try {
-    const response = await fetch(url, options);
+    // Ensure headers include authentication
+    const defaultHeaders = buildHeaders({ includeJson: true, includeAuth: true });
+    const mergedOptions = {
+      ...options,
+      headers: {
+        ...defaultHeaders,
+        ...options.headers,
+      },
+    };
+
+    const response = await fetch(url, mergedOptions);
     const rawText = await response.text();
 
     let data = {};
@@ -15,7 +46,22 @@ async function requestJson(url, options = {}, fallbackMessage = "Request failed.
     }
 
     if (!response.ok) {
-      throw new Error(data.message || fallbackMessage);
+      let errorMessage = data.message || fallbackMessage;
+      
+      // Suppress permission-related errors and provide silent handling
+      if (response.status === 403 && (
+        errorMessage.includes('Insufficient permissions') || 
+        errorMessage.includes('requires different permissions') ||
+        errorMessage.includes('Access denied')
+      )) {
+        // Return a special error object that can be handled silently by the UI
+        const permissionError = new Error('PERMISSION_DENIED');
+        permissionError.status = 403;
+        permissionError.isPermissionError = true;
+        throw permissionError;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     return data;
@@ -34,9 +80,6 @@ export async function upsertAllocationForReport(reportId, payload) {
     `${API_BASE_URL}/api/allocations/by-report/${reportId}`,
     {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(payload),
     },
     "Failed to save allocation."
@@ -48,9 +91,6 @@ export async function clearAllocationForReport(reportId, payload = {}) {
     `${API_BASE_URL}/api/allocations/by-report/${reportId}`,
     {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify(payload),
     },
     "Failed to clear allocation."

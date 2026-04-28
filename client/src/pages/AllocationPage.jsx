@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2 } from "lucide-react";
-import { fetchDisasterReports } from "../services/disasterReportService";
+import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, MapPin, Calendar, RefreshCcw } from "lucide-react";
+import PageHeader from "../components/PageHeader";
+import { fetchDisasterReports, updateDisasterReport } from "../services/disasterReportService";
+import { getResourcePrediction } from "../services/predictionService";
 import "./Pages.css";
+
+const MAX_ALLOCATION_NOTE_LENGTH = 500;
 
 // Mock inventory data (same as InventoryPage)
 const initialInventory = [
@@ -72,11 +76,13 @@ export default function AllocationPage() {
   const [inventory, setInventory] = useState(initialInventory);
   const [disasterEvents, setDisasterEvents] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [eventsError, setEventsError] = useState("");
   const [inventoryError, setInventoryError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [allocationError, setAllocationError] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -100,33 +106,76 @@ export default function AllocationPage() {
     { value: "monitoring", label: "Monitoring" },
   ];
 
-  useEffect(() => {
-    let isMounted = true;
+  const normalizePredictionPayload = (payload) => {
+    if (!payload || typeof payload !== "object") return null;
+    const source = payload.prediction || payload.data?.prediction || payload.recommendation || payload;
 
-    const loadDisasterEvents = async () => {
-      setIsLoadingEvents(true);
-      setEventsError("");
+    const foodNeeded = Number(source.foodNeeded ?? source.food_needed ?? source.food ?? 0);
+    const waterNeeded = Number(source.waterNeeded ?? source.water_needed ?? source.water ?? 0);
+    const medicineNeeded = Number(source.medicineNeeded ?? source.medicine_needed ?? source.medicine ?? 0);
 
-      try {
-        const reports = await fetchDisasterReports();
-        if (!isMounted) return;
-        setDisasterEvents(Array.isArray(reports) ? reports : []);
-      } catch (error) {
-        if (!isMounted) return;
-        setDisasterEvents([]);
-        setEventsError(error.message || "Failed to load disaster events.");
-      } finally {
-        if (isMounted) {
-          setIsLoadingEvents(false);
-        }
+    return {
+      foodNeeded: Number.isFinite(foodNeeded) ? foodNeeded : 0,
+      waterNeeded: Number.isFinite(waterNeeded) ? waterNeeded : 0,
+      medicineNeeded: Number.isFinite(medicineNeeded) ? medicineNeeded : 0,
+    };
+  };
+
+  const fetchPredictionForEvent = async (event) => {
+    if (!event) return;
+
+    setPredictionLoading(true);
+    setPredictionError("");
+
+    try {
+      const response = await getResourcePrediction({
+        disasterType: event.disasterType,
+        severity: event.severity,
+        affectedPopulation: Number(event.affectedPopulation || 0),
+        disasterId: event.id,
+        location: event.location,
+      });
+
+      const normalized = normalizePredictionPayload(response);
+      if (!normalized) {
+        throw new Error("Prediction service returned invalid data.");
       }
-    };
 
-    loadDisasterEvents();
+      setPredictedResources(normalized);
+    } catch (error) {
+      setPredictedResources(null);
+      setPredictionError(error.message || "Failed to fetch prediction.");
+    } finally {
+      setPredictionLoading(false);
+    }
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  const loadPageData = async (showProcessing = true) => {
+    if (showProcessing) {
+      setIsProcessing(true);
+    }
+
+    setIsLoadingData(true);
+    setEventsError("");
+    setActionError("");
+
+    try {
+      const reports = await fetchDisasterReports();
+      setDisasterEvents(Array.isArray(reports) ? reports : []);
+    } catch (error) {
+      setDisasterEvents([]);
+      setEventsError(error.message || "Failed to load disaster events.");
+    } finally {
+      setIsLoadingData(false);
+      if (showProcessing) {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadPageData(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredEvents = disasterEvents.filter(event => {
@@ -142,10 +191,63 @@ export default function AllocationPage() {
 
   const stats = {
     totalEvents: disasterEvents.length,
+    pendingEvents: disasterEvents.filter(e => ["pending_inventory", "active"].includes(e.status)).length,
     activeEvents: disasterEvents.filter(e => e.status === "active").length,
     allocatedEvents: disasterEvents.filter(e => e.status === "allocated").length,
     criticalEvents: disasterEvents.filter(e => e.priority === "critical").length,
     lowStockItems: inventory.filter(item => item.stock < item.min).length
+  };
+
+  const handleQuantityChange = (needName, value) => {
+    const parsed = Math.max(0, Number(value) || 0);
+    setAllocationQuantities((prev) => ({
+      ...prev,
+      [needName]: parsed,
+    }));
+  };
+
+  const getSuggestedQuantityForNeed = (needName) => {
+    if (!predictedResources) return 0;
+    const key = String(needName || "").toLowerCase();
+    if (key.includes("water")) return Math.round(predictedResources.waterNeeded || 0);
+    if (key.includes("med")) return Math.round(predictedResources.medicineNeeded || 0);
+    return Math.round(predictedResources.foodNeeded || 0);
+  };
+
+  const buildAllocatedResourcesPayload = () => {
+    const quantities = Object.entries(allocationQuantities).reduce((acc, [name, qty]) => {
+      const value = Math.max(0, Number(qty) || 0);
+      if (value > 0) {
+        acc[name] = value;
+      }
+      return acc;
+    }, {});
+
+    return {
+      quantities,
+      lineItems: Object.entries(quantities).map(([itemName, quantity]) => ({
+        itemId: itemName,
+        itemName,
+        quantity,
+        category: "",
+      })),
+      message: allocationMessage,
+      allocatedDate: existingAllocation?.allocatedDate || new Date().toISOString(),
+      allocatedBy: existingAllocation?.allocatedBy || "Allocation Officer",
+      lastUpdated: new Date().toISOString(),
+    };
+  };
+
+  const applyPredictionAsSuggestion = () => {
+    if (!selectedEvent || !Array.isArray(selectedEvent.immediateNeeds)) return;
+
+    const suggested = {};
+    selectedEvent.immediateNeeds.forEach((need) => {
+      const available = getAvailableStock(need);
+      suggested[need] = Math.max(0, Math.min(getSuggestedQuantityForNeed(need), available));
+    });
+
+    setAllocationQuantities((prev) => ({ ...prev, ...suggested }));
   };
 
   const handleAllocate = (eventId) => {
@@ -167,8 +269,15 @@ export default function AllocationPage() {
     fetchPredictionForEvent(event);
   };
 
-  const confirmAllocation = () => {
+  const confirmAllocation = async () => {
     if (!selectedEvent) return;
+    
+    // Validate that we have allocation quantities
+    const hasAllocations = Object.values(allocationQuantities).some(qty => qty > 0);
+    if (!hasAllocations) {
+      setAllocationError("Please allocate at least one item.");
+      return;
+    }
     
     // Update inventory stock based on allocation quantities
     const updatedInventory = inventory.map(item => {
@@ -198,16 +307,35 @@ export default function AllocationPage() {
         : event
     );
     
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    try {
+      setIsProcessing(true);
+      setAllocationError("");
+
+      // Update disaster report with allocation data
+      const updated = await updateDisasterReport(selectedEvent.id, {
+        status: "allocated",
+        allocatedResources: buildAllocatedResourcesPayload(),
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents.map((event) =>
+        event.id === selectedEvent.id ? { ...event, ...updated } : event
+      ));
+      setActionMessage("Allocation confirmed and synchronized. Tracking officers can now create tracking records for this disaster.");
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+    } catch (error) {
+      console.error('Allocation error:', error);
+      setAllocationError(error.message || "Failed to confirm allocation.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const updateAllocation = () => {
+  const updateAllocation = async () => {
     if (!selectedEvent || !existingAllocation) return;
     
     // Update inventory stock based on quantity changes
@@ -234,16 +362,38 @@ export default function AllocationPage() {
         : event
     );
     
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    try {
+      setIsProcessing(true);
+      setAllocationError("");
+
+      const updated = await updateDisasterReport(selectedEvent.id, {
+        status: "allocated",
+        allocatedResources: buildAllocatedResourcesPayload(),
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents.map((event) =>
+        event.id === selectedEvent.id ? { ...event, ...updated } : event
+      ));
+      setActionMessage("Allocation updated and synchronized.");
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+    } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for allocation update - handled silently');
+        return;
+      }
+      setAllocationError(error.message || "Failed to update allocation.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const deleteAllocation = () => {
+  const deleteAllocation = async () => {
     if (!selectedEvent || !existingAllocation) return;
     
     // Return allocated quantities to inventory
@@ -263,13 +413,35 @@ export default function AllocationPage() {
         : event
     );
     
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    try {
+      setIsProcessing(true);
+      setAllocationError("");
+
+      const updated = await updateDisasterReport(selectedEvent.id, {
+        status: "active",
+        allocatedResources: null,
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents.map((event) =>
+        event.id === selectedEvent.id ? { ...event, ...updated } : event
+      ));
+      setActionMessage("Allocation deleted and synchronized.");
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+    } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for allocation deletion - handled silently');
+        return;
+      }
+      setAllocationError(error.message || "Failed to delete allocation.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleDeleteAllocationFromTable = async (eventId) => {
@@ -285,6 +457,124 @@ export default function AllocationPage() {
     }
 
     await deleteAllocationForEvent(event, false);
+  };
+
+  const deleteAllocationForEvent = async (event, closeModalAfterDelete = true) => {
+    if (!event || !event.allocatedResources) return;
+
+    setIsProcessing(true);
+    setActionError("");
+
+    try {
+      const updatedInventory = inventory.map((item) => {
+        const allocatedQty = Number(event.allocatedResources?.quantities?.[item.name] || 0);
+        return { ...item, stock: item.stock + allocatedQty };
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents((prev) =>
+        prev.map((candidate) =>
+          candidate.id === event.id
+            ? {
+                ...candidate,
+                status: "active",
+                allocatedResources: null,
+              }
+            : candidate
+        )
+      );
+
+      setActionMessage("Allocation deleted and resources returned to inventory.");
+
+      if (closeModalAfterDelete) {
+        setAllocationModal(false);
+        setSelectedEvent(null);
+        setExistingAllocation(null);
+      }
+    } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for allocation deletion - handled silently');
+        return;
+      }
+      setActionError(error.message || "Failed to delete allocation.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePreviewPrediction = async (eventId) => {
+    const event = disasterEvents.find((candidate) => candidate.id === eventId);
+    if (!event) return;
+    setPredictionPreviewEvent(event);
+    setPredictionPreviewModal(true);
+    await fetchPredictionForEvent(event);
+  };
+
+  const closePredictionPreview = () => {
+    setPredictionPreviewModal(false);
+    setPredictionPreviewEvent(null);
+  };
+
+  const finalizeAllocation = async (eventId) => {
+    setIsProcessing(true);
+    setActionError("");
+
+    try {
+      await updateDisasterReport(eventId, { status: "monitoring" });
+      setDisasterEvents((prev) =>
+        prev.map((event) =>
+          event.id === eventId
+            ? {
+                ...event,
+                status: "monitoring",
+              }
+            : event
+        )
+      );
+      setActionMessage("Allocation moved to monitoring status.");
+    } catch (error) {
+      // Handle permission errors silently
+      if (error.isPermissionError) {
+        console.log('Permission denied for allocation finalization - handled silently');
+        return;
+      }
+      setActionError(error.message || "Failed to finalize allocation.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExportAllocationReport = (event) => {
+    const allocated = event?.allocatedResources;
+    if (!allocated) {
+      setActionError("No allocation record found to export.");
+      return;
+    }
+
+    const quantities = allocated.quantities || {};
+    const lines = [
+      `Allocation Report: ${event.id}`,
+      `Disaster Type: ${event.disasterType}`,
+      `Location: ${event.location}`,
+      `Status: ${formatStatusLabel(event.status)}`,
+      `Allocated By: ${allocated.allocatedBy || "Allocation Officer"}`,
+      `Allocated Date: ${formatEventDate(allocated.allocatedDate)}`,
+      "",
+      "Allocated Quantities:",
+      ...Object.entries(quantities).map(([name, qty]) => `- ${name}: ${qty}`),
+      "",
+      `Notes: ${allocated.message || "-"}`,
+    ];
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${event.id}-allocation-report.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
   };
 
   const getAvailableStock = (itemName) => {
@@ -478,7 +768,7 @@ export default function AllocationPage() {
                       </td>
                       <td>
                         <div className="items-summary">
-                          {requestedResources.length === 0 ? (
+                          {needs.length === 0 ? (
                             <div className="item-line">No items listed</div>
                           ) : (
                             needs.map((need, idx) => (
@@ -871,7 +1161,7 @@ export default function AllocationPage() {
                 <button 
                   className="btn-primary"
                   onClick={confirmAllocation}
-                  disabled={Object.values(allocationQuantities).every(qty => qty === 0)}
+                  disabled={!Object.values(allocationQuantities).some(qty => qty > 0)}
                 >
                   Confirm Allocation
                 </button>
