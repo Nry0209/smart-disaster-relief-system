@@ -1,34 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Package, Truck, Users, AlertTriangle, CheckCircle, Clock, MapPin } from 'lucide-react';
+import { fetchTrackingRecords } from '../services/workflowService';
+import { fetchDisasterReports } from '../services/disasterReportService';
+import { fetchInventoryItems } from '../services/inventoryService';
 import './Pages.css';
 
 function DashboardPage() {
   const { user } = useAuth();
   const [deliveryRecords, setDeliveryRecords] = useState([]);
+  const [disasterReports, setDisasterReports] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Load delivery records for tracking
+  // Load real data from backend
   useEffect(() => {
-    const distributionRecords = JSON.parse(localStorage.getItem('distributionTrackingRecords') || '[]');
-    setDeliveryRecords(distributionRecords);
-  }, []);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const [trackingData, reportsData, inventoryData] = await Promise.allSettled([
+          fetchTrackingRecords(),
+          fetchDisasterReports(),
+          fetchInventoryItems()
+        ]);
 
-  // Listen for storage changes
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const distributionRecords = JSON.parse(localStorage.getItem('distributionTrackingRecords') || '[]');
-      setDeliveryRecords(distributionRecords);
+        if (trackingData.status === 'fulfilled') {
+          setDeliveryRecords(Array.isArray(trackingData.value) ? trackingData.value : []);
+        }
+
+        if (reportsData.status === 'fulfilled') {
+          setDisasterReports(Array.isArray(reportsData.value) ? reportsData.value : []);
+        }
+
+        if (inventoryData.status === 'fulfilled') {
+          setInventoryItems(Array.isArray(inventoryData.value) ? inventoryData.value : []);
+        }
+      } catch (err) {
+        setError(err.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    loadData();
   }, []);
 
   const stats = [
     { label: "Active Deliveries", value: deliveryRecords.filter(r => r.status === 'in_transit').length, icon: Truck, tone: "warning" },
     { label: "Delivered Today", value: deliveryRecords.filter(r => r.status === 'delivered').length, icon: Package, tone: "success" },
-    { label: "Confirmed Deliveries", value: deliveryRecords.filter(r => r.status === 'confirmed').length, icon: CheckCircle, tone: "info" },
-    { label: "People Helped", value: "5,892", icon: Users, tone: "success" },
+    { label: "Confirmed Deliveries", value: deliveryRecords.filter(r => r.status === 'confirmed_delivered').length, icon: CheckCircle, tone: "info" },
+    { label: "Active Disasters", value: disasterReports.filter(r => r.status === 'active').length, icon: AlertTriangle, tone: "danger" },
+    { label: "Total Inventory Items", value: inventoryItems.length, icon: Package, tone: "success" },
+    { label: "Low Stock Items", value: inventoryItems.filter(item => item.stock < item.min).length, icon: AlertTriangle, tone: "warning" },
   ];
 
   const toneStyles = {

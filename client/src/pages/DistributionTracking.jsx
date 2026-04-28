@@ -44,6 +44,12 @@ const TRANSPORT_TYPES = [
   "Light Van"
 ];
 
+// Warehouse options
+const WAREHOUSES = [
+  "Colombo Central Warehouse",
+  "Kandy Regional Warehouse"
+];
+
 function getPlanId(report) {
   return String(report?.id || report?._id || "");
 }
@@ -275,7 +281,36 @@ export default function DistributionTracking() {
                           "-"
                         )}
                       </td>
-                      <td>{plan.allocatedResources?.allocatedDate ? new Date(plan.allocatedResources.allocatedDate).toLocaleDateString() : "-"}</td>
+                      <td>
+                        {(() => {
+                          // Try multiple possible date fields
+                          const dateFields = [
+                            plan.allocatedResources?.allocatedDate,
+                            plan.allocatedResources?.allocatedAt,
+                            plan.allocatedResources?.createdAt,
+                            plan.createdAt,
+                            plan.updatedAt
+                          ];
+                          
+                          for (const dateField of dateFields) {
+                            if (dateField) {
+                              try {
+                                const date = new Date(dateField);
+                                if (!isNaN(date.getTime())) {
+                                  return date.toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
+                                  });
+                                }
+                              } catch (error) {
+                                continue;
+                              }
+                            }
+                          }
+                          return "-";
+                        })()}
+                      </td>
                       <td>
                         <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full">READY FOR TRACKING</span>
                       </td>
@@ -378,13 +413,17 @@ export default function DistributionTracking() {
               </label>
 
               <label className="form-group">
-                <span>Current Location</span>
-                <input
-                  type="text"
+                <span>Starting Warehouse</span>
+                <select
                   value={form.currentLocation}
                   onChange={(e) => setForm((prev) => ({ ...prev, currentLocation: e.target.value }))}
-                  placeholder="Starting location (e.g., Warehouse)"
-                />
+                  required
+                >
+                  <option value="">Select warehouse</option>
+                  {WAREHOUSES.map((warehouse) => (
+                    <option key={warehouse} value={warehouse}>{warehouse}</option>
+                  ))}
+                </select>
               </label>
 
               {selectedPlan && (

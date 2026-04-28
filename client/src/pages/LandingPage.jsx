@@ -78,7 +78,6 @@ function LandingPage() {
       {/* HERO SECTION */}
       <section className="landing-hero container-grid">
         <div className="landing-hero-left">
-
           <h1>When every second counts, coordination saves lives.</h1>
 
           <p className="landing-description">
@@ -157,34 +156,34 @@ function LandingPage() {
                   </div>
                 ))}
               </div>
+            </div>
 
-              <div className="landing-slider-controls">
-                <button 
-                  className="landing-slider-btn"
-                  onClick={prevSlide}
-                  aria-label="Previous slide"
-                >
-                  ‹
-                </button>
-                <button 
-                  className="landing-slider-btn"
-                  onClick={nextSlide}
-                  aria-label="Next slide"
-                >
-                  ›
-                </button>
-              </div>
+            <div className="landing-slider-controls">
+              <button 
+                className="landing-slider-btn"
+                onClick={prevSlide}
+                aria-label="Previous slide"
+              >
+                ‹
+              </button>
+              <button 
+                className="landing-slider-btn"
+                onClick={nextSlide}
+                aria-label="Next slide"
+              >
+                ›
+              </button>
+            </div>
 
-              <div className="landing-slider-indicators">
-                {slides.map((_, index) => (
-                  <button
-                    key={index}
-                    className={`landing-slider-dot ${index === currentSlide ? 'active' : ''}`}
-                    onClick={() => goToSlide(index)}
-                    aria-label={`Go to slide ${index + 1}`}
-                  />
-                ))}
-              </div>
+            <div className="landing-slider-indicators">
+              {slides.map((_, index) => (
+                <button
+                  key={index}
+                  className={`landing-slider-dot ${index === currentSlide ? 'active' : ''}`}
+                  onClick={() => goToSlide(index)}
+                  aria-label={`Go to slide ${index + 1}`}
+                />
+              ))}
             </div>
           </div>
         </div>
