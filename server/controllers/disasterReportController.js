@@ -105,7 +105,7 @@ function normalizeAllocatedResources(value) {
   };
 }
 
-async function normalizeRequiredItems(value) {
+function normalizeRequiredItems(value) {
   if (!Array.isArray(value)) {
     throw new Error("requiredItems must be an array.");
   }
@@ -121,41 +121,26 @@ async function normalizeRequiredItems(value) {
     requiredQuantity: Number(item?.requiredQuantity),
   }));
 
-  const ids = normalizedInput.map((item) => item.inventoryItemId);
+  // Validate required fields
+  if (normalizedInput.some((item) => !item.itemName)) {
+    throw new Error("Each required item must have an itemName.");
+  }
 
-  if (ids.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
-    throw new Error("requiredItems contains an invalid inventoryItemId.");
+  if (normalizedInput.some((item) => !item.category)) {
+    throw new Error("Each required item must have a category.");
   }
 
   if (normalizedInput.some((item) => !Number.isFinite(item.requiredQuantity) || item.requiredQuantity <= 0)) {
     throw new Error("requiredItems requiredQuantity must be greater than zero.");
   }
 
-  const inventoryItems = await InventoryItem.find({ _id: { $in: ids } });
-  const inventoryById = new Map(inventoryItems.map((item) => [String(item._id), item]));
-
-  if (inventoryById.size !== new Set(ids).size) {
-    throw new Error("One or more requiredItems entries reference missing inventory items.");
-  }
-
-  return normalizedInput.map((item) => {
-    const inventoryItem = inventoryById.get(item.inventoryItemId);
-
-    if (item.itemName && item.itemName.toLowerCase() !== String(inventoryItem.name || "").toLowerCase()) {
-      throw new Error(`Required item '${item.itemName}' does not match selected inventory item.`);
-    }
-
-    if (item.category && item.category.toLowerCase() !== String(inventoryItem.category || "").toLowerCase()) {
-      throw new Error(`Required item category '${item.category}' does not match selected inventory item.`);
-    }
-
-    return {
-      inventoryItemId: inventoryItem._id,
-      itemName: inventoryItem.name,
-      category: inventoryItem.category,
-      requiredQuantity: Math.floor(item.requiredQuantity),
-    };
-  });
+  // For new structure, inventoryItemId is just the itemName (string), not ObjectId
+  return normalizedInput.map((item) => ({
+    inventoryItemId: item.itemName, // Use itemName as inventoryItemId for new structure
+    itemName: item.itemName,
+    category: item.category,
+    requiredQuantity: Math.floor(item.requiredQuantity),
+  }));
 }
 
 function formatAllocatedResources(allocatedResources) {
@@ -260,7 +245,7 @@ async function createDisasterReport(req, res) {
     let normalizedRequiredItems = [];
     if (Array.isArray(requiredItems)) {
       try {
-        normalizedRequiredItems = await normalizeRequiredItems(requiredItems);
+        normalizedRequiredItems = normalizeRequiredItems(requiredItems);
       } catch (error) {
         return res.status(400).json({ message: error.message || "Invalid requiredItems value." });
       }
@@ -424,7 +409,7 @@ async function updateDisasterReport(req, res) {
 
     if (Object.prototype.hasOwnProperty.call(updates, "requiredItems")) {
       try {
-        updates.requiredItems = await normalizeRequiredItems(updates.requiredItems);
+        updates.requiredItems = normalizeRequiredItems(updates.requiredItems);
         updates.immediateNeeds = updates.requiredItems.map((item) => item.itemName);
       } catch (error) {
         return res.status(400).json({ message: error.message || "Invalid requiredItems value." });

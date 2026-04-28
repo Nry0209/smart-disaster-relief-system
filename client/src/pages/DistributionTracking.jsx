@@ -79,24 +79,21 @@ export default function DistributionTracking() {
     try {
       setLoading(true);
 
-      const [reportsResult, recordsResult] = await Promise.allSettled([
-        fetchDisasterReports({ status: "allocated" }),
-        fetchTrackingRecords(),
-      ]);
+      // Load allocation plans (allocated status)
+      const reportsResult = await fetchDisasterReports({ status: "allocated" });
+      const allocatedPlans = reportsResult?.filter((report) => report?.allocatedResources?.lineItems?.length > 0) || [];
 
-      const allocatedPlans =
-        reportsResult.status === "fulfilled"
-          ? reportsResult.value.filter((report) => report?.allocatedResources?.lineItems?.length > 0)
-          : [];
-      const records = recordsResult.status === "fulfilled" ? recordsResult.value : [];
+      // Load tracking records separately
+      const recordsResult = await fetchTrackingRecords();
+      const records = recordsResult || [];
 
       setPlans(Array.isArray(allocatedPlans) ? allocatedPlans : []);
       setTrackingRecords(Array.isArray(records) ? records : []);
 
-      if (reportsResult.status === "rejected" || recordsResult.status === "rejected") {
-        setError("Some tracking data could not be loaded. You can still work with available data.");
-      } else {
+      if (reportsResult && recordsResult) {
         setError("");
+      } else {
+        setError("Some tracking data could not be loaded. You can still work with available data.");
       }
     } catch (loadError) {
       setError(loadError.message || "Failed to load tracking data.");

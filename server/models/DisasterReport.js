@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const MIN_AFFECTED_POPULATION = 1;
 const MAX_AFFECTED_POPULATION = 10000000;
@@ -22,6 +23,7 @@ const allocationLineItemSchema = new mongoose.Schema(
     },
     category: {
       type: String,
+      enum: [...ITEM_CATEGORY_ENUM, ""], // Allow empty string for flexibility
       default: "",
       trim: true,
     },
@@ -65,9 +67,9 @@ const allocatedResourcesSchema = new mongoose.Schema(
 const requiredResourceItemSchema = new mongoose.Schema(
   {
     inventoryItemId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "InventoryItem",
+      type: String,
       required: true,
+      trim: true,
     },
     itemName: {
       type: String,
@@ -76,6 +78,7 @@ const requiredResourceItemSchema = new mongoose.Schema(
     },
     category: {
       type: String,
+      enum: ITEM_CATEGORY_ENUM,
       required: true,
       trim: true,
     },

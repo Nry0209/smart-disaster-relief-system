@@ -9,25 +9,30 @@ import {
   deleteInventoryItem,
   adjustInventoryStock,
 } from "../services/inventoryService";
-import { ITEM_CATEGORY_LIST, ITEM_CATEGORIES } from "../utils/categories";
+import { ITEM_CATEGORY_LIST, ITEM_CATEGORIES, ITEM_MAPPING } from "../utils/constants";
 import "./Pages.css";
 
 const CATEGORY_OPTIONS = [...ITEM_CATEGORY_LIST, "Other"];
 
+// Warehouse options
+const WAREHOUSE_OPTIONS = [
+  "Colombo Central Warehouse",
+  "Kandy Regional Warehouse"
+];
+
 const DEFAULT_ITEM_FORM = {
   id: "",
   name: "",
-  category: ITEM_CATEGORIES.WATER,
+  category: ITEM_CATEGORIES.DRINKING_WATER,
   stock: "",
   min: "",
-  warehouse: "Warehouse 1",
-  unit: "units",
+  warehouse: "Kandy Regional Warehouse",
 };
 
 const DEFAULT_ACTION_FORM = {
   itemId: "",
   quantity: "",
-  destinationWarehouse: "Warehouse 1",
+  destinationWarehouse: "Colombo Central Warehouse",
   note: "",
 };
 
@@ -35,8 +40,6 @@ const MAX_ITEM_NAME_LENGTH = 80;
 const MIN_ITEM_NAME_LENGTH = 2;
 const MIN_WAREHOUSE_LENGTH = 2;
 const MAX_WAREHOUSE_LENGTH = 60;
-const MIN_UNIT_LENGTH = 1;
-const MAX_UNIT_LENGTH = 20;
 const MAX_ACTION_NOTE_LENGTH = 300;
 
 function getStatus(stock, min) {
@@ -89,9 +92,7 @@ function formatActivityEntry(activity) {
 function getModalTitle(modal) {
   if (modal === "add") return "Add New Stock Item";
   if (modal === "edit") return "Edit Stock Item";
-  if (modal === "adjust") return "Adjust Stock";
-  if (modal === "transfer") return "Transfer Stock";
-  if (modal === "donate") return "Record Donation";
+  if (modal === "adjust") return "Update Stock";
   return "Inventory Action";
 }
 
@@ -99,8 +100,6 @@ function getModalSubmitLabel(modal) {
   if (modal === "add") return "Add Item";
   if (modal === "edit") return "Save Changes";
   if (modal === "adjust") return "Apply Adjustment";
-  if (modal === "transfer") return "Record Transfer";
-  if (modal === "donate") return "Record Donation";
   return "Confirm";
 }
 
@@ -128,10 +127,14 @@ export default function InventoryPage() {
         fetchInventoryActivity(25),
       ]);
 
+      console.log('Fetched items:', fetchedItems);
+      console.log('Fetched activity:', fetchedActivity);
+      
       setItems(Array.isArray(fetchedItems) ? fetchedItems : []);
       setActivityLog(Array.isArray(fetchedActivity) ? fetchedActivity : []);
       setError("");
     } catch (fetchError) {
+      console.error('Fetch error:', fetchError);
       setError(fetchError.message || "Failed to load inventory data.");
     } finally {
       if (showLoader) {
@@ -189,7 +192,8 @@ export default function InventoryPage() {
     setModal(type);
     setActionForm({
       ...DEFAULT_ACTION_FORM,
-      itemId: items[0]?.id || "",
+      category: "",
+      itemId: "",
     });
   }
 
@@ -213,14 +217,13 @@ export default function InventoryPage() {
     const normalizedWarehouse = itemForm.warehouse.trim();
     const normalizedUnit = itemForm.unit.trim();
 
-    const duplicateName = items.find(
-      (item) =>
-        item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
-        String(item.id) !== String(itemForm.id || "")
-    );
-
     if (!normalizedName) {
       setError("Item name is required.");
+      return;
+    }
+
+    if (!itemForm.category) {
+      setError("Category is required.");
       return;
     }
 
@@ -234,59 +237,38 @@ export default function InventoryPage() {
       return;
     }
 
-    if (duplicateName) {
-      setError("An inventory item with this name already exists.");
-      return;
-    }
+    // Find existing item with same name and category
+    const existingItem = items.find(
+      (item) =>
+        item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
+        item.category === itemForm.category
+    );
 
     if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
       setError("Stock and minimum values must be whole numbers (0 or greater).");
       return;
     }
 
-    if (!normalizedWarehouse) {
-      setError("Warehouse is required.");
-      return;
-    }
-
-    if (normalizedWarehouse.length < MIN_WAREHOUSE_LENGTH) {
-      setError(`Warehouse must be at least ${MIN_WAREHOUSE_LENGTH} characters.`);
-      return;
-    }
-
-    if (normalizedWarehouse.length > MAX_WAREHOUSE_LENGTH) {
-      setError(`Warehouse cannot exceed ${MAX_WAREHOUSE_LENGTH} characters.`);
-      return;
-    }
-
-    if (!normalizedUnit) {
-      setError("Unit is required.");
-      return;
-    }
-
-    if (normalizedUnit.length < MIN_UNIT_LENGTH) {
-      setError(`Unit must be at least ${MIN_UNIT_LENGTH} character.`);
-      return;
-    }
-
-    if (normalizedUnit.length > MAX_UNIT_LENGTH) {
-      setError(`Unit cannot exceed ${MAX_UNIT_LENGTH} characters.`);
-      return;
-    }
-
     setIsSaving(true);
 
     try {
-      const payload = {
-        name: normalizedName,
-        category: itemForm.category,
-        stock,
-        min,
-        warehouse: normalizedWarehouse,
-        unit: normalizedUnit,
-      };
-
-      if (modal === "edit") {
+      if (existingItem && modal === "add") {
+        // Update existing item stock instead of creating duplicate
+        const newStock = existingItem.stock + stock;
+        await updateInventoryItem(existingItem.id, {
+          stock: newStock,
+          note: `Stock increased by ${stock} units from manual inventory addition.`,
+          performedBy: "Inventory Officer",
+        });
+        setNotice(`${normalizedName} stock updated successfully. Added ${stock} units.`);
+      } else if (modal === "edit") {
+        const payload = {
+          name: normalizedName,
+          category: itemForm.category,
+          stock,
+          min,
+          warehouse: normalizedWarehouse,
+        };
         await updateInventoryItem(itemForm.id, {
           ...payload,
           note: "Updated from inventory dashboard.",
@@ -294,17 +276,25 @@ export default function InventoryPage() {
         });
         setNotice("Inventory item updated successfully.");
       } else {
+        // Create new item
         await createInventoryItem({
-          ...payload,
+          name: normalizedName,
+          category: itemForm.category,
+          stock,
+          min,
+          warehouse: normalizedWarehouse,
           performedBy: "Inventory Officer",
         });
         setNotice("Inventory item created successfully.");
       }
 
+      console.log('About to reload inventory data after save...');
       await loadInventoryData(false);
+      console.log('Inventory data reloaded, closing modal...');
       closeModal();
       setError("");
     } catch (saveError) {
+      console.error('Save error:', saveError);
       setError(saveError.message || "Failed to save inventory item.");
     } finally {
       setIsSaving(false);
@@ -332,12 +322,11 @@ export default function InventoryPage() {
 
   async function handleApplyAction() {
     const quantity = Number(actionForm.quantity);
-    const selectedItem = items.find((item) => item.id === actionForm.itemId);
+    const selectedItem = items.find((item) => item.name === actionForm.itemId && item.category === actionForm.category);
     const normalizedNote = actionForm.note.trim();
-    const normalizedDestination = actionForm.destinationWarehouse.trim();
 
-    if (!actionForm.itemId) {
-      setError("Please select an inventory item.");
+    if (!actionForm.itemId || !actionForm.category) {
+      setError("Please select a category and item.");
       return;
     }
 
@@ -366,19 +355,6 @@ export default function InventoryPage() {
       return;
     }
 
-    if (modal === "transfer" && !normalizedDestination) {
-      setError("Destination warehouse is required for transfer.");
-      return;
-    }
-
-    if (
-      modal === "transfer" &&
-      normalizedDestination.toLowerCase() === String(selectedItem.warehouse || "").trim().toLowerCase()
-    ) {
-      setError("Destination warehouse must be different from current warehouse.");
-      return;
-    }
-
     setIsSaving(true);
 
     try {
@@ -392,32 +368,19 @@ export default function InventoryPage() {
         payload.actionType = "adjust";
       }
 
-      if (modal === "donate") {
-        payload.actionType = "donation";
-      }
-
-      if (modal === "transfer") {
-        payload.actionType = "transfer";
-        payload.destinationWarehouse = normalizedDestination;
-      }
-
-      await adjustInventoryStock(actionForm.itemId, payload);
+      console.log('About to adjust stock for item:', selectedItem.id);
+      await adjustInventoryStock(selectedItem.id, payload);
+      console.log('Stock adjusted, about to reload inventory data...');
       await loadInventoryData(false);
+      console.log('Inventory data reloaded after stock adjustment, closing modal...');
       closeModal();
       setError("");
 
       if (modal === "adjust") {
         setNotice("Stock adjustment recorded.");
       }
-
-      if (modal === "donate") {
-        setNotice("Donation entry recorded.");
-      }
-
-      if (modal === "transfer") {
-        setNotice("Warehouse transfer recorded.");
-      }
     } catch (actionError) {
+      console.error('Action error:', actionError);
       setError(actionError.message || "Failed to apply inventory action.");
     } finally {
       setIsSaving(false);
@@ -432,10 +395,10 @@ export default function InventoryPage() {
 
     const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`;
     const rows = [
-      ["Item", "Category", "Stock", "Minimum", "Warehouse", "Unit", "Status"],
+      ["Item", "Category", "Stock", "Minimum", "Warehouse", "Status"],
       ...filteredItems.map((item) => {
         const status = getStatus(item.stock, item.min).label;
-        return [item.name, item.category, item.stock, item.min, item.warehouse, item.unit, status];
+        return [item.name, item.category, item.stock, item.min, item.warehouse, status];
       }),
     ];
 
@@ -452,7 +415,7 @@ export default function InventoryPage() {
     setError("");
   }
 
-  const isActionModal = modal === "adjust" || modal === "transfer" || modal === "donate";
+  const isActionModal = modal === "adjust";
 
   return (
     <div className="inventory-page">
@@ -484,34 +447,18 @@ export default function InventoryPage() {
 
       <div className="inventory-actions">
         <div className="filter-controls">
-          <div className="search-input">
-            <Search size={14} />
-            <input
-              placeholder="Search by item name, category, warehouse"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className="category-btn"
-            onClick={() => loadInventoryData(false)}
-            disabled={isSaving}
-          >
-            Refresh
-          </button>
-        </div>
-
-        <div className="category-filters">
-          {categoryFilters.map((category) => (
-            <button
-              key={category}
-              className={`category-btn${activeCat === category ? " active" : ""}`}
-              onClick={() => setActiveCat(category)}
+          <div className="filter-dropdown">
+            <label>Filter by Category:</label>
+            <select
+              value={activeCat}
+              onChange={(event) => setActiveCat(event.target.value)}
+              className="category-dropdown"
             >
-              {category}
-            </button>
-          ))}
+              {categoryFilters.map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -605,8 +552,6 @@ export default function InventoryPage() {
         <div className="action-buttons">
           <button className="action-btn add" onClick={() => setModal("add")}>Add New Item</button>
           <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Update Stock</button>
-          <button className="action-btn transfer" onClick={() => openActionModal("transfer")}>Transfer Items</button>
-          <button className="action-btn donate" onClick={() => openActionModal("donate")}>Record Donation</button>
           <button className="action-btn export" onClick={handleExport}>Export Report</button>
         </div>
         <p style={{ fontSize: 13, color: "#64748b", marginTop: 16, textAlign: "center" }}>
@@ -636,23 +581,34 @@ export default function InventoryPage() {
               {(modal === "add" || modal === "edit") && (
                 <>
                   <div className="form-group">
-                    <label>Item Name</label>
-                    <input
-                      placeholder="e.g. Bottled Water"
-                      value={itemForm.name}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, name: event.target.value }))}
-                      minLength={MIN_ITEM_NAME_LENGTH}
-                      maxLength={MAX_ITEM_NAME_LENGTH}
-                    />
-                  </div>
-                  <div className="form-group">
                     <label>Category</label>
                     <select
                       value={itemForm.category}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, category: event.target.value }))}
+                      onChange={(event) => {
+                        const newCategory = event.target.value;
+                        setItemForm((prev) => ({ 
+                          ...prev, 
+                          category: newCategory,
+                          name: "" // Reset item name when category changes
+                        }));
+                      }}
                     >
-                      {CATEGORY_OPTIONS.map((category) => (
+                      <option value="">Select category</option>
+                      {Object.values(ITEM_CATEGORIES).map((category) => (
                         <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Item Name</label>
+                    <select
+                      value={itemForm.name}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, name: event.target.value }))}
+                      disabled={!itemForm.category}
+                    >
+                      <option value="">Select item</option>
+                      {itemForm.category && ITEM_MAPPING[itemForm.category]?.map((itemName) => (
+                        <option key={itemName} value={itemName}>{itemName}</option>
                       ))}
                     </select>
                   </div>
@@ -678,21 +634,14 @@ export default function InventoryPage() {
                   </div>
                   <div className="form-group">
                     <label>Warehouse</label>
-                    <input
+                    <select
                       value={itemForm.warehouse}
                       onChange={(event) => setItemForm((prev) => ({ ...prev, warehouse: event.target.value }))}
-                      minLength={MIN_WAREHOUSE_LENGTH}
-                      maxLength={MAX_WAREHOUSE_LENGTH}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Unit</label>
-                    <input
-                      value={itemForm.unit}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, unit: event.target.value }))}
-                      minLength={MIN_UNIT_LENGTH}
-                      maxLength={MAX_UNIT_LENGTH}
-                    />
+                    >
+                      {WAREHOUSE_OPTIONS.map((warehouse) => (
+                        <option key={warehouse} value={warehouse}>{warehouse}</option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}
@@ -705,63 +654,65 @@ export default function InventoryPage() {
                     </p>
                   )}
 
-                  {items.length > 0 && (
-                    <>
-                      <div className="form-group">
-                        <label>Select Item</label>
-                        <select
-                          value={actionForm.itemId}
-                          onChange={(event) => setActionForm((prev) => ({ ...prev, itemId: event.target.value }))}
-                        >
-                          {items.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name} ({item.stock} units)
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="form-group">
+                    <label>Category</label>
+                    <select
+                      value={actionForm.category || ""}
+                      onChange={(event) => {
+                        const newCategory = event.target.value;
+                        setActionForm(prev => ({ 
+                          ...prev, 
+                          category: newCategory,
+                          itemId: "" // Reset item selection when category changes
+                        }));
+                      }}
+                    >
+                      <option value="">Select category</option>
+                      {Object.values(ITEM_CATEGORIES).map(category => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                      <div className="form-group">
-                        <label>Quantity</label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={actionForm.quantity}
-                          onChange={(event) => setActionForm((prev) => ({ ...prev, quantity: event.target.value }))}
-                        />
-                      </div>
+                  <div className="form-group">
+                    <label>Select Item</label>
+                    <select
+                      value={actionForm.itemId}
+                      onChange={(event) => setActionForm((prev) => ({ ...prev, itemId: event.target.value }))}
+                      disabled={!actionForm.category}
+                    >
+                      <option value="">Select item</option>
+                      {actionForm.category && ITEM_MAPPING[actionForm.category]?.map(itemName => (
+                        <option key={itemName} value={itemName}>{itemName}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                      {modal === "transfer" && (
-                        <div className="form-group">
-                          <label>Destination Warehouse</label>
-                          <input
-                            value={actionForm.destinationWarehouse}
-                            onChange={(event) =>
-                              setActionForm((prev) => ({ ...prev, destinationWarehouse: event.target.value }))
-                            }
-                            minLength={MIN_WAREHOUSE_LENGTH}
-                            maxLength={MAX_WAREHOUSE_LENGTH}
-                          />
-                        </div>
-                      )}
+                  <div className="form-group">
+                    <label>Quantity</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={actionForm.quantity}
+                      onChange={(event) => setActionForm((prev) => ({ ...prev, quantity: event.target.value }))}
+                    />
+                  </div>
 
-                      <div className="form-group">
-                        <label>Notes</label>
-                        <input
-                          placeholder="Optional notes for audit trail"
-                          value={actionForm.note}
-                          onChange={(event) => setActionForm((prev) => ({ ...prev, note: event.target.value }))}
-                          maxLength={MAX_ACTION_NOTE_LENGTH}
-                        />
-                      </div>
+                  <div className="form-group">
+                    <label>Notes</label>
+                    <input
+                      placeholder="Optional notes for audit trail"
+                      value={actionForm.note}
+                      onChange={(event) => setActionForm((prev) => ({ ...prev, note: event.target.value }))}
+                      maxLength={MAX_ACTION_NOTE_LENGTH}
+                    />
+                  </div>
 
-                      {selectedActionItem && (
-                        <p style={{ fontSize: 13, color: "#64748b" }}>
-                          Selected: {selectedActionItem.name} | Stock: {selectedActionItem.stock} | Warehouse: {selectedActionItem.warehouse}
-                        </p>
-                      )}
-                    </>
+                  {selectedActionItem && (
+                    <p style={{ fontSize: 13, color: "#64748b" }}>
+                      Selected: {selectedActionItem.name} | Stock: {selectedActionItem.stock} | Warehouse: {selectedActionItem.warehouse}
+                    </p>
                   )}
                 </>
               )}

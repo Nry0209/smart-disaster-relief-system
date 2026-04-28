@@ -5,6 +5,7 @@ import { upsertAllocationForReport, clearAllocationForReport } from "../services
 import { getResourcePrediction } from "../services/predictionService";
 import { fetchInventoryItems } from "../services/inventoryService";
 import PageHeader from "../components/PageHeader";
+import { ITEM_CATEGORIES, ITEM_MAPPING } from "../utils/constants";
 import "./Pages.css";
 
 const MAX_ALLOCATION_NOTE_LENGTH = 400;
@@ -257,21 +258,52 @@ export default function AllocationPage() {
       const normalizedName = String(item.itemName || "").toLowerCase();
       const normalizedCategory = String(item.category || "").toLowerCase();
 
-      if (normalizedCategory === "water" || normalizedName.includes("water")) {
-        suggestion[item.inventoryItemId] = Number(predictedResources.waterNeeded || 0);
-      } else if (
-        normalizedCategory === "food" ||
-        normalizedName.includes("food") ||
-        normalizedName.includes("ration")
+      // 🍚 FOOD GROUP (Maps to foodNeeded)
+      if (
+        normalizedCategory.includes("dry food") ||
+        normalizedCategory.includes("ready-to-eat") ||
+        normalizedCategory.includes("baby food") ||
+        normalizedCategory.includes("nutritional") ||
+        normalizedName.includes("rice") ||
+        normalizedName.includes("flour") ||
+        normalizedName.includes("canned") ||
+        normalizedName.includes("biscuit") ||
+        normalizedName.includes("noodle") ||
+        normalizedName.includes("ration") ||
+        normalizedName.includes("formula") ||
+        normalizedName.includes("protein") ||
+        normalizedName.includes("energy")
       ) {
         suggestion[item.inventoryItemId] = Number(predictedResources.foodNeeded || 0);
-      } else if (
-        normalizedCategory === "medical" ||
+      }
+      // 💧 WATER GROUP (Maps to waterNeeded)
+      else if (
+        normalizedCategory.includes("drinking water") ||
+        normalizedCategory.includes("water purification") ||
+        normalizedName.includes("water") ||
+        normalizedName.includes("bottled") ||
+        normalizedName.includes("filter") ||
+        normalizedName.includes("purification")
+      ) {
+        suggestion[item.inventoryItemId] = Number(predictedResources.waterNeeded || 0);
+      }
+      // 💊 MEDICAL GROUP (Maps to medicineNeeded)
+      else if (
+        normalizedCategory.includes("basic medicine") ||
+        normalizedCategory.includes("first aid") ||
+        normalizedCategory.includes("emergency medical") ||
         normalizedName.includes("medicine") ||
-        normalizedName.includes("medical")
+        normalizedName.includes("medical") ||
+        normalizedName.includes("paracetamol") ||
+        normalizedName.includes("antibiotic") ||
+        normalizedName.includes("bandage") ||
+        normalizedName.includes("antiseptic") ||
+        normalizedName.includes("kit")
       ) {
         suggestion[item.inventoryItemId] = Number(predictedResources.medicineNeeded || 0);
-      } else {
+      }
+      // 🏠 SUPPORT GROUP (NOT predicted but IMPORTANT)
+      else {
         suggestion[item.inventoryItemId] = Number(allocationQuantities[item.inventoryItemId] || 0);
       }
     });
@@ -728,7 +760,6 @@ export default function AllocationPage() {
           <table className="requests-table">
             <thead>
               <tr>
-                <th>Event ID</th>
                 <th>Disaster Type</th>
                 <th>Location</th>
                 <th>Priority</th>
@@ -767,7 +798,6 @@ export default function AllocationPage() {
                   
                   return (
                     <tr key={event.id}>
-                      <td><span className="request-id">{event.id}</span></td>
                       <td><span className="disaster-type">{event.disasterType}</span></td>
                       <td>
                         <div className="location-info">

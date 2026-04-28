@@ -4,6 +4,7 @@ import { createDisasterReport } from "../services/disasterReportService";
 import { fetchInventoryItems } from "../services/inventoryService";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
+import { ITEM_CATEGORIES, ITEM_MAPPING } from "../utils/constants";
 
 const DEFAULT_REQUIRED_ITEM = {
   inventoryItemId: "",
@@ -138,12 +139,12 @@ function CreateDisasterReportPage() {
   };
 
   const categoryOptions = useMemo(
-    () => [...new Set(inventoryItems.map((item) => item.category))].sort((a, b) => a.localeCompare(b)),
-    [inventoryItems]
+    () => Object.values(ITEM_CATEGORIES),
+    []
   );
 
   const getItemsByCategory = (category) =>
-    inventoryItems.filter((item) => String(item.category) === String(category));
+    ITEM_MAPPING[category] || [];
 
   const updateRequiredItem = (index, field, value) => {
     setLastEditedAt(new Date());
@@ -155,11 +156,9 @@ function CreateDisasterReportPage() {
         current.category = value;
         current.inventoryItemId = "";
         current.itemName = "";
-      } else if (field === "inventoryItemId") {
-        current.inventoryItemId = value;
-        const matched = inventoryItems.find((item) => item.id === value);
-        current.itemName = matched?.name || "";
-        current.category = matched?.category || current.category;
+      } else if (field === "itemName") {
+        current.itemName = value;
+        current.inventoryItemId = value; // Use item name as ID for new structure
       } else {
         current[field] = value;
       }
@@ -402,7 +401,6 @@ function CreateDisasterReportPage() {
 
     const hasInvalidRequiredItem = requiredItems.some(
       (item) =>
-        !String(item.inventoryItemId || "").trim() ||
         !String(item.itemName || "").trim() ||
         !String(item.category || "").trim() ||
         !Number.isInteger(Number(item.requiredQuantity)) ||
@@ -455,14 +453,13 @@ function CreateDisasterReportPage() {
 
     const normalizedRequiredItems = (Array.isArray(formData.requiredItems) ? formData.requiredItems : [])
       .map((item) => ({
-        inventoryItemId: String(item.inventoryItemId || "").trim(),
+        inventoryItemId: String(item.itemName || "").trim(), // Use item name as ID
         itemName: String(item.itemName || "").trim(),
         category: String(item.category || "").trim(),
         requiredQuantity: Number(item.requiredQuantity),
       }))
       .filter(
         (item) =>
-          item.inventoryItemId &&
           item.itemName &&
           item.category &&
           Number.isInteger(item.requiredQuantity) &&
@@ -710,13 +707,13 @@ function CreateDisasterReportPage() {
                           <span className="text-[11px]">Item name</span>
                           <select
                             className={inputBaseClass}
-                            value={resource.inventoryItemId}
-                            onChange={(e) => updateRequiredItem(index, "inventoryItemId", e.target.value)}
+                            value={resource.itemName}
+                            onChange={(e) => updateRequiredItem(index, "itemName", e.target.value)}
                             disabled={!resource.category}
                           >
                             <option value="">Select item</option>
-                            {itemOptions.map((item) => (
-                              <option key={item.id} value={item.id}>{item.name}</option>
+                            {itemOptions.map((itemName) => (
+                              <option key={itemName} value={itemName}>{itemName}</option>
                             ))}
                           </select>
                         </label>

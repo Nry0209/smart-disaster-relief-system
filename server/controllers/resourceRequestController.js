@@ -9,17 +9,18 @@ const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
 };
 
-// Create resource request (Inventory Officer)
+// Create resource request (NGO/Partner)
 async function createResourceRequest(req, res) {
   try {
     const { 
-      ngoId, 
-      disasterId, 
-      urgency, 
-      requestedItems, 
-      deliveryDate, 
-      deliveryAddress, 
-      notes 
+      ngoPartner,
+      requestType,
+      amount,
+      items,
+      deliveryWarehouse,
+      expectedDeliveryDate,
+      problemNote,
+      disasterId
     } = req.body;
 
     if (!isDbConnected()) {
@@ -28,106 +29,108 @@ async function createResourceRequest(req, res) {
       });
     }
 
-    // Validate required fields
-    if (!ngoId || !disasterId || !urgency || !requestedItems || !deliveryDate || !deliveryAddress) {
+    // Validate required fields (except items for monetary requests)
+    if (!ngoPartner || !requestType || !deliveryWarehouse || !expectedDeliveryDate || !problemNote) {
       return res.status(400).json({ message: "All required fields must be provided." });
     }
 
-    const hasInvalidCount = requestedItems.some((item) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 0);
-    if (hasInvalidCount) {
-      return res.status(400).json({ message: "Invalid count. Quantity cannot be negative." });
+    // Validate request type specific requirements
+    if (requestType === "monetary" && (!amount || Number(amount) <= 0)) {
+      return res.status(400).json({ message: "Valid amount is required for monetary requests." });
     }
 
-    // Validate NGO exists
-    const ngo = await Partner.findById(ngoId);
-    if (!ngo) {
-      return res.status(404).json({ message: "NGO not found." });
+    if (requestType === "inventory" && (!items || items.length === 0)) {
+      return res.status(400).json({ message: "At least one item is required for inventory requests." });
     }
 
-    // Validate disaster exists
-    const disaster = await DisasterReport.findById(disasterId);
-    if (!disaster) {
-      return res.status(404).json({ message: "Disaster report not found." });
+    // Validate inventory items if request type is inventory
+    if (requestType === "inventory" && items) {
+      const hasInvalidCount = items.some((item) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 0);
+      if (hasInvalidCount) {
+        return res.status(400).json({ message: "Invalid count. Quantity cannot be negative." });
+      }
     }
 
-    // Check stock availability for requested items
-    const stockChecks = await Promise.all(
-      requestedItems.map(async (item) => {
-        if (item.resourceId) {
-          const inventoryItem = await InventoryItem.findById(item.resourceId);
-          return {
-            itemName: item.itemName,
-            requestedQuantity: item.quantity,
-            availableStock: inventoryItem ? inventoryItem.stock : 0,
-            shortage: inventoryItem ? (item.quantity > inventoryItem.stock) : true
-          };
-        }
-        return {
-          itemName: item.itemName,
-          requestedQuantity: item.quantity,
-          availableStock: 0,
-          shortage: true
-        };
-      })
-    );
+    // Validate delivery date is not in the past
+    const deliveryDate = new Date(expectedDeliveryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (deliveryDate < today) {
+      return res.status(400).json({ message: "Delivery date cannot be in the past." });
+    }
 
-    const hasShortages = stockChecks.some(check => check.shortage);
+    // Validate partner exists and get partner data
+    const partner = await Partner.findById(ngoPartner);
+    if (!partner) {
+      return res.status(404).json({ message: "Partner not found." });
+    }
 
-    // Create resource request
-    const resourceRequest = new ResourceRequest({
-      ngoId,
-      ngoEmail: ngo.email,
-      disasterId,
-      disasterType: disaster.disasterType,
-      disasterLocation: disaster.location,
-      urgency,
-      requestedItems,
-      deliveryDate,
-      deliveryAddress,
-      requestedBy: req.user.id,
-      requestedByName: req.user.fullName || req.user.name,
-      notes: notes || "",
-      status: "sent"
-    });
+    // Optional: Validate disaster exists if provided
+    let disaster = null;
+    if (disasterId) {
+      disaster = await DisasterReport.findById(disasterId);
+      if (!disaster) {
+        return res.status(404).json({ message: "Disaster report not found." });
+      }
+    }
 
+    // Create resource request with new schema
+    const resourceRequestData = {
+      ngoPartner: partner._id,
+      requestType,
+      deliveryWarehouse,
+      expectedDeliveryDate: deliveryDate,
+      problemNote,
+      disasterId: disasterId || null,
+    };
+
+    // Add request-specific data
+    if (requestType === "monetary") {
+      resourceRequestData.amount = Number(amount);
+    } else {
+      resourceRequestData.items = items.map(item => ({
+        inventoryItemId: item.inventoryItemId || null,
+        itemName: item.itemName,
+        category: item.category,
+        quantity: Number(item.quantity),
+        unit: item.unit || "units"
+      }));
+    }
+
+    const resourceRequest = new ResourceRequest(resourceRequestData);
     await resourceRequest.save();
 
-    // Send email to NGO if there are shortages
-    if (hasShortages) {
-      try {
-        await sendResourceRequestEmail({
-          ngoEmail: ngo.email,
-          ngoName: ngo.organizationName || ngo.contactPerson || "Partner Organization",
-          disasterType: disaster.disasterType,
-          disasterLocation: disaster.location,
-          requestedItems: stockChecks,
-          deliveryDate,
-          urgency,
-          requestId: resourceRequest._id
-        });
-        
-        resourceRequest.emailSentAt = new Date();
-        await resourceRequest.save();
-      } catch (emailError) {
-        console.error("Failed to send resource request email:", emailError);
-        // Continue even if email fails
-      }
+    // Send email notification using partner data
+    try {
+      await sendResourceRequestEmail({
+        to: partner.email,
+        requesterName: partner.organizationName || partner.contactPerson,
+        requestType,
+        requestDetails: requestType === "monetary" 
+          ? `Amount: LKR ${amount}` 
+          : `Items: ${items.map(item => `${item.itemName} (${item.quantity})`).join(", ")}`,
+        deliveryWarehouse,
+        expectedDeliveryDate: deliveryDate.toDateString(),
+        problemNote,
+      });
+      resourceRequest.emailSentAt = new Date();
+      await resourceRequest.save();
+    } catch (emailError) {
+      console.error("Failed to send email notification:", emailError);
+      // Continue with the request even if email fails
     }
 
-    return res.status(201).json({
-      message: "Resource request created successfully.",
-      resourceRequest: {
-        ...resourceRequest.toObject(),
-        stockChecks,
-        hasShortages
-      }
+    res.status(201).json({
+      message: "Resource request submitted successfully",
+      data: resourceRequest,
+      emailSent: !!resourceRequest.emailSentAt
     });
 
   } catch (error) {
     console.error("Create resource request error:", error);
-    return res.status(500).json({ 
-      message: "Failed to create resource request.", 
-      error: error.message 
+    res.status(500).json({
+      message: "Failed to create resource request",
+      error: error.message
     });
   }
 }

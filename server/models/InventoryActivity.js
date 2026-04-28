@@ -14,7 +14,7 @@ const inventoryActivitySchema = new mongoose.Schema(
     },
     action: {
       type: String,
-      enum: ["create", "update", "adjust", "transfer", "donation", "consume", "restock", "delete"],
+      enum: ["create", "update", "adjust", "consume", "restock", "delete"],
       required: true,
     },
     quantity: {

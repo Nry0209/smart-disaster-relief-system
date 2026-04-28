@@ -35,88 +35,96 @@ const requestedItemSchema = new mongoose.Schema(
 
 const resourceRequestSchema = new mongoose.Schema(
   {
-    ngoId: {
+    // NGO/Partner Information
+    ngoPartner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Partner",
       required: true,
     },
-    ngoEmail: {
+
+    // Request Type
+    requestType: {
       type: String,
+      enum: ["inventory", "monetary"],
       required: true,
-      trim: true,
-      lowercase: true,
+      default: "inventory",
     },
 
-    disasterId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "DisasterReport",
-      required: true,
-    },
-    disasterType: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    disasterLocation: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    urgency: {
-      type: String,
-      enum: ["low", "medium", "high"],
-      required: true,
-    },
-
-    requestedItems: {
-      type: [requestedItemSchema],
-      required: true,
-      validate: {
-        validator: function (items) {
-          return Array.isArray(items) && items.length > 0;
-        },
-        message: "At least one requested item is required.",
+    // Monetary Request (for monetary requests)
+    amount: {
+      type: Number,
+      min: 0,
+      required: function() {
+        return this.requestType === "monetary";
       },
     },
 
-    deliveryDate: {
+    // Inventory Request (for inventory requests)
+    items: {
+      type: [requestedItemSchema],
+      required: function() {
+        return this.requestType === "inventory";
+      },
+      validate: {
+        validator: function (items) {
+          if (this.requestType === "inventory") {
+            return Array.isArray(items) && items.length > 0;
+          }
+          return true;
+        },
+        message: "At least one requested item is required for inventory requests.",
+      },
+    },
+
+    // Delivery Information
+    deliveryWarehouse: {
+      type: String,
+      required: true,
+      trim: true,
+      enum: ["Colombo Central Warehouse", "Kandy Regional Warehouse"],
+    },
+    expectedDeliveryDate: {
       type: Date,
       required: true,
     },
-    deliveryAddress: {
+
+    // Problem Description
+    problemNote: {
       type: String,
       required: true,
       trim: true,
+      maxlength: 500,
     },
 
-    requestedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    requestedByName: {
-      type: String,
-      trim: true,
-      default: "",
-    },
-
+    // Status and Tracking
     status: {
       type: String,
-      enum: ["sent", "fulfilled", "cancelled"],
-      default: "sent",
+      enum: ["pending", "under_review", "approved", "fulfilled", "rejected"],
+      default: "pending",
       required: true,
+    },
+
+    // Optional reference to disaster (if applicable)
+    disasterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DisasterReport",
+      required: false,
+    },
+
+    // Admin tracking
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+    },
+    reviewedAt: {
+      type: Date,
+      required: false,
     },
 
     emailSentAt: {
       type: Date,
       default: null,
-    },
-
-    notes: {
-      type: String,
-      trim: true,
-      default: "",
     },
   },
   { timestamps: true }

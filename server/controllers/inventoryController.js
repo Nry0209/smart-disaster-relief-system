@@ -1,15 +1,7 @@
 const mongoose = require("mongoose");
 const InventoryItem = require("../models/InventoryItem");
 const InventoryActivity = require("../models/InventoryActivity");
-
-const CATEGORY_MAP = {
-  water: "Water",
-  food: "Food",
-  medical: "Medical",
-  shelter: "Shelter",
-  clothing: "Clothing",
-  other: "Other",
-};
+const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const DEFAULT_INVENTORY_ITEMS = [
   {
@@ -54,8 +46,8 @@ const DEFAULT_INVENTORY_ITEMS = [
   },
 ];
 
-const ALLOWED_ACTION_TYPES = ["adjust", "donation", "transfer", "consume", "restock"];
-const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse", "unit"];
+const ALLOWED_ACTION_TYPES = ["adjust", "consume", "restock"];
+const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse"];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
@@ -66,7 +58,8 @@ function normalizeCategory(value) {
     return null;
   }
 
-  return CATEGORY_MAP[String(value).trim().toLowerCase()] || null;
+  const normalizedValue = String(value).trim();
+  return ITEM_CATEGORY_ENUM.includes(normalizedValue) ? normalizedValue : null;
 }
 
 function toNonNegativeNumber(value) {
@@ -164,7 +157,6 @@ async function createInventoryItem(req, res) {
       stock: stockValue,
       min: minValue,
       warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
-      unit: String(unit || "units").trim() || "units",
     });
 
     await createActivityLog({
@@ -466,13 +458,7 @@ async function adjustInventoryStock(req, res) {
       return res.status(400).json({ message: "quantity must be a positive number." });
     }
 
-    if (normalizedActionType === "transfer") {
-      const normalizedDestination = String(destinationWarehouse || "").trim();
-      if (!normalizedDestination) {
-        return res.status(400).json({ message: "destinationWarehouse is required for transfer actions." });
-      }
-    }
-
+    
     const item = await InventoryItem.findById(id);
     if (!item) {
       return res.status(404).json({ message: "Inventory item not found." });
@@ -485,7 +471,7 @@ async function adjustInventoryStock(req, res) {
       quantityDelta = -normalizedQuantity;
     }
 
-    if (normalizedActionType === "donation" || normalizedActionType === "restock") {
+    if (normalizedActionType === "restock") {
       quantityDelta = normalizedQuantity;
     }
 
@@ -495,17 +481,12 @@ async function adjustInventoryStock(req, res) {
       return res.status(400).json({ message: "Insufficient stock for this operation." });
     }
 
-    if (normalizedActionType === "transfer") {
-      item.warehouse = String(destinationWarehouse).trim();
-    }
-
+    
     item.stock = nextStock;
     await item.save();
 
     const defaultNotes = {
       adjust: "Stock adjusted for damaged or expired units.",
-      donation: "Donation stock recorded.",
-      transfer: `Stock transfer recorded to ${item.warehouse}.`,
       consume: "Stock consumed for allocation or dispatch.",
       restock: "Stock replenished.",
     };
@@ -518,15 +499,9 @@ async function adjustInventoryStock(req, res) {
       previousStock,
       newStock: item.stock,
       note: String(note || defaultNotes[normalizedActionType]).trim(),
-      metadata:
-        normalizedActionType === "transfer"
-          ? {
-              destinationWarehouse: item.warehouse,
-              movedQuantity: normalizedQuantity,
-            }
-          : {
-              requestedQuantity: normalizedQuantity,
-            },
+      metadata: {
+        requestedQuantity: normalizedQuantity,
+      },
       performedBy: String(performedBy || "Inventory Officer"),
     });
 
