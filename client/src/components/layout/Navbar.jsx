@@ -41,7 +41,7 @@ function Navbar({ onToggleSidebar }) {
   const [notificationsError, setNotificationsError] = useState("");
 
   const pageTitle = useMemo(() => getPageTitle(pathname), [pathname]);
-  const roleLabel = formatRole(user?.role) || "Admin";
+  const roleLabel = formatRole(user?.role);
   const roleTone = user?.role === "admin" ? "is-admin" : "is-staff";
 
   const fetchNotifications = async () => {
@@ -152,7 +152,7 @@ function Navbar({ onToggleSidebar }) {
           )}
         </div>
 
-        <div className={`role-badge ${roleTone}`}>{roleLabel || "Admin"}</div>
+        <div className={`role-badge ${roleTone}`}>{roleLabel}</div>
 
         <div className="profile-shell">
           <button
@@ -165,8 +165,8 @@ function Navbar({ onToggleSidebar }) {
           >
             <div className="user-avatar">{user?.name?.charAt(0)?.toUpperCase() || "U"}</div>
             <div className="user-details">
-              <strong>{user?.name || "Admin"}</strong>
-              <span>{user?.email || "admin@smartrelief.org"}</span>
+              <strong>{user?.name}</strong>
+              <span>{user?.email}</span>
             </div>
             <ChevronDown size={14} />
           </button>

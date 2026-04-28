@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createDisasterReport } from "../services/disasterReportService";
 import { fetchInventoryItems } from "../services/inventoryService";
+import { useAuth } from "../context/AuthContext";
+import PageHeader from "../components/PageHeader";
 
 const DEFAULT_REQUIRED_ITEM = {
   inventoryItemId: "",
@@ -22,6 +24,15 @@ const MAX_IMMEDIATE_NEED_LENGTH = 60;
 const MIN_AFFECTED_POPULATION = 1;
 const MAX_AFFECTED_POPULATION = 10000000;
 const MAX_AFFECTED_POPULATION_DIGITS = String(MAX_AFFECTED_POPULATION).length;
+
+// Disaster types for dropdown
+const DISASTER_TYPES = [
+  "Flood",
+  "Landslide", 
+  "Cyclone",
+  "Drought",
+  "Tsunami"
+];
 
 function normalizeImmediateNeeds(needs = []) {
   const seen = new Set();
@@ -61,6 +72,8 @@ function preventInvalidPopulationKey(event) {
 
 function CreateDisasterReportPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const reportedByName = user?.fullName || user?.email || "DMC Officer";
   const [formData, setFormData] = useState({
     disasterType: "",
     location: "",
@@ -473,7 +486,7 @@ function CreateDisasterReportPage() {
         immediateNeeds: normalizedNeeds,
         requiredItems: normalizedRequiredItems,
         status,
-        reportedBy: "DMC Officer",
+        reportedBy: reportedByName,
       });
 
       if (actionType === "save" || actionType === "allocation") {
@@ -502,98 +515,64 @@ function CreateDisasterReportPage() {
   };
 
   return (
-    <div className="disaster-report-page min-h-screen bg-slate-50 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_50%),radial-gradient(circle_at_90%_25%,rgba(56,189,248,0.12),transparent_45%)] px-4 py-6 md:px-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-[0_16px_30px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="min-h-screen bg-slate-50 px-6 py-7 text-slate-900">
+      <div className="mx-auto w-full max-w-5xl">
+        <PageHeader
+          role="DMC Officer / Incident Reporting"
+          title="Disaster Event Report"
+          description="Capture incident details, assess population impact, and request immediate resource needs for coordinated response."
+        />
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Report ID</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{reportId}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Completion</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{completion}%</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Readiness</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{readinessLabel.text}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Last edited</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900">{formatDateTime(lastEditedAt)}</p>
+          </div>
+        </div>
+
+        {formError && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{formError}</div>}
+        {formSuccess && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{formSuccess}</div>}
+
+        <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                DMC Officer / Create Disaster Report
-              </span>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-                Create Disaster Report
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-600">
-                Register incidents with verified field details to trigger inventory,
-                allocation, and delivery workflows.
+              <h2 className="text-lg font-semibold text-slate-900">Incident profile</h2>
+              <p className="text-xs text-slate-500">
+                Capture core event details and risk level.
               </p>
             </div>
-            <div className="w-full max-w-xs rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span>Completion</span>
-                <span>{completion}%</span>
-              </div>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sky-100">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-500 to-blue-500 transition-all"
-                  style={{ width: `${completion}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-              Report ID: {reportId}
-            </span>
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-              Risk band: {riskBand}
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-              Last edited: {formatDateTime(lastEditedAt)}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${readinessLabel.tone}`}>
-              {readinessLabel.text}
+            <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+              {formData.priority.toUpperCase()} PRIORITY
             </span>
           </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {steps.map((step, index) => {
-              const active = completion >= (index + 1) * 25;
-              return (
-                <div
-                  key={step}
-                  className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                    active
-                      ? "border-sky-200 bg-sky-50 text-sky-700"
-                      : "border-slate-200 bg-white text-slate-500"
-                  }`}
-                >
-                  {index + 1}. {step}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-5">
-          <div className="space-y-6 lg:col-span-3">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Incident profile</h2>
-                  <p className="text-xs text-slate-500">
-                    Capture core event details and risk level.
-                  </p>
-                </div>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
-                  {formData.priority.toUpperCase()} PRIORITY
-                </span>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1 text-xs font-semibold text-slate-600">
                   Disaster type
-                  <input
+                  <select
                     className={getFieldClass(fieldErrors.disasterType)}
-                    type="text"
-                    placeholder="Flood"
                     value={formData.disasterType}
                     onChange={(e) => handleInputChange("disasterType", e.target.value)}
-                    maxLength={MAX_DISASTER_TYPE_LENGTH}
-                  />
+                  >
+                    <option value="">Select disaster type</option>
+                    {DISASTER_TYPES.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
                   <p className="text-[11px] font-medium text-slate-500">
-                    Example: Flood, Landslide, Earthquake, Cyclone
+                    Select the type of disaster event
                   </p>
                 </label>
 
@@ -679,9 +658,8 @@ function CreateDisasterReportPage() {
                   </select>
                 </label>
               </div>
-            </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-lg font-semibold text-slate-900">Situation assessment</h2>
               <p className="mb-4 text-xs text-slate-500">
                 Add incident context and required resources.
@@ -823,7 +801,6 @@ function CreateDisasterReportPage() {
                 </p>
               )}
             </div>
-          </div>
 
           <div className="space-y-6 lg:col-span-2">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
@@ -834,7 +811,7 @@ function CreateDisasterReportPage() {
                 </p>
               </div>
 
-              <div className="relative mb-4 h-52 overflow-hidden rounded-2xl border border-dashed border-sky-200 bg-[radial-gradient(circle_at_18%_28%,rgba(56,189,248,0.32),transparent_45%),radial-gradient(circle_at_70%_38%,rgba(59,130,246,0.28),transparent_42%),radial-gradient(circle_at_85%_70%,rgba(14,165,233,0.22),transparent_48%),#f0f9ff)]">
+              <div className="relative mb-4 h-52 overflow-hidden rounded-2xl border border-dashed border-slate-200 bg-slate-50">
                 <div className="absolute left-[20%] top-[24%] h-2.5 w-2.5 rounded-full bg-blue-600 shadow-[0_0_0_6px_rgba(37,99,235,0.18)]" />
                 <div className="absolute left-[45%] top-[42%] h-2.5 w-2.5 rounded-full bg-blue-600 shadow-[0_0_0_6px_rgba(37,99,235,0.18)]" />
                 <div className="absolute left-[62%] top-[55%] h-2.5 w-2.5 rounded-full bg-blue-600 shadow-[0_0_0_6px_rgba(37,99,235,0.18)]" />
@@ -888,7 +865,7 @@ function CreateDisasterReportPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-sky-50/70 p-5 shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-base font-semibold text-slate-900">Predictive resource estimate</h3>
                 <span className="rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">

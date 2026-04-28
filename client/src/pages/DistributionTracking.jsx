@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import { RefreshCw } from "lucide-react";
 import { fetchDisasterReports } from "../services/disasterReportService";
 import {
   createTrackingRecord as createTrackingRecordRequest,
@@ -10,6 +11,38 @@ import "./Pages.css";
 
 const STATUS_SEQUENCE = ["prepared", "dispatched", "in_transit", "delivered"];
 const TRACKING_RECORDS_UPDATED_EVENT = "tracking-records-updated";
+
+// Sri Lankan driver names
+const SRI_LANKAN_DRIVERS = [
+  "Kumara Bandara",
+  "Nimal Perera", 
+  "Sunil Fernando",
+  "Rohan Silva",
+  "Chaminda Rajapaksa",
+  "Mahinda Wijesinghe",
+  "Saman Kumara",
+  "Priyantha Bandara",
+  "Lalith Perera",
+  "Dinesh Fernando"
+];
+
+// Truck numbers
+const TRUCK_NUMBERS = [
+  "WP-CA-1234",
+  "WP-CB-5678", 
+  "WP-CC-9012",
+  "WP-CD-3456",
+  "WP-CE-7890"
+];
+
+// Transport types
+const TRANSPORT_TYPES = [
+  "Refrigerated Truck",
+  "Emergency Vehicle", 
+  "Heavy Truck",
+  "Medium Truck",
+  "Light Van"
+];
 
 function getPlanId(report) {
   return String(report?.id || report?._id || "");
@@ -196,6 +229,17 @@ export default function DistributionTracking() {
         {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
         {notice && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
 
+        <div className="flex justify-end mb-4">
+          <button
+            className="btn-refresh"
+            onClick={loadData}
+            disabled={loading}
+          >
+            <RefreshCw size={16} className={loading ? "spinning" : ""} />
+            Refresh Data
+          </button>
+        </div>
+
         <section className="professional-form-shell mt-6 rounded-3xl p-6">
           <h2 className="mb-4 text-lg font-semibold">Allocation Plans Ready for Tracking</h2>
           <div className="overflow-x-auto">
@@ -292,33 +336,45 @@ export default function DistributionTracking() {
               </label>
 
               <label className="form-group">
-                <span>Transport Details</span>
-                <input
-                  type="text"
+                <span>Transport Type</span>
+                <select
                   value={form.transportDetails}
                   onChange={(e) => setForm((prev) => ({ ...prev, transportDetails: e.target.value }))}
-                  placeholder="e.g., Refrigerated truck, Emergency vehicle"
-                />
+                  required
+                >
+                  <option value="">Select transport type</option>
+                  {TRANSPORT_TYPES.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="form-group">
                 <span>Driver Name</span>
-                <input
-                  type="text"
+                <select
                   value={form.driverName}
                   onChange={(e) => setForm((prev) => ({ ...prev, driverName: e.target.value }))}
-                  placeholder="Driver full name"
-                />
+                  required
+                >
+                  <option value="">Select driver</option>
+                  {SRI_LANKAN_DRIVERS.map((driver) => (
+                    <option key={driver} value={driver}>{driver}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="form-group">
                 <span>Vehicle Number</span>
-                <input
-                  type="text"
+                <select
                   value={form.vehicleNumber}
                   onChange={(e) => setForm((prev) => ({ ...prev, vehicleNumber: e.target.value }))}
-                  placeholder="Vehicle registration number"
-                />
+                  required
+                >
+                  <option value="">Select vehicle</option>
+                  {TRUCK_NUMBERS.map((number) => (
+                    <option key={number} value={number}>{number}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="form-group">

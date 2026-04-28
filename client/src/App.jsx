@@ -116,9 +116,9 @@ function App() {
       } />
       <Route path="/disaster-report/create" element={
         <DashboardLayout>
-          <DmcOnlyRoute>
+          <RoleRoute allowedRoles={["admin", "dmc_officer"]} fallback="/dashboard">
             <CreateDisasterReportPage />
-          </DmcOnlyRoute>
+          </RoleRoute>
         </DashboardLayout>
       } />
       <Route path="/reports-analytics" element={
@@ -128,9 +128,11 @@ function App() {
       } />
       <Route path="/prediction" element={<Navigate to="/reports-analytics" replace />} />
       <Route path="/audit-logs" element={
-        <DashboardLayout>
-          <AuditLogsPage />
-        </DashboardLayout>
+        <RoleRoute allowedRoles={["admin"]} fallback="/dashboard">
+          <DashboardLayout>
+            <AuditLogsPage />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

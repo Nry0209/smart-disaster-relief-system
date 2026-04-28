@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
+import { RefreshCw } from "lucide-react";
 import { confirmTrackingDelivery, fetchTrackingRecords } from "../services/workflowService";
 import "./Pages.css";
 
@@ -83,6 +84,17 @@ export default function DmcDeliveryVerificationPage() {
 
       {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
       {notice && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
+
+      <div className="flex justify-end mb-4">
+        <button
+          className="btn-refresh"
+          onClick={loadRecords}
+          disabled={loading}
+        >
+          <RefreshCw size={16} className={loading ? "spinning" : ""} />
+          Refresh Data
+        </button>
+      </div>
 
       <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold">📦 Goods Received - Delivery Verification</h2>

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Filter, Download, Calendar, User, Shield, AlertTriangle, CheckCircle, XCircle, Clock, FileText, Eye, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { fetchAuditLogs } from '../services/auditLogService';
 
 const AuditLogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -12,7 +13,7 @@ const AuditLogsPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // Mock users
-  const users = [
+  const defaultUsers = [
     { id: 'user1', name: 'Admin User', role: 'Administrator' },
     { id: 'user2', name: 'DMC Officer', role: 'DMC Officer' },
     { id: 'user3', name: 'NGO Manager', role: 'NGO Manager' },
@@ -144,9 +145,60 @@ const AuditLogsPage = () => {
     }
   ];
 
+  const users = useMemo(() => {
+    const derivedUsers = new Map();
+
+    logs.forEach((log) => {
+      if (!log?.user) {
+        return;
+      }
+
+      derivedUsers.set(String(log.user), {
+        id: String(log.user),
+        name: log.userName || String(log.user),
+        role: log.userRole || "System",
+      });
+    });
+
+    return derivedUsers.size ? Array.from(derivedUsers.values()) : defaultUsers;
+  }, [logs]);
+
+  async function loadLogs() {
+    try {
+      setIsLoading(true);
+
+      const auditLogs = await fetchAuditLogs({ limit: 200 });
+      const normalizedLogs = Array.isArray(auditLogs)
+        ? auditLogs.map((entry, index) => ({
+            id: String(entry.id || entry._id || `audit-${index}`),
+            timestamp: entry.timestamp || entry.createdAt || new Date().toISOString(),
+            user: String(entry.user || ""),
+            userName: entry.userName || entry.userEmail || "System",
+            userRole: entry.userRole || "System",
+            action: entry.action || "UNKNOWN",
+            resource: entry.resource || entry.category || "System",
+            details: entry.details || entry.rawDescription || "Activity recorded",
+            ipAddress: entry.ipAddress || "-",
+            userAgent: entry.userAgent || "N/A",
+            status: entry.status || "success",
+            severity: entry.severity || "low",
+            category: entry.category || entry.resource || "System",
+          }))
+        : [];
+
+      setLogs(normalizedLogs);
+      setFilteredLogs(normalizedLogs);
+    } catch (loadError) {
+      console.error("Failed to load audit logs:", loadError);
+      setLogs(mockLogs);
+      setFilteredLogs(mockLogs);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   useEffect(() => {
-    setLogs(mockLogs);
-    setFilteredLogs(mockLogs);
+    loadLogs();
   }, []);
 
   useEffect(() => {
@@ -202,6 +254,16 @@ const AuditLogsPage = () => {
 
   const getActionIcon = (action) => {
     switch (action) {
+      case 'READ':
+        return <Eye size={16} />;
+      case 'CREATE':
+      case 'UPDATE':
+      case 'DELETE':
+        return <FileText size={16} />;
+      case 'PERFORMANCE':
+        return <Clock size={16} />;
+      case 'SUSPICIOUS_REQUEST':
+        return <AlertTriangle size={16} />;
       case 'LOGIN':
       case 'LOGIN_FAILED':
         return <User size={16} />;
@@ -261,18 +323,96 @@ const AuditLogsPage = () => {
   };
 
   const exportLogs = (format) => {
-    console.log(`Exporting logs as ${format}`);
+    if (!filteredLogs.length) {
+      return;
+    }
+
+    if (format === 'CSV') {
+      const headers = ['Timestamp', 'User', 'Role', 'Action', 'Resource', 'Status', 'Severity', 'Details'];
+      const rows = filteredLogs.map((log) => [
+        formatDate(log.timestamp),
+        log.userName,
+        log.userRole || '',
+        log.action,
+        log.resource,
+        log.status,
+        log.severity,
+        String(log.details || '').replace(/"/g, '""'),
+      ]);
+
+      const csv = [
+        headers.join(','),
+        ...rows.map((row) => row.map((value) => `"${String(value ?? '')}"`).join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'audit-logs.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Audit Logs</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h1>Audit Logs</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th><th>User</th><th>Role</th><th>Action</th><th>Resource</th><th>Status</th><th>Severity</th><th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredLogs.map((log) => `
+                <tr>
+                  <td>${formatDate(log.timestamp)}</td>
+                  <td>${log.userName}</td>
+                  <td>${log.userRole || ''}</td>
+                  <td>${log.action}</td>
+                  <td>${log.resource}</td>
+                  <td>${log.status}</td>
+                  <td>${log.severity}</td>
+                  <td>${String(log.details || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <script>window.onload = () => window.print();</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
-  const refreshLogs = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
+  const refreshLogs = async () => {
+    await loadLogs();
   };
 
   const actionTypes = [
     { value: 'all', label: 'All Actions' },
+    { value: 'READ', label: 'Read' },
+    { value: 'CREATE', label: 'Create' },
+    { value: 'UPDATE', label: 'Update' },
+    { value: 'DELETE', label: 'Delete' },
+    { value: 'PERFORMANCE', label: 'Performance' },
+    { value: 'SUSPICIOUS_REQUEST', label: 'Security Alert' },
     { value: 'LOGIN', label: 'Login' },
     { value: 'LOGIN_FAILED', label: 'Failed Login' },
     { value: 'RESOURCE_ALLOCATE', label: 'Resource Allocation' },

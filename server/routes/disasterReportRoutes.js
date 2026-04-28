@@ -18,7 +18,7 @@ const {
 
 const router = express.Router();
 
-router.post("/", authenticateToken, authorizeRoles("dmc_officer"), createDisasterReport);
+router.post("/", authenticateToken, authorizeRoles("admin", "dmc_officer"), createDisasterReport);
 router.get("/", authenticateToken, internalStaffOnly, listDisasterReports);
 router.get("/:id", authenticateToken, internalStaffOnly, getDisasterReportById);
 router.put("/:id", authenticateToken, dmcOfficerOnly, updateDisasterReport);
