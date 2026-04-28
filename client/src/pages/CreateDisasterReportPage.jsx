@@ -1,17 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createDisasterReport } from "../services/disasterReportService";
+import { fetchInventoryItems } from "../services/inventoryService";
 
-const QUICK_NEEDS = [
-  "Water",
-  "Meal Packs",
-  "Medical Kits",
-  "Blankets",
-  "Tents",
-  "Rescue Boats",
-  "Power Banks",
-  "Baby Supplies",
-];
+const DEFAULT_REQUIRED_ITEM = {
+  inventoryItemId: "",
+  category: "",
+  itemName: "",
+  requiredQuantity: "",
+};
 
 const ALLOWED_SEVERITIES = new Set(["critical", "high", "medium", "low"]);
 const ALLOWED_PRIORITIES = new Set(["critical", "high", "medium", "low"]);
@@ -40,10 +37,6 @@ function normalizeImmediateNeeds(needs = []) {
       seen.add(key);
       return true;
     });
-}
-
-function parseImmediateNeedsInput(value) {
-  return normalizeImmediateNeeds(String(value || "").split(","));
 }
 
 function sanitizePopulationInput(value) {
@@ -77,12 +70,49 @@ function CreateDisasterReportPage() {
     priority: "critical",
     description: "",
     immediateNeeds: [],
+    requiredItems: [{ ...DEFAULT_REQUIRED_ITEM }],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitAction, setSubmitAction] = useState("save");
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [lastEditedAt, setLastEditedAt] = useState(new Date());
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadInventory() {
+      try {
+        setInventoryLoading(true);
+        const items = await fetchInventoryItems();
+        if (!active) return;
+
+        const normalized = Array.isArray(items)
+          ? items
+              .filter((item) => item?.id && item?.name && item?.category)
+              .map((item) => ({
+                id: String(item.id),
+                name: String(item.name),
+                category: String(item.category),
+              }))
+          : [];
+
+        setInventoryItems(normalized);
+      } catch {
+        if (active) setInventoryItems([]);
+      } finally {
+        if (active) setInventoryLoading(false);
+      }
+    }
+
+    loadInventory();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleInputChange = (field, value) => {
     setLastEditedAt(new Date());
@@ -94,31 +124,59 @@ function CreateDisasterReportPage() {
     handleInputChange("affectedPopulation", sanitizedPopulation);
   };
 
-  const handleNeedsChange = (value) => {
+  const categoryOptions = useMemo(
+    () => [...new Set(inventoryItems.map((item) => item.category))].sort((a, b) => a.localeCompare(b)),
+    [inventoryItems]
+  );
+
+  const getItemsByCategory = (category) =>
+    inventoryItems.filter((item) => String(item.category) === String(category));
+
+  const updateRequiredItem = (index, field, value) => {
     setLastEditedAt(new Date());
-    const needs = parseImmediateNeedsInput(value);
-    setFormData((prev) => ({ ...prev, immediateNeeds: needs }));
+    setFormData((prev) => {
+      const next = [...(Array.isArray(prev.requiredItems) ? prev.requiredItems : [])];
+      const current = { ...(next[index] || DEFAULT_REQUIRED_ITEM) };
+
+      if (field === "category") {
+        current.category = value;
+        current.inventoryItemId = "";
+        current.itemName = "";
+      } else if (field === "inventoryItemId") {
+        current.inventoryItemId = value;
+        const matched = inventoryItems.find((item) => item.id === value);
+        current.itemName = matched?.name || "";
+        current.category = matched?.category || current.category;
+      } else {
+        current[field] = value;
+      }
+
+      next[index] = current;
+      const immediateNeeds = normalizeImmediateNeeds(next.map((item) => item.itemName));
+      return { ...prev, requiredItems: next, immediateNeeds };
+    });
   };
 
-  const handleQuickNeedToggle = (need) => {
+  const addRequiredItem = () => {
     setLastEditedAt(new Date());
+    setFormData((prev) => ({
+      ...prev,
+      requiredItems: [...(Array.isArray(prev.requiredItems) ? prev.requiredItems : []), { ...DEFAULT_REQUIRED_ITEM }],
+    }));
+  };
 
-    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
-    const hasNeed = normalizedNeeds.includes(need);
-
-    if (!hasNeed && normalizedNeeds.length >= MAX_IMMEDIATE_NEEDS) {
-      setFormError(`You can add up to ${MAX_IMMEDIATE_NEEDS} immediate needs.`);
-      return;
-    }
-
-    setFormError("");
-
+  const removeRequiredItem = (index) => {
+    setLastEditedAt(new Date());
     setFormData((prev) => {
-      const currentNeeds = normalizeImmediateNeeds(prev.immediateNeeds);
-      const immediateNeeds = hasNeed
-        ? currentNeeds.filter((item) => item !== need)
-        : [...currentNeeds, need];
-      return { ...prev, immediateNeeds };
+      const existing = Array.isArray(prev.requiredItems) ? prev.requiredItems : [];
+      const next = existing.filter((_, idx) => idx !== index);
+      const requiredItems = next.length ? next : [{ ...DEFAULT_REQUIRED_ITEM }];
+      const immediateNeeds = normalizeImmediateNeeds(requiredItems.map((item) => item.itemName));
+      return {
+        ...prev,
+        requiredItems,
+        immediateNeeds,
+      };
     });
   };
 
@@ -262,6 +320,7 @@ function CreateDisasterReportPage() {
     const description = formData.description.trim();
     const affectedPopulation = Number(formData.affectedPopulation);
     const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+    const requiredItems = Array.isArray(formData.requiredItems) ? formData.requiredItems : [];
     const eventDate = formData.eventDate ? new Date(formData.eventDate) : null;
 
     if (!ALLOWED_SEVERITIES.has(formData.severity)) {
@@ -324,6 +383,23 @@ function CreateDisasterReportPage() {
       return "Add at least one immediate need before sending to allocation.";
     }
 
+    if (requiredItems.length > MAX_IMMEDIATE_NEEDS) {
+      return `You can select up to ${MAX_IMMEDIATE_NEEDS} required resources.`;
+    }
+
+    const hasInvalidRequiredItem = requiredItems.some(
+      (item) =>
+        !String(item.inventoryItemId || "").trim() ||
+        !String(item.itemName || "").trim() ||
+        !String(item.category || "").trim() ||
+        !Number.isInteger(Number(item.requiredQuantity)) ||
+        Number(item.requiredQuantity) <= 0
+    );
+
+    if (actionType !== "draft" && hasInvalidRequiredItem) {
+      return "Each required resource must include category, item name, and quantity greater than zero.";
+    }
+
     return "";
   };
 
@@ -364,7 +440,25 @@ function CreateDisasterReportPage() {
       return;
     }
 
-    const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
+    const normalizedRequiredItems = (Array.isArray(formData.requiredItems) ? formData.requiredItems : [])
+      .map((item) => ({
+        inventoryItemId: String(item.inventoryItemId || "").trim(),
+        itemName: String(item.itemName || "").trim(),
+        category: String(item.category || "").trim(),
+        requiredQuantity: Number(item.requiredQuantity),
+      }))
+      .filter(
+        (item) =>
+          item.inventoryItemId &&
+          item.itemName &&
+          item.category &&
+          Number.isInteger(item.requiredQuantity) &&
+          item.requiredQuantity > 0
+      );
+
+    const normalizedNeeds = normalizeImmediateNeeds(
+      normalizedRequiredItems.map((item) => item.itemName)
+    );
 
     setSubmitAction(actionType);
     setIsSubmitting(true);
@@ -377,6 +471,7 @@ function CreateDisasterReportPage() {
         affectedPopulation: Number(formData.affectedPopulation),
         description: formData.description.trim(),
         immediateNeeds: normalizedNeeds,
+        requiredItems: normalizedRequiredItems,
         status,
         reportedBy: "DMC Officer",
       });
@@ -396,6 +491,7 @@ function CreateDisasterReportPage() {
         priority: "critical",
         description: "",
         immediateNeeds: [],
+        requiredItems: [{ ...DEFAULT_REQUIRED_ITEM }],
       });
       setLastEditedAt(new Date());
     } catch (error) {
@@ -604,42 +700,81 @@ function CreateDisasterReportPage() {
                   />
                 </label>
 
-                <label className="block space-y-1 text-xs font-semibold text-slate-600">
-                  Initial required resources (manual notes)
-                  <textarea
-                    className={`${getFieldClass(fieldErrors.immediateNeeds)} min-h-20 resize-y`}
-                    rows={2}
-                    placeholder="Bottled water, dry rations, blankets, tents..."
-                    value={formData.immediateNeeds.join(", ")}
-                    onChange={(e) => handleNeedsChange(e.target.value)}
-                    maxLength={500}
-                  />
-                  <p className="text-[11px] font-medium text-slate-500">
-                    Up to {MAX_IMMEDIATE_NEEDS} needs, each max {MAX_IMMEDIATE_NEED_LENGTH} characters.
-                  </p>
-                </label>
+                <div className="block space-y-2 text-xs font-semibold text-slate-600">
+                  <p>Initial required resources (from inventory)</p>
 
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-slate-600">Quick-select resource needs</p>
-                  <div className="flex flex-wrap gap-2">
-                    {QUICK_NEEDS.map((need) => {
-                      const active = formData.immediateNeeds.includes(need);
-                      return (
-                        <button
-                          key={need}
-                          type="button"
-                          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                            active
-                              ? "border-sky-300 bg-sky-100 text-sky-700"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                          }`}
-                          onClick={() => handleQuickNeedToggle(need)}
-                        >
-                          {need}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {inventoryLoading && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Loading inventory catalog...
+                    </p>
+                  )}
+
+                  {(Array.isArray(formData.requiredItems) ? formData.requiredItems : []).map((resource, index) => {
+                    const itemOptions = getItemsByCategory(resource.category);
+
+                    return (
+                      <div key={`required-item-${index}`} className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-12">
+                        <label className="space-y-1 md:col-span-4">
+                          <span className="text-[11px]">Category</span>
+                          <select
+                            className={inputBaseClass}
+                            value={resource.category}
+                            onChange={(e) => updateRequiredItem(index, "category", e.target.value)}
+                          >
+                            <option value="">Select category</option>
+                            {categoryOptions.map((category) => (
+                              <option key={category} value={category}>{category}</option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="space-y-1 md:col-span-5">
+                          <span className="text-[11px]">Item name</span>
+                          <select
+                            className={inputBaseClass}
+                            value={resource.inventoryItemId}
+                            onChange={(e) => updateRequiredItem(index, "inventoryItemId", e.target.value)}
+                            disabled={!resource.category}
+                          >
+                            <option value="">Select item</option>
+                            {itemOptions.map((item) => (
+                              <option key={item.id} value={item.id}>{item.name}</option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="space-y-1 md:col-span-2">
+                          <span className="text-[11px]">Quantity</span>
+                          <input
+                            className={inputBaseClass}
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={resource.requiredQuantity}
+                            onChange={(e) => updateRequiredItem(index, "requiredQuantity", e.target.value)}
+                          />
+                        </label>
+
+                        <div className="md:col-span-1 flex items-end">
+                          <button
+                            type="button"
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                            onClick={() => removeRequiredItem(index)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    onClick={addRequiredItem}
+                  >
+                    Add resource item
+                  </button>
                 </div>
               </div>
 

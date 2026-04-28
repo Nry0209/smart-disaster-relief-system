@@ -1,7 +1,48 @@
 const TrackingRecord = require('../models/TrackingRecord');
 const Allocation = require('../models/Allocation');
 const DisasterReport = require('../models/DisasterReport');
-const User = require('../models/User');
+
+async function resolveConfirmedAllocation({ allocationId, disasterId, userId }) {
+  if (!disasterId) {
+    const error = new Error('Disaster ID is required');
+    error.status = 400;
+    throw error;
+  }
+
+  const report = await DisasterReport.findById(disasterId);
+  if (!report) {
+    const error = new Error('Disaster report not found');
+    error.status = 404;
+    throw error;
+  }
+
+  // Check if disaster report has allocated status and resources
+  if (report.status !== 'allocated') {
+    const error = new Error('Can only create tracking records for allocated disaster reports');
+    error.status = 400;
+    throw error;
+  }
+
+  const lineItems = Array.isArray(report.allocatedResources?.lineItems)
+    ? report.allocatedResources.lineItems
+    : [];
+
+  if (!lineItems.length) {
+    const error = new Error('No allocated plan found for this disaster report');
+    error.status = 400;
+    throw error;
+  }
+
+  // Return a mock allocation object for compatibility
+  return {
+    _id: report._id, // Use disaster report ID as allocation ID
+    disasterId: report._id,
+    lineItems: lineItems,
+    status: 'allocated',
+    notes: report.allocatedResources?.message || '',
+    allocatedDate: report.allocatedResources?.allocatedDate
+  };
+}
 
 // Get all tracking records with filtering and pagination
 const getAllTrackingRecords = async (req, res) => {
@@ -30,10 +71,21 @@ const getAllTrackingRecords = async (req, res) => {
       ];
     }
 
+    const pendingStatuses = ['prepared', 'dispatched', 'in_transit', 'delivered'];
+
     // Role-based filtering
     if (req.user.role === 'dmc_officer') {
-      // DMC officers can only see delivered records for confirmation
-      query.status = { $in: ['delivered', 'confirmed_delivered'] };
+      // DMC officers work from the live pending-confirmation queue.
+      // confirmed_delivered stays available only when explicitly requested.
+      if (status === 'pending_confirmation') {
+        query.status = { $in: pendingStatuses };
+      } else if (status === 'confirmed_delivered') {
+        query.status = 'confirmed_delivered';
+      } else if (status && pendingStatuses.includes(status)) {
+        query.status = status;
+      } else {
+        query.status = { $in: pendingStatuses };
+      }
     }
 
     const trackingRecords = await TrackingRecord.find(query)
@@ -84,15 +136,6 @@ const getTrackingRecordById = async (req, res) => {
       });
     }
 
-    // Role-based access check
-    if (req.user.role === 'dmc_officer' && 
-        !['delivered', 'confirmed_delivered'].includes(trackingRecord.status)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
     res.json({
       success: true,
       data: { trackingRecord }
@@ -119,34 +162,24 @@ const createTrackingRecord = async (req, res) => {
       currentLocation
     } = req.body;
 
-    // Validate allocation exists and is confirmed
-    const allocation = await Allocation.findById(allocationId);
-    if (!allocation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Allocation not found'
-      });
-    }
+    const allocation = await resolveConfirmedAllocation({
+      allocationId,
+      disasterId,
+      userId: req.user.id,
+    });
 
-    if (allocation.status !== 'confirmed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Can only create tracking records for confirmed allocations'
-      });
-    }
-
-    // Check if tracking record already exists for this allocation
-    const existingRecord = await TrackingRecord.findOne({ allocationId });
+    // Check if tracking record already exists for this disaster report
+    const existingRecord = await TrackingRecord.findOne({ disasterId: allocation.disasterId });
     if (existingRecord) {
       return res.status(400).json({
         success: false,
-        message: 'Tracking record already exists for this allocation'
+        message: 'Tracking record already exists for this disaster report'
       });
     }
 
     const trackingRecord = new TrackingRecord({
-      allocationId,
-      disasterId,
+      allocationId: allocation._id, // Use disaster report ID as allocation ID
+      disasterId: allocation.disasterId,
       createdBy: req.user.id,
       dispatchDate: dispatchDate || new Date(),
       transportDetails: transportDetails || '',
@@ -170,9 +203,9 @@ const createTrackingRecord = async (req, res) => {
     });
   } catch (error) {
     console.error('Create tracking record error:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
-      message: 'Server error while creating tracking record'
+      message: error.status ? error.message : 'Server error while creating tracking record'
     });
   }
 };
@@ -343,10 +376,10 @@ const updateTrackingStatus = async (req, res) => {
       });
     }
 
-    if (trackingRecord.status !== 'delivered') {
+    if (trackingRecord.status === 'confirmed_delivered') {
       return res.status(400).json({
         success: false,
-        message: 'Can only confirm delivered records'
+        message: 'Record is already confirmed'
       });
     }
 

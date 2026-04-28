@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const inventoryItemSchema = new mongoose.Schema(
   {
@@ -9,7 +10,7 @@ const inventoryItemSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["Water", "Food", "Medical", "Shelter", "Clothing", "Other"],
+      enum: ITEM_CATEGORY_ENUM,
       required: true,
     },
     stock: {

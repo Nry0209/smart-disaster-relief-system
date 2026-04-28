@@ -65,7 +65,7 @@ export const SIDEBAR_ITEMS = [
   {
     label: "Distribution Tracking",
     path: "/distribution-tracking",
-    roles: [ROLES.ADMIN, ROLES.TRACKING, ROLES.CHARITY],
+    roles: [ROLES.ADMIN, ROLES.TRACKING],
   },
   {
     label: "User Management",

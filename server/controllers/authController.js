@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const mongoose = require('mongoose');
 
 const { generateToken } = require('../config/auth');
 
@@ -7,6 +8,8 @@ const bcrypt = require('bcryptjs');
 const { sendStaffOnboardingEmail, sendTestEmail, sendPasswordResetEmail, sendFirstPasswordSetEmail } = require('../services/emailService');
 
 const crypto = require('crypto');
+
+const isDatabaseConnected = () => mongoose.connection.readyState === 1;
 
 
 
@@ -32,6 +35,13 @@ const adminLogin = async (req, res) => {
 
       });
 
+    }
+
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database unavailable. Please try again shortly.'
+      });
     }
 
 
@@ -166,6 +176,13 @@ const staffLogin = async (req, res) => {
 
       });
 
+    }
+
+    if (!isDatabaseConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database unavailable. Please try again shortly.'
+      });
     }
 
 

@@ -1,6 +1,7 @@
 const { getPrediction } = require("../services/predictionService");
 const mongoose = require("mongoose");
 const PredictionLog = require("../models/PredictionLog");
+const { ITEM_CATEGORIES } = require("../utils/constants");
 
 const predictResources = async (req, res) => {
   try {
@@ -31,16 +32,19 @@ const predictResources = async (req, res) => {
       const predictedResources = [
         {
           itemName: "Food",
+          category: ITEM_CATEGORIES.FOOD,
           recommendedQuantity: Number(result.foodNeeded || 0),
           unit: "units",
         },
         {
           itemName: "Water",
+          category: ITEM_CATEGORIES.WATER,
           recommendedQuantity: Number(result.waterNeeded || 0),
           unit: "units",
         },
         {
           itemName: "Medicine",
+          category: ITEM_CATEGORIES.MEDICAL,
           recommendedQuantity: Number(result.medicineNeeded || 0),
           unit: "units",
         },
@@ -59,7 +63,29 @@ const predictResources = async (req, res) => {
       });
     }
 
-    res.status(200).json(result);
+    // Include category mapping in response for frontend consistency
+    const categorizedResult = {
+      ...result,
+      predictedResources: [
+        {
+          itemName: "Food",
+          category: ITEM_CATEGORIES.FOOD,
+          quantity: Number(result.foodNeeded || 0),
+        },
+        {
+          itemName: "Water", 
+          category: ITEM_CATEGORIES.WATER,
+          quantity: Number(result.waterNeeded || 0),
+        },
+        {
+          itemName: "Medicine",
+          category: ITEM_CATEGORIES.MEDICAL,
+          quantity: Number(result.medicineNeeded || 0),
+        },
+      ],
+    };
+
+    res.status(200).json(categorizedResult);
   } catch (error) {
     console.error("Prediction controller error:", error.message);
     res.status(500).json({ message: "Failed to get prediction." });

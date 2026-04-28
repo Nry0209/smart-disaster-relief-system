@@ -296,13 +296,39 @@ const validateDonation = [
     .withMessage('Please provide a valid phone number'),
 
   body('itemType')
-    .if(body('donationType').equals('inventory'))
+    .optional()
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Item name must be between 2 and 100 characters'),
 
-  body('quantity')
+  body('items')
     .if(body('donationType').equals('inventory'))
+    .isArray({ min: 1 })
+    .withMessage('For inventory donations, at least one item is required'),
+
+  body('items.*.inventoryItemId')
+    .if(body('donationType').equals('inventory'))
+    .isMongoId()
+    .withMessage('Each selected donation item must include a valid inventoryItemId'),
+
+  body('items.*.itemName')
+    .if(body('donationType').equals('inventory'))
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Each selected donation item must include an item name between 2 and 100 characters'),
+
+  body('items.*.category')
+    .if(body('donationType').equals('inventory'))
+    .isIn(['Water', 'Food', 'Medical', 'Shelter', 'Clothing', 'Other'])
+    .withMessage('Each selected donation item must include a valid category'),
+
+  body('items.*.quantity')
+    .if(body('donationType').equals('inventory'))
+    .isInt({ min: 1 })
+    .withMessage('Each selected donation item must include a quantity greater than zero'),
+
+  body('quantity')
+    .optional()
     .isInt({ min: 1 })
     .withMessage('Quantity must be a positive number'),
   

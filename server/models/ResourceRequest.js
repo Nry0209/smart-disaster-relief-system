@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const requestedItemSchema = new mongoose.Schema(
   {
@@ -15,6 +16,7 @@ const requestedItemSchema = new mongoose.Schema(
     },
     category: {
       type: String,
+      enum: ITEM_CATEGORY_ENUM,
       trim: true,
     },
     quantity: {

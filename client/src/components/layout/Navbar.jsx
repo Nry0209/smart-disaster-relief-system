@@ -78,7 +78,18 @@ function Navbar({ onToggleSidebar }) {
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+    
+    // Listen for notification updates from allocation page
+    const handleNotificationUpdate = () => {
+      fetchNotifications();
+    };
+    
+    window.addEventListener('notificationUpdate', handleNotificationUpdate);
+    
+    return () => {
+      window.removeEventListener('notificationUpdate', handleNotificationUpdate);
+    };
+  }, [fetchNotifications]);
 
   return (
     <header className="topbar">

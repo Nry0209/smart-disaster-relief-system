@@ -1,20 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2, RefreshCcw } from "lucide-react";
-import PageHeader from "../components/PageHeader";
 import { fetchDisasterReports } from "../services/disasterReportService";
+import { upsertAllocationForReport, clearAllocationForReport } from "../services/allocationService";
 import { getResourcePrediction } from "../services/predictionService";
+import { fetchInventoryItems } from "../services/inventoryService";
+import PageHeader from "../components/PageHeader";
 import "./Pages.css";
 
 const MAX_ALLOCATION_NOTE_LENGTH = 400;
-
-// Mock inventory data (same as InventoryPage)
-const initialInventory = [
-  { id: 1, name: "Bottled Water",  category: "Water",   stock: 4500, min: 6000 },
-  { id: 2, name: "Dry Ration",     category: "Food",    stock: 3900, min: 3500 },
-  { id: 3, name: "Blankets",       category: "Shelter", stock: 2600, min: 2000 },
-  { id: 4, name: "Tents",          category: "Shelter", stock: 240,  min: 400  },
-  { id: 5, name: "Medicine Kits",  category: "Medical", stock: 310,  min: 500  },
-];
 
 function getStatus(stock, min) {
   const ratio = stock / min;
@@ -73,7 +66,7 @@ function formatEventDate(value) {
 }
 
 export default function AllocationPage() {
-  const [inventory, setInventory] = useState(initialInventory);
+  const [inventory, setInventory] = useState([]);
   const [disasterEvents, setDisasterEvents] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -109,19 +102,73 @@ export default function AllocationPage() {
   const loadPageData = async (showRefreshedMessage = false) => {
     setIsLoadingData(true);
     setEventsError("");
+    setInventoryError("");
 
     try {
-      const reports = await fetchDisasterReports();
-      setDisasterEvents(Array.isArray(reports) ? reports : []);
+      const [reportsResult, inventoryResult] = await Promise.allSettled([
+        fetchDisasterReports(),
+        fetchInventoryItems(),
+      ]);
+
+      if (reportsResult.status === "fulfilled") {
+        setDisasterEvents(Array.isArray(reportsResult.value) ? reportsResult.value : []);
+      } else {
+        setDisasterEvents([]);
+        setEventsError(reportsResult.reason?.message || "Failed to load disaster reports from the backend.");
+      }
+
+      if (inventoryResult.status === "fulfilled") {
+        setInventory(Array.isArray(inventoryResult.value) ? inventoryResult.value : []);
+      } else {
+        setInventory([]);
+        setInventoryError(inventoryResult.reason?.message || "Failed to load inventory from the backend.");
+      }
+
       if (showRefreshedMessage) {
         setActionMessage("Allocation queue refreshed.");
       }
     } catch (error) {
+      const message = error.message || "Failed to load synchronized disaster and inventory data.";
       setDisasterEvents([]);
-      setEventsError(error.message || "Failed to load disaster events.");
+      setInventory([]);
+      setEventsError(message);
+      setInventoryError(message);
     } finally {
       setIsLoadingData(false);
     }
+  };
+
+  const getRequestedItems = (event) => {
+    if (Array.isArray(event?.requiredItems) && event.requiredItems.length > 0) {
+      return event.requiredItems
+        .map((item) => ({
+          inventoryItemId: String(item.inventoryItemId || ""),
+          itemName: String(item.itemName || "").trim(),
+          category: String(item.category || "").trim(),
+          requiredQuantity: Number(item.requiredQuantity || 0),
+        }))
+        .filter((item) => item.inventoryItemId && item.itemName);
+    }
+
+    const needs = Array.isArray(event?.immediateNeeds) ? event.immediateNeeds : [];
+    return needs
+      .map((need) => {
+        const matched = inventory.find(
+          (item) => String(item.name || "").toLowerCase() === String(need || "").toLowerCase()
+        );
+
+        if (!matched) {
+          return null;
+        }
+
+        return {
+          inventoryItemId: String(matched.id || matched._id || ""),
+          itemName: matched.name,
+          category: matched.category,
+          requiredQuantity: 0,
+        };
+      })
+      .filter(Boolean);
   };
 
   useEffect(() => {
@@ -190,13 +237,13 @@ export default function AllocationPage() {
     setPredictionPreviewEvent(null);
   };
 
-  const handleQuantityChange = (need, value) => {
+  const handleQuantityChange = (inventoryItemId, value) => {
     const parsed = Number(value);
     const qty = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
 
     setAllocationQuantities((prev) => ({
       ...prev,
-      [need]: qty,
+      [inventoryItemId]: qty,
     }));
   };
 
@@ -204,19 +251,28 @@ export default function AllocationPage() {
     if (!selectedEvent || !predictedResources) return;
 
     const suggestion = {};
-    const needs = Array.isArray(selectedEvent.immediateNeeds) ? selectedEvent.immediateNeeds : [];
+    const requestedItems = getRequestedItems(selectedEvent);
 
-    needs.forEach((need) => {
-      const normalizedNeed = String(need).toLowerCase();
+    requestedItems.forEach((item) => {
+      const normalizedName = String(item.itemName || "").toLowerCase();
+      const normalizedCategory = String(item.category || "").toLowerCase();
 
-      if (normalizedNeed.includes("water")) {
-        suggestion[need] = Number(predictedResources.waterNeeded || 0);
-      } else if (normalizedNeed.includes("food") || normalizedNeed.includes("ration")) {
-        suggestion[need] = Number(predictedResources.foodNeeded || 0);
-      } else if (normalizedNeed.includes("medicine") || normalizedNeed.includes("medical")) {
-        suggestion[need] = Number(predictedResources.medicineNeeded || 0);
+      if (normalizedCategory === "water" || normalizedName.includes("water")) {
+        suggestion[item.inventoryItemId] = Number(predictedResources.waterNeeded || 0);
+      } else if (
+        normalizedCategory === "food" ||
+        normalizedName.includes("food") ||
+        normalizedName.includes("ration")
+      ) {
+        suggestion[item.inventoryItemId] = Number(predictedResources.foodNeeded || 0);
+      } else if (
+        normalizedCategory === "medical" ||
+        normalizedName.includes("medicine") ||
+        normalizedName.includes("medical")
+      ) {
+        suggestion[item.inventoryItemId] = Number(predictedResources.medicineNeeded || 0);
       } else {
-        suggestion[need] = Number(allocationQuantities[need] || 0);
+        suggestion[item.inventoryItemId] = Number(allocationQuantities[item.inventoryItemId] || 0);
       }
     });
 
@@ -240,7 +296,8 @@ export default function AllocationPage() {
     try {
       const allocation = event.allocatedResources;
       const updatedInventory = inventory.map((item) => {
-        const allocatedQty = Number(allocation.quantities?.[item.name] || 0);
+        const itemId = String(item.id || item._id || "");
+        const allocatedQty = Number(allocation.quantities?.[itemId] || 0);
         return { ...item, stock: item.stock + allocatedQty };
       });
 
@@ -333,64 +390,125 @@ export default function AllocationPage() {
     fetchPredictionForEvent(event);
   };
 
-  const confirmAllocation = () => {
+  const confirmAllocation = async () => {
     if (!selectedEvent) return;
-    setAllocationError("");
     
-    // Update inventory stock based on allocation quantities
-    const updatedInventory = inventory.map(item => {
-      const allocatedQty = allocationQuantities[item.name] || 0;
-      const existingQty = existingAllocation?.quantities?.[item.name] || 0;
-      const stockChange = allocatedQty - existingQty;
-      const newStock = Math.max(0, item.stock - stockChange);
-      return { ...item, stock: newStock };
-    });
-    
-    // Create allocation record
-    const allocationRecord = {
-      quantities: allocationQuantities,
-      message: allocationMessage,
-      allocatedDate: new Date().toISOString(),
-      allocatedBy: "Allocation Officer"
-    };
-    
-    // Update event with allocation
-    const updatedEvents = disasterEvents.map(event => 
-      event.id === selectedEvent.id 
-        ? { 
-            ...event, 
-            status: "allocated",
-            allocatedResources: allocationRecord
-          }
-        : event
-    );
-    
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    setIsProcessing(true);
+    setActionError("");
+    setActionMessage("");
+
+    try {
+      const requestedItems = getRequestedItems(selectedEvent);
+
+      // Update inventory stock based on allocation quantities
+      const updatedInventory = inventory.map(item => {
+        const itemId = String(item.id || item._id || "");
+        const allocatedQty = allocationQuantities[itemId] || 0;
+        const existingQty = existingAllocation?.quantities?.[itemId] || 0;
+        const stockChange = allocatedQty - existingQty;
+        const newStock = Math.max(0, item.stock - stockChange);
+        return { ...item, stock: newStock };
+      });
+
+      const lineItems = requestedItems
+        .map((item) => ({
+          itemId: item.inventoryItemId,
+          itemName: item.itemName,
+          category: item.category,
+          quantity: Number(allocationQuantities[item.inventoryItemId] || 0),
+        }))
+        .filter((item) => item.quantity > 0);
+      
+      // Create allocation record
+      const allocationRecord = {
+        quantities: allocationQuantities,
+        lineItems,
+        message: allocationMessage,
+        allocatedDate: new Date().toISOString(),
+        allocatedBy: "Allocation Officer"
+      };
+      
+      // Update event with allocation
+      const updatedEvents = disasterEvents.map(event => 
+        event.id === selectedEvent.id 
+          ? { 
+                ...event, 
+                status: "allocated",
+                allocatedResources: allocationRecord
+              }
+          : event
+      );
+      
+      // Save allocation to backend
+      await upsertAllocationForReport(selectedEvent.id, {
+        hasExistingAllocation: Boolean(existingAllocation),
+        quantities: allocationQuantities,
+        lineItems,
+        message: allocationMessage,
+        allocatedBy: "Allocation Officer"
+      });
+      
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents);
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+      setActionMessage("Allocation confirmed and status updated to 'allocated'");
+      
+      // Trigger notification for new allocation
+      const notification = {
+        type: 'allocation_confirmed',
+        message: `New allocation confirmed for ${selectedEvent.disasterType} at ${selectedEvent.location}`,
+        eventId: selectedEvent.id,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store notification in localStorage for navbar to pick up
+      const existingNotifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+      existingNotifications.unshift(notification);
+      localStorage.setItem('notifications', JSON.stringify(existingNotifications.slice(0, 50)));
+      
+      // Trigger notification refresh in navbar
+      window.dispatchEvent(new CustomEvent('notificationUpdate'));
+    } catch (error) {
+      setActionError(error.message || "Failed to confirm allocation");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const updateAllocation = () => {
+  const updateAllocation = async () => {
     if (!selectedEvent || !existingAllocation) return;
     setAllocationError("");
     
     // Update inventory stock based on quantity changes
+    const requestedItems = getRequestedItems(selectedEvent);
+
     const updatedInventory = inventory.map(item => {
-      const newQty = allocationQuantities[item.name] || 0;
-      const oldQty = existingAllocation.quantities[item.name] || 0;
+      const itemId = String(item.id || item._id || "");
+      const newQty = allocationQuantities[itemId] || 0;
+      const oldQty = existingAllocation.quantities[itemId] || 0;
       const stockChange = newQty - oldQty;
       const newStock = item.stock - stockChange;
       return { ...item, stock: Math.max(0, newStock) };
     });
+
+    const lineItems = requestedItems
+      .map((item) => ({
+        itemId: item.inventoryItemId,
+        itemName: item.itemName,
+        category: item.category,
+        quantity: Number(allocationQuantities[item.inventoryItemId] || 0),
+      }))
+      .filter((item) => item.quantity > 0);
     
     // Update allocation record
     const updatedAllocation = {
       ...existingAllocation,
       quantities: allocationQuantities,
+      lineItems,
       message: allocationMessage,
       lastUpdated: new Date().toISOString()
     };
@@ -402,22 +520,36 @@ export default function AllocationPage() {
         : event
     );
     
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    try {
+      await upsertAllocationForReport(selectedEvent.id, {
+        hasExistingAllocation: true,
+        quantities: allocationQuantities,
+        lineItems,
+        message: allocationMessage,
+        allocatedBy: "Allocation Officer",
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents);
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+    } catch (error) {
+      setAllocationError(error.message || "Failed to update allocation.");
+    }
   };
 
-  const deleteAllocation = () => {
+  const deleteAllocation = async () => {
     if (!selectedEvent || !existingAllocation) return;
     setAllocationError("");
+    const reportId = selectedEvent.id;
     
     // Return allocated quantities to inventory
     const updatedInventory = inventory.map(item => {
-      const allocatedQty = existingAllocation.quantities[item.name] || 0;
+      const itemId = String(item.id || item._id || "");
+      const allocatedQty = existingAllocation.quantities[itemId] || 0;
       return { ...item, stock: item.stock + allocatedQty };
     });
     
@@ -432,13 +564,21 @@ export default function AllocationPage() {
         : event
     );
     
-    setInventory(updatedInventory);
-    setDisasterEvents(updatedEvents);
-    setAllocationModal(false);
-    setSelectedEvent(null);
-    setAllocationQuantities({});
-    setAllocationMessage("");
-    setExistingAllocation(null);
+    try {
+      await clearAllocationForReport(reportId, {
+        message: "Allocation cleared",
+      });
+
+      setInventory(updatedInventory);
+      setDisasterEvents(updatedEvents);
+      setAllocationModal(false);
+      setSelectedEvent(null);
+      setAllocationQuantities({});
+      setAllocationMessage("");
+      setExistingAllocation(null);
+    } catch (error) {
+      setAllocationError(error.message || "Failed to clear allocation from backend.");
+    }
   };
 
   const handleDeleteAllocationFromTable = async (eventId) => {
@@ -456,9 +596,10 @@ export default function AllocationPage() {
     await deleteAllocationForEvent(event, false);
   };
 
-  const getAvailableStock = (itemName) => {
-    const item = inventory.find(inv => inv.name.toLowerCase() === itemName.toLowerCase());
-    const allocatedQty = existingAllocation?.quantities?.[item?.name] || 0;
+  const getAvailableStock = (inventoryItemId) => {
+    const item = inventory.find(inv => String(inv.id || inv._id || "") === String(inventoryItemId));
+    const itemId = String(item?.id || item?._id || "");
+    const allocatedQty = existingAllocation?.quantities?.[itemId] || 0;
     return item ? item.stock + allocatedQty : 0;
   };
 
@@ -622,7 +763,7 @@ export default function AllocationPage() {
                   const priorityStyle = getUrgencyColor(event.priority);
                   const statusStyle = getStatusColor(event.status);
                   const canAllocate = ["active", "pending_inventory"].includes(event.status);
-                  const needs = Array.isArray(event.immediateNeeds) ? event.immediateNeeds : [];
+                  const needs = getRequestedItems(event);
                   
                   return (
                     <tr key={event.id}>
@@ -652,7 +793,7 @@ export default function AllocationPage() {
                           ) : (
                             needs.map((need, idx) => (
                               <div key={idx} className="item-line">
-                                {need}
+                                {need.itemName} ({need.category})
                               </div>
                             ))
                           )}
@@ -875,10 +1016,10 @@ export default function AllocationPage() {
               <div className="allocation-requested-needs">
                 <h3>DMC Requested Needs</h3>
                 <div className="items-summary">
-                  {Array.isArray(selectedEvent.immediateNeeds) && selectedEvent.immediateNeeds.length > 0 ? (
-                    selectedEvent.immediateNeeds.map((need, idx) => (
+                  {getRequestedItems(selectedEvent).length > 0 ? (
+                    getRequestedItems(selectedEvent).map((need, idx) => (
                       <div key={`${selectedEvent.id}-modal-need-${idx}`} className="item-line">
-                        {need}
+                        {need.itemName} ({need.category})
                       </div>
                     ))
                   ) : (
@@ -937,15 +1078,15 @@ export default function AllocationPage() {
 
               <div className="allocation-details">
                 <h3>Resource Allocation</h3>
-                {selectedEvent.immediateNeeds.map((need, index) => {
-                  const available = getAvailableStock(need);
-                  const currentQty = allocationQuantities[need] || 0;
+                {getRequestedItems(selectedEvent).map((need, index) => {
+                  const available = getAvailableStock(need.inventoryItemId);
+                  const currentQty = allocationQuantities[need.inventoryItemId] || 0;
                   const hasStock = currentQty <= available;
 
                   return (
                     <div key={`${selectedEvent.id}-allocation-${index}`} className="allocation-item">
                       <div className="item-info">
-                        <span className="item-name">{need}</span>
+                        <span className="item-name">{need.itemName}</span>
                         <span className="item-quantity">Available: {available.toLocaleString()}</span>
                       </div>
                       <div className="quantity-input">
@@ -954,7 +1095,7 @@ export default function AllocationPage() {
                           min="0"
                           max={Math.max(available, 0)}
                           value={currentQty}
-                          onChange={(event) => handleQuantityChange(need, event.target.value)}
+                          onChange={(event) => handleQuantityChange(need.inventoryItemId, event.target.value)}
                           className={hasStock ? "valid" : "invalid"}
                         />
                         <span className="unit-label">units</span>

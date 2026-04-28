@@ -30,26 +30,42 @@ async function requestJson(url, options = {}, fallbackMessage = "Request failed.
 }
 
 export async function upsertAllocationForReport(reportId, payload) {
+  const token = localStorage.getItem("token");
+  const hasExisting = Boolean(payload?.hasExistingAllocation);
+
+  const requestPayload = {
+    allocatedBy: payload?.allocatedBy || "Allocation Officer",
+    message: payload?.message || "",
+    allocatedResources: {
+      quantities: payload?.quantities || {},
+      lineItems: Array.isArray(payload?.lineItems) ? payload.lineItems : [],
+    },
+  };
+
   return requestJson(
-    `${API_BASE_URL}/api/allocations/by-report/${reportId}`,
+    `${API_BASE_URL}/api/disaster-reports/${reportId}/allocate`,
     {
-      method: "PUT",
+      method: hasExisting ? "PUT" : "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     },
     "Failed to save allocation."
   );
 }
 
 export async function clearAllocationForReport(reportId, payload = {}) {
+  const token = localStorage.getItem("token");
+
   return requestJson(
-    `${API_BASE_URL}/api/allocations/by-report/${reportId}`,
+    `${API_BASE_URL}/api/disaster-reports/${reportId}/allocate`,
     {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(payload),
     },

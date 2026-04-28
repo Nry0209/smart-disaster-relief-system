@@ -1,4 +1,5 @@
 const DisasterReport = require("../models/DisasterReport");
+const InventoryItem = require("../models/InventoryItem");
 const mongoose = require("mongoose");
 
 const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
@@ -13,6 +14,7 @@ const UPDATABLE_FIELDS = [
   "priority",
   "description",
   "immediateNeeds",
+  "requiredItems",
   "status",
   "reportedBy",
   "allocatedResources",
@@ -103,6 +105,59 @@ function normalizeAllocatedResources(value) {
   };
 }
 
+async function normalizeRequiredItems(value) {
+  if (!Array.isArray(value)) {
+    throw new Error("requiredItems must be an array.");
+  }
+
+  if (value.length === 0) {
+    return [];
+  }
+
+  const normalizedInput = value.map((item) => ({
+    inventoryItemId: String(item?.inventoryItemId || "").trim(),
+    itemName: String(item?.itemName || "").trim(),
+    category: String(item?.category || "").trim(),
+    requiredQuantity: Number(item?.requiredQuantity),
+  }));
+
+  const ids = normalizedInput.map((item) => item.inventoryItemId);
+
+  if (ids.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+    throw new Error("requiredItems contains an invalid inventoryItemId.");
+  }
+
+  if (normalizedInput.some((item) => !Number.isFinite(item.requiredQuantity) || item.requiredQuantity <= 0)) {
+    throw new Error("requiredItems requiredQuantity must be greater than zero.");
+  }
+
+  const inventoryItems = await InventoryItem.find({ _id: { $in: ids } });
+  const inventoryById = new Map(inventoryItems.map((item) => [String(item._id), item]));
+
+  if (inventoryById.size !== new Set(ids).size) {
+    throw new Error("One or more requiredItems entries reference missing inventory items.");
+  }
+
+  return normalizedInput.map((item) => {
+    const inventoryItem = inventoryById.get(item.inventoryItemId);
+
+    if (item.itemName && item.itemName.toLowerCase() !== String(inventoryItem.name || "").toLowerCase()) {
+      throw new Error(`Required item '${item.itemName}' does not match selected inventory item.`);
+    }
+
+    if (item.category && item.category.toLowerCase() !== String(inventoryItem.category || "").toLowerCase()) {
+      throw new Error(`Required item category '${item.category}' does not match selected inventory item.`);
+    }
+
+    return {
+      inventoryItemId: inventoryItem._id,
+      itemName: inventoryItem.name,
+      category: inventoryItem.category,
+      requiredQuantity: Math.floor(item.requiredQuantity),
+    };
+  });
+}
+
 function formatAllocatedResources(allocatedResources) {
   if (!allocatedResources) {
     return null;
@@ -144,6 +199,14 @@ function formatReport(report) {
     priority: report.priority,
     description: report.description,
     immediateNeeds: report.immediateNeeds,
+    requiredItems: Array.isArray(report.requiredItems)
+      ? report.requiredItems.map((item) => ({
+          inventoryItemId: item.inventoryItemId,
+          itemName: item.itemName,
+          category: item.category,
+          requiredQuantity: item.requiredQuantity,
+        }))
+      : [],
     status: report.status,
     reportedBy: report.reportedBy,
     allocatedResources: formatAllocatedResources(report.allocatedResources),
@@ -163,6 +226,7 @@ async function createDisasterReport(req, res) {
       priority,
       description,
       immediateNeeds,
+      requiredItems,
       status,
       reportedBy,
     } = req.body;
@@ -193,6 +257,19 @@ async function createDisasterReport(req, res) {
       return res.status(401).json({ message: "Invalid user session. Please sign in again." });
     }
 
+    let normalizedRequiredItems = [];
+    if (Array.isArray(requiredItems)) {
+      try {
+        normalizedRequiredItems = await normalizeRequiredItems(requiredItems);
+      } catch (error) {
+        return res.status(400).json({ message: error.message || "Invalid requiredItems value." });
+      }
+    }
+
+    const normalizedImmediateNeeds = normalizedRequiredItems.length
+      ? normalizedRequiredItems.map((item) => item.itemName)
+      : immediateNeeds;
+
     const report = await DisasterReport.create({
       disasterType,
       location,
@@ -203,7 +280,8 @@ async function createDisasterReport(req, res) {
       eventDate,
       priority,
       description,
-      immediateNeeds,
+      immediateNeeds: Array.isArray(normalizedImmediateNeeds) ? normalizedImmediateNeeds : [],
+      requiredItems: normalizedRequiredItems,
       status,
       reportedBy,
       createdBy,
@@ -342,6 +420,15 @@ async function updateDisasterReport(req, res) {
       updates.immediateNeeds = updates.immediateNeeds
         .map((item) => String(item).trim())
         .filter(Boolean);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "requiredItems")) {
+      try {
+        updates.requiredItems = await normalizeRequiredItems(updates.requiredItems);
+        updates.immediateNeeds = updates.requiredItems.map((item) => item.itemName);
+      } catch (error) {
+        return res.status(400).json({ message: error.message || "Invalid requiredItems value." });
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "allocatedResources")) {

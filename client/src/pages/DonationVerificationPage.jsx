@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
-import { fetchInventoryItems } from "../services/inventoryService";
 import { fetchDonations, verifyDonationById } from "../services/workflowService";
 import "./Pages.css";
 
 export default function DonationVerificationPage() {
   const [donations, setDonations] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -16,13 +14,9 @@ export default function DonationVerificationPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const [donationList, inventory] = await Promise.all([
-        fetchDonations(),
-        fetchInventoryItems(),
-      ]);
+      const donationList = await fetchDonations();
 
       setDonations(Array.isArray(donationList) ? donationList : []);
-      setInventoryItems(Array.isArray(inventory) ? inventory : []);
       setError("");
     } catch (loadError) {
       setError(loadError.message || "Failed to load donations.");
@@ -57,21 +51,6 @@ export default function DonationVerificationPage() {
             ? "Verified after physical inspection."
             : "Rejected after physical inspection.",
       };
-
-      if (status === "verified" && donation.donationType === "inventory") {
-        const matched = inventoryItems.find(
-          (item) =>
-            String(item.name || "").toLowerCase() === String(donation.itemType || "").toLowerCase()
-        );
-
-        if (!matched) {
-          throw new Error(
-            `No inventory item matched '${donation.itemType}'. Create inventory item first, then verify.`
-          );
-        }
-
-        payload.inventoryItemId = matched.id || matched._id;
-      }
 
       await verifyDonationById(donation._id, payload);
       setNotice(`Donation ${status} successfully.`);
@@ -140,7 +119,11 @@ export default function DonationVerificationPage() {
                       <td>
                         {donation.donationType === "monetary"
                           ? `LKR ${Number(donation.amount || 0).toLocaleString()}`
-                          : `${donation.itemType || "-"} x ${Number(donation.quantity || 0).toLocaleString()}`}
+                          : Array.isArray(donation.items) && donation.items.length > 0
+                            ? donation.items
+                                .map((item) => `${item.itemName || "-"} (${item.category || "-"}) x ${Number(item.quantity || 0).toLocaleString()}`)
+                                .join(", ")
+                            : `${donation.itemType || "-"} x ${Number(donation.quantity || 0).toLocaleString()}`}
                       </td>
                       <td>{donation.status}</td>
                       <td>{new Date(donation.createdAt).toLocaleString()}</td>

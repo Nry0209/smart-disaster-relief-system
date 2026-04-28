@@ -21,11 +21,119 @@ function normalizeDonationPayload(payload = {}) {
     phone: String(payload.phone || "").trim(),
     itemType: String(payload.itemType || "").trim(),
     category: String(payload.category || "").trim(),
+    items: Array.isArray(payload.items) ? payload.items : [],
     quantity: Number(payload.quantity),
     amount: Number(payload.amount),
     expectedDeliveryDate: payload.expectedDeliveryDate || null,
     partnerId: payload.partnerId || null,
   };
+}
+
+function normalizeLineQuantity(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  const normalized = Math.floor(parsed);
+  return normalized > 0 ? normalized : null;
+}
+
+async function normalizeInventoryDonationItems({ items, itemType, category, quantity }) {
+  let requestedItems = Array.isArray(items) ? items : [];
+
+  // Backward compatibility for older clients that still submit single-item payloads.
+  if (!requestedItems.length && itemType) {
+    requestedItems = [
+      {
+        itemName: itemType,
+        category,
+        quantity,
+      },
+    ];
+  }
+
+  if (!requestedItems.length) {
+    return { normalizedItems: [], totalQuantity: 0 };
+  }
+
+  const normalizedRequestedItems = requestedItems.map((item) => ({
+    inventoryItemId: String(item.inventoryItemId || "").trim(),
+    itemName: String(item.itemName || item.itemType || "").trim(),
+    category: String(item.category || "").trim(),
+    quantity: normalizeLineQuantity(item.quantity),
+  }));
+
+  const hasExplicitInventoryIds = normalizedRequestedItems.every((item) => item.inventoryItemId);
+  let inventoryItemsById = new Map();
+
+  if (hasExplicitInventoryIds) {
+    const uniqueIds = [...new Set(normalizedRequestedItems.map((item) => item.inventoryItemId))];
+
+    const inventoryItems = await InventoryItem.find({
+      _id: { $in: uniqueIds },
+    });
+
+    inventoryItemsById = new Map(inventoryItems.map((entry) => [String(entry._id), entry]));
+
+    if (inventoryItemsById.size !== uniqueIds.length) {
+      throw new Error("One or more selected inventory items were not found.");
+    }
+  }
+
+  const normalizedItems = [];
+
+  for (const item of normalizedRequestedItems) {
+    if (!item.quantity) {
+      throw new Error("Each selected inventory item must include a quantity greater than zero.");
+    }
+
+    let inventoryItem = null;
+
+    if (item.inventoryItemId) {
+      inventoryItem = inventoryItemsById.get(item.inventoryItemId);
+    } else {
+      const nameQuery = item.itemName;
+      const categoryQuery = item.category;
+
+      if (!nameQuery || !categoryQuery) {
+        throw new Error("Each selected inventory item must include category and item name.");
+      }
+
+      inventoryItem = await InventoryItem.findOne({
+        name: { $regex: `^${nameQuery.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, $options: "i" },
+        category: { $regex: `^${categoryQuery.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, $options: "i" },
+      });
+    }
+
+    if (!inventoryItem) {
+      throw new Error(`Inventory item '${item.itemName || "(unknown)"}' in category '${item.category || "(unknown)"}' was not found.`);
+    }
+
+    if (
+      item.itemName &&
+      item.itemName.toLowerCase() !== String(inventoryItem.name || "").toLowerCase()
+    ) {
+      throw new Error(`Item name '${item.itemName}' does not match selected inventory record.`);
+    }
+
+    if (
+      item.category &&
+      item.category.toLowerCase() !== String(inventoryItem.category || "").toLowerCase()
+    ) {
+      throw new Error(`Category '${item.category}' does not match selected inventory record.`);
+    }
+
+    normalizedItems.push({
+      inventoryItemId: inventoryItem._id,
+      itemName: inventoryItem.name,
+      category: inventoryItem.category,
+      quantity: item.quantity,
+    });
+  }
+
+  const totalQuantity = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
+  return { normalizedItems, totalQuantity };
 }
 
 // Create donation (Public submission)
@@ -40,6 +148,7 @@ async function createDonation(req, res) {
       phone,
       itemType,
       category,
+      items,
       quantity,
       amount,
       expectedDeliveryDate,
@@ -60,22 +169,27 @@ async function createDonation(req, res) {
       return res.status(400).json({ message: "Organization name is required for organization donors." });
     }
 
+    let normalizedInventoryItems = [];
+    let totalInventoryQuantity = 0;
+
     if (donationType === "inventory") {
-      if (!itemType || !Number.isFinite(quantity)) {
-        return res.status(400).json({
-          message: "For inventory donations, item type and a valid quantity are required."
+      try {
+        const normalized = await normalizeInventoryDonationItems({
+          items,
+          itemType,
+          category,
+          quantity,
         });
+
+        normalizedInventoryItems = normalized.normalizedItems;
+        totalInventoryQuantity = normalized.totalQuantity;
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
       }
 
-      if (quantity < 0) {
+      if (!normalizedInventoryItems.length || totalInventoryQuantity <= 0) {
         return res.status(400).json({
-          message: "Invalid count. Quantity cannot be negative."
-        });
-      }
-
-      if (quantity === 0) {
-        return res.status(400).json({
-          message: "For inventory donations, quantity must be greater than zero."
+          message: "For inventory donations, select at least one inventory item and quantity."
         });
       }
     }
@@ -104,9 +218,10 @@ async function createDonation(req, res) {
       organizationName: donorType === "organization" ? organizationName : "",
       email: email || "",
       phone: phone || "",
-      itemType: donationType === "inventory" ? itemType : "",
-      category: donationType === "inventory" ? category || "" : "monetary",
-      quantity: donationType === "inventory" ? quantity : 0,
+      items: donationType === "inventory" ? normalizedInventoryItems : [],
+      itemType: donationType === "inventory" ? normalizedInventoryItems[0]?.itemName || "" : "",
+      category: donationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "monetary",
+      quantity: donationType === "inventory" ? totalInventoryQuantity : 0,
       amount: donationType === "monetary" ? amount : 0,
       expectedDeliveryDate: donationType === "inventory" ? expectedDeliveryDate || null : null,
       status: "pending_verification"
@@ -141,7 +256,12 @@ async function listDonations(req, res) {
     const filter = {};
 
     if (status) filter.status = status;
-    if (category) filter.category = category;
+    if (category) {
+      filter.$or = [
+        { category },
+        { "items.category": category },
+      ];
+    }
 
     const donations = await Donation.find(filter)
       .populate('partnerId', 'name email')
@@ -215,7 +335,7 @@ async function verifyDonation(req, res) {
     }
 
     const { id } = req.params;
-    const { status, verificationNotes, inventoryItemId } = req.body;
+    const { status, verificationNotes } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid donation ID." });
@@ -243,41 +363,64 @@ async function verifyDonation(req, res) {
 
     // If approved and this is an inventory donation, update inventory stock.
     if (status === "verified" && donation.donationType === "inventory") {
-      if (!inventoryItemId) {
-        return res.status(400).json({ 
-          message: "Inventory item ID is required for verified inventory donations." 
+      let donationItems = Array.isArray(donation.items) ? donation.items : [];
+
+      if (!donationItems.length && donation.itemType && donation.category && donation.quantity > 0) {
+        const legacyInventoryItem = await InventoryItem.findOne({
+          name: { $regex: `^${String(donation.itemType).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, $options: "i" },
+          category: { $regex: `^${String(donation.category).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}$`, $options: "i" },
+        });
+
+        if (legacyInventoryItem) {
+          donationItems = [
+            {
+              inventoryItemId: legacyInventoryItem._id,
+              itemName: legacyInventoryItem.name,
+              category: legacyInventoryItem.category,
+              quantity: donation.quantity,
+            },
+          ];
+          donation.items = donationItems;
+        }
+      }
+
+      if (!donationItems.length) {
+        return res.status(400).json({
+          message: "Donation has no inventory item lines to verify."
         });
       }
 
-      const inventoryItem = await InventoryItem.findById(inventoryItemId);
-      if (!inventoryItem) {
-        return res.status(404).json({ message: "Inventory item not found." });
+      for (const donationItem of donationItems) {
+        const inventoryItem = await InventoryItem.findById(donationItem.inventoryItemId);
+        if (!inventoryItem) {
+          return res.status(404).json({
+            message: `Inventory item not found for donated item '${donationItem.itemName}'.`
+          });
+        }
+
+        const previousStock = inventoryItem.stock;
+        inventoryItem.stock += donationItem.quantity;
+        inventoryItem.lastUpdatedBy = req.user.id;
+        await inventoryItem.save();
+
+        const activity = new InventoryActivity({
+          itemId: inventoryItem._id,
+          itemName: inventoryItem.name,
+          action: "donation",
+          quantity: donationItem.quantity,
+          previousStock,
+          newStock: inventoryItem.stock,
+          note: `Donation from ${donation.donorName}${donation.email ? ` (${donation.email})` : ""}`,
+          metadata: {
+            donationId: donation._id.toString(),
+            donationType: donation.donationType,
+            category: inventoryItem.category,
+          },
+          performedBy: req.user.fullName || req.user.name || req.user.id,
+        });
+
+        await activity.save();
       }
-
-      // Update inventory stock
-      const previousStock = inventoryItem.stock;
-      inventoryItem.stock += donation.quantity;
-      inventoryItem.lastUpdatedBy = req.user.id;
-      await inventoryItem.save();
-
-      // Create inventory activity record
-      const activity = new InventoryActivity({
-        itemId: inventoryItem._id,
-        itemName: inventoryItem.name,
-        action: "donation",
-        quantity: donation.quantity,
-        previousStock,
-        newStock: inventoryItem.stock,
-        note: `Donation from ${donation.donorName}${donation.email ? ` (${donation.email})` : ""}`,
-        metadata: {
-          donationId: donation._id.toString(),
-          donationType: donation.donationType,
-          category: inventoryItem.category,
-        },
-        performedBy: req.user.fullName || req.user.name || req.user.id,
-      });
-
-      await activity.save();
     }
 
     await donation.save();
@@ -315,6 +458,7 @@ async function updateDonation(req, res) {
       phone,
       itemType,
       category,
+      items,
       quantity,
       amount,
       expectedDeliveryDate,
@@ -344,22 +488,27 @@ async function updateDonation(req, res) {
       return res.status(400).json({ message: "Organization name is required for organization donors." });
     }
 
+    let normalizedInventoryItems = [];
+    let totalInventoryQuantity = 0;
+
     if (donationType === "inventory") {
-      if (!itemType || !Number.isFinite(quantity)) {
-        return res.status(400).json({
-          message: "For inventory donations, item type and a valid quantity are required."
+      try {
+        const normalized = await normalizeInventoryDonationItems({
+          items,
+          itemType,
+          category,
+          quantity,
         });
+
+        normalizedInventoryItems = normalized.normalizedItems;
+        totalInventoryQuantity = normalized.totalQuantity;
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
       }
 
-      if (quantity < 0) {
+      if (!normalizedInventoryItems.length || totalInventoryQuantity <= 0) {
         return res.status(400).json({
-          message: "Invalid count. Quantity cannot be negative."
-        });
-      }
-
-      if (quantity === 0) {
-        return res.status(400).json({
-          message: "For inventory donations, quantity must be greater than zero."
+          message: "For inventory donations, select at least one inventory item and quantity."
         });
       }
     }
@@ -378,9 +527,10 @@ async function updateDonation(req, res) {
     donation.organizationName = donorType === "organization" ? organizationName : "";
     donation.email = email;
     donation.phone = phone;
-    donation.itemType = donationType === "inventory" ? itemType : "";
-    donation.category = donationType === "inventory" ? category : "monetary";
-    donation.quantity = donationType === "inventory" ? quantity : 0;
+    donation.items = donationType === "inventory" ? normalizedInventoryItems : [];
+    donation.itemType = donationType === "inventory" ? normalizedInventoryItems[0]?.itemName || "" : "";
+    donation.category = donationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "monetary";
+    donation.quantity = donationType === "inventory" ? totalInventoryQuantity : 0;
     donation.amount = donationType === "monetary" ? amount : 0;
     donation.expectedDeliveryDate = donationType === "inventory" ? expectedDeliveryDate : null;
 

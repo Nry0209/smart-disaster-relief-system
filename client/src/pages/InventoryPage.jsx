@@ -9,14 +9,15 @@ import {
   deleteInventoryItem,
   adjustInventoryStock,
 } from "../services/inventoryService";
+import { ITEM_CATEGORY_LIST, ITEM_CATEGORIES } from "../utils/categories";
 import "./Pages.css";
 
-const CATEGORY_OPTIONS = ["Water", "Food", "Medical", "Shelter", "Clothing", "Other"];
+const CATEGORY_OPTIONS = [...ITEM_CATEGORY_LIST, "Other"];
 
 const DEFAULT_ITEM_FORM = {
   id: "",
   name: "",
-  category: "Water",
+  category: ITEM_CATEGORIES.WATER,
   stock: "",
   min: "",
   warehouse: "Warehouse 1",

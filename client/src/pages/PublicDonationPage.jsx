@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Building2, CheckCircle, HandCoins, Heart, Package, UserRound } from "lucide-react";
 import { createPublicDonation } from "../services/workflowService";
+import { fetchInventoryItems } from "../services/inventoryService";
 import "./Pages.css";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
 const MIN_TEXT_LENGTH = 2;
 const MAX_TEXT_LENGTH = 80;
-const MAX_CATEGORY_LENGTH = 50;
+const DEFAULT_DONATION_ITEM = {
+  inventoryItemId: "",
+  category: "",
+  itemName: "",
+  quantity: "",
+};
 
 function getTodayDateLocal() {
   const now = new Date();
@@ -36,6 +42,8 @@ export default function PublicDonationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [form, setForm] = useState({
     donorType: "individual",
     donationType: "inventory",
@@ -44,14 +52,98 @@ export default function PublicDonationPage() {
     email: "",
     phone: "",
     amount: "",
-    itemType: "",
-    category: "",
-    quantity: "",
+    items: [{ ...DEFAULT_DONATION_ITEM }],
     expectedDeliveryDate: "",
   });
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadInventoryItems() {
+      try {
+        setCatalogLoading(true);
+        const items = await fetchInventoryItems();
+
+        if (!active) return;
+
+        const normalized = Array.isArray(items)
+          ? items
+              .filter((item) => item?.id && item?.name && item?.category)
+              .map((item) => ({
+                id: String(item.id),
+                name: String(item.name),
+                category: String(item.category),
+              }))
+          : [];
+
+        setInventoryItems(normalized);
+      } catch {
+        if (!active) return;
+        setInventoryItems([]);
+      } finally {
+        if (active) setCatalogLoading(false);
+      }
+    }
+
+    loadInventoryItems();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const categoryOptions = useMemo(() => {
+    return [...new Set(inventoryItems.map((item) => item.category))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [inventoryItems]);
+
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function getItemsByCategory(category) {
+    return inventoryItems.filter((item) => item.category === category);
+  }
+
+  function updateDonationItem(index, field, value) {
+    setForm((prev) => {
+      const nextItems = [...(Array.isArray(prev.items) ? prev.items : [])];
+      const current = { ...(nextItems[index] || DEFAULT_DONATION_ITEM) };
+
+      if (field === "category") {
+        current.category = value;
+        current.inventoryItemId = "";
+        current.itemName = "";
+      } else if (field === "inventoryItemId") {
+        current.inventoryItemId = value;
+        const matched = inventoryItems.find((item) => item.id === value);
+        current.itemName = matched?.name || "";
+        current.category = matched?.category || current.category;
+      } else {
+        current[field] = value;
+      }
+
+      nextItems[index] = current;
+      return { ...prev, items: nextItems };
+    });
+  }
+
+  function addDonationItemRow() {
+    setForm((prev) => ({
+      ...prev,
+      items: [...(Array.isArray(prev.items) ? prev.items : []), { ...DEFAULT_DONATION_ITEM }],
+    }));
+  }
+
+  function removeDonationItemRow(index) {
+    setForm((prev) => {
+      const existing = Array.isArray(prev.items) ? prev.items : [];
+      const nextItems = existing.filter((_, idx) => idx !== index);
+      return {
+        ...prev,
+        items: nextItems.length ? nextItems : [{ ...DEFAULT_DONATION_ITEM }],
+      };
+    });
   }
 
   function validateStep(step) {
@@ -59,8 +151,13 @@ export default function PublicDonationPage() {
     const organizationName = form.organizationName.trim();
     const email = form.email.trim();
     const phone = form.phone.trim();
-    const itemType = form.itemType.trim();
-    const quantity = Number(form.quantity);
+    const normalizedItems = (Array.isArray(form.items) ? form.items : [])
+      .map((item) => ({
+        inventoryItemId: String(item.inventoryItemId || "").trim(),
+        category: String(item.category || "").trim(),
+        itemName: String(item.itemName || "").trim(),
+        quantity: Number(item.quantity),
+      }));
     const amount = Number(form.amount);
     const expectedDeliveryDate = form.expectedDeliveryDate ? new Date(form.expectedDeliveryDate) : null;
 
@@ -92,16 +189,23 @@ export default function PublicDonationPage() {
     }
 
     if (step === 2) {
-      if (form.donationType === "inventory" && (!itemType || itemType.length < MIN_TEXT_LENGTH || itemType.length > MAX_TEXT_LENGTH || !Number.isInteger(quantity) || quantity < 0)) {
-        return "For inventory donations, item type and a valid quantity are required. Invalid count values are not allowed.";
-      }
+      if (form.donationType === "inventory") {
+        if (!normalizedItems.length) {
+          return "Select at least one inventory item and quantity.";
+        }
 
-      if (form.donationType === "inventory" && quantity === 0) {
-        return "For inventory donations, quantity must be greater than zero.";
-      }
+        const hasInvalidLine = normalizedItems.some(
+          (item) =>
+            !item.inventoryItemId ||
+            !item.category ||
+            !item.itemName ||
+            !Number.isInteger(item.quantity) ||
+            item.quantity <= 0
+        );
 
-      if (form.donationType === "inventory" && form.category.trim().length > MAX_CATEGORY_LENGTH) {
-        return `Category cannot exceed ${MAX_CATEGORY_LENGTH} characters.`;
+        if (hasInvalidLine) {
+          return "Each selected inventory item must include category, item name, and a quantity greater than zero.";
+        }
       }
 
       if (form.donationType === "monetary" && (!Number.isFinite(amount) || amount <= 0)) {
@@ -150,13 +254,19 @@ export default function PublicDonationPage() {
       return;
     }
 
-    const quantity = Number(form.quantity);
+    const normalizedItems = (Array.isArray(form.items) ? form.items : [])
+      .map((item) => ({
+        inventoryItemId: String(item.inventoryItemId || "").trim(),
+        category: String(item.category || "").trim(),
+        itemName: String(item.itemName || "").trim(),
+        quantity: Number(item.quantity),
+      }))
+      .filter((item) => item.inventoryItemId && item.itemName && item.category && Number.isInteger(item.quantity) && item.quantity > 0);
     const amount = Number(form.amount);
     const donorName = form.donorName.trim();
     const organizationName = form.organizationName.trim();
     const email = form.email.trim();
     const phone = form.phone.trim();
-    const itemType = form.itemType.trim();
 
     if (form.email && !EMAIL_PATTERN.test(email)) {
       setError("Enter a valid email address.");
@@ -179,9 +289,7 @@ export default function PublicDonationPage() {
         email,
         phone,
         amount: form.donationType === "monetary" ? amount : 0,
-        itemType: form.donationType === "inventory" ? itemType : "",
-        category: form.donationType === "inventory" ? form.category.trim() : "",
-        quantity: form.donationType === "inventory" ? quantity : 0,
+        items: form.donationType === "inventory" ? normalizedItems : [],
         expectedDeliveryDate: form.donationType === "inventory" ? form.expectedDeliveryDate || null : null,
       });
 
@@ -194,9 +302,7 @@ export default function PublicDonationPage() {
         email: "",
         phone: "",
         amount: "",
-        itemType: "",
-        category: "",
-        quantity: "",
+        items: [{ ...DEFAULT_DONATION_ITEM }],
         expectedDeliveryDate: "",
       });
       setCurrentStep(1);
@@ -369,34 +475,79 @@ export default function PublicDonationPage() {
                 </label>
               ) : (
                 <>
-                  <label className="form-group">
-                    <span>Item Type *</span>
-                    <input
-                      value={form.itemType}
-                      onChange={(e) => updateField("itemType", e.target.value)}
-                      placeholder="e.g., Water Bottles"
-                      required
-                      minLength={MIN_TEXT_LENGTH}
-                      maxLength={MAX_TEXT_LENGTH}
-                    />
-                  </label>
+                  <div className="md:col-span-2 space-y-3">
+                    <span className="text-sm font-semibold text-slate-700">Select inventory items *</span>
 
-                  <label className="form-group">
-                    <span>Category</span>
-                    <input value={form.category} onChange={(e) => updateField("category", e.target.value)} />
-                  </label>
+                    {catalogLoading && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                        Loading inventory catalog...
+                      </div>
+                    )}
 
-                  <label className="form-group">
-                    <span>Quantity *</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={form.quantity}
-                      onChange={(e) => updateField("quantity", e.target.value)}
-                      required
-                    />
-                  </label>
+                    {(Array.isArray(form.items) ? form.items : []).map((line, index) => {
+                      const itemOptions = getItemsByCategory(line.category);
+
+                      return (
+                        <div key={`donation-item-row-${index}`} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-12">
+                          <label className="form-group md:col-span-4">
+                            <span>Category *</span>
+                            <select
+                              value={line.category}
+                              onChange={(e) => updateDonationItem(index, "category", e.target.value)}
+                              required
+                            >
+                              <option value="">Select category</option>
+                              {categoryOptions.map((category) => (
+                                <option key={category} value={category}>{category}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="form-group md:col-span-5">
+                            <span>Item Name *</span>
+                            <select
+                              value={line.inventoryItemId}
+                              onChange={(e) => updateDonationItem(index, "inventoryItemId", e.target.value)}
+                              required
+                              disabled={!line.category}
+                            >
+                              <option value="">Select item</option>
+                              {itemOptions.map((item) => (
+                                <option key={item.id} value={item.id}>{item.name}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="form-group md:col-span-2">
+                            <span>Quantity *</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={line.quantity}
+                              onChange={(e) => updateDonationItem(index, "quantity", e.target.value)}
+                              required
+                            />
+                          </label>
+
+                          <div className="form-group md:col-span-1">
+                            <span>&nbsp;</span>
+                            <button
+                              type="button"
+                              className="btn-secondary w-full"
+                              onClick={() => removeDonationItemRow(index)}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <button type="button" className="btn-secondary" onClick={addDonationItemRow}>
+                      Add Another Item
+                    </button>
+                  </div>
 
                   <label className="form-group">
                     <span>Expected Delivery Date</span>
@@ -427,9 +578,14 @@ export default function PublicDonationPage() {
                 <p><strong>Amount:</strong> {form.amount ? `LKR ${form.amount}` : "-"}</p>
               ) : (
                 <>
-                  <p><strong>Item Type:</strong> {form.itemType || "-"}</p>
-                  <p><strong>Category:</strong> {form.category || "-"}</p>
-                  <p><strong>Quantity:</strong> {form.quantity || "-"}</p>
+                  <p><strong>Selected Items:</strong></p>
+                  <ul className="list-disc pl-6">
+                    {(Array.isArray(form.items) ? form.items : []).map((item, index) => (
+                      <li key={`review-item-${index}`}>
+                        {(item.itemName || "-")} ({item.category || "-"}) x {item.quantity || "0"}
+                      </li>
+                    ))}
+                  </ul>
                   <p><strong>Expected Delivery:</strong> {form.expectedDeliveryDate || "-"}</p>
                 </>
               )}

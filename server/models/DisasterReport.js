@@ -62,6 +62,32 @@ const allocatedResourcesSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const requiredResourceItemSchema = new mongoose.Schema(
+  {
+    inventoryItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "InventoryItem",
+      required: true,
+    },
+    itemName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    category: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    requiredQuantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  { _id: false }
+);
+
 const disasterReportSchema = new mongoose.Schema(
   {
     disasterType: {
@@ -121,6 +147,10 @@ const disasterReportSchema = new mongoose.Schema(
     },
     immediateNeeds: {
       type: [String],
+      default: [],
+    },
+    requiredItems: {
+      type: [requiredResourceItemSchema],
       default: [],
     },
     status: {

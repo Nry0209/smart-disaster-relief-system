@@ -68,7 +68,9 @@ function App() {
       } />
       <Route path="/dmc-delivery-verification" element={
         <DashboardLayout>
-          <DmcDeliveryVerificationPage />
+          <DmcOnlyRoute>
+            <DmcDeliveryVerificationPage />
+          </DmcOnlyRoute>
         </DashboardLayout>
       } />
       <Route path="/inventory" element={
@@ -87,9 +89,11 @@ function App() {
         </DashboardLayout>
       } />
       <Route path="/distribution-tracking" element={
-        <DashboardLayout>
-          <DistributionTracking />
-        </DashboardLayout>
+        <RoleRoute allowedRoles={["admin", "tracking_officer"]} fallback="/dashboard">
+          <DashboardLayout>
+            <DistributionTracking />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="/users" element={
         <RoleRoute allowedRoles={["admin", "inventory_officer"]} fallback="/dashboard">

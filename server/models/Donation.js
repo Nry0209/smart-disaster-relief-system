@@ -1,5 +1,31 @@
 const mongoose = require("mongoose");
 
+const donationItemSchema = new mongoose.Schema(
+  {
+    inventoryItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "InventoryItem",
+      required: true,
+    },
+    itemName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    category: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  { _id: false }
+);
+
 const donationSchema = new mongoose.Schema(
   {
     partnerId: {
@@ -51,6 +77,10 @@ const donationSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       default: 0,
+    },
+    items: {
+      type: [donationItemSchema],
+      default: [],
     },
     amount: {
       type: Number,
