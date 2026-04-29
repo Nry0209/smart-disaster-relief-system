@@ -5,11 +5,9 @@ import { fetchDisasterReports } from "../services/disasterReportService";
 import {
   createTrackingRecord as createTrackingRecordRequest,
   fetchTrackingRecords,
-  updateTrackingRecordById,
 } from "../services/workflowService";
 import "./Pages.css";
 
-const STATUS_SEQUENCE = ["prepared", "dispatched", "in_transit", "delivered"];
 const TRACKING_RECORDS_UPDATED_EVENT = "tracking-records-updated";
 
 // Sri Lankan driver names
@@ -58,6 +56,10 @@ function getTrackedPlanId(record) {
   return String(record?.disasterId?._id || record?.disasterId || "");
 }
 
+function isFinalizedTrackingRecord(record) {
+  return String(record?.status || "") === "confirmed_delivered";
+}
+
 export default function DistributionTracking() {
   const [plans, setPlans] = useState([]);
   const [trackingRecords, setTrackingRecords] = useState([]);
@@ -84,7 +86,7 @@ export default function DistributionTracking() {
       const allocatedPlans = reportsResult?.filter((report) => report?.allocatedResources?.lineItems?.length > 0) || [];
 
       // Load tracking records separately
-      const recordsResult = await fetchTrackingRecords();
+      const recordsResult = await fetchTrackingRecords({ limit: 1000 });
       const records = recordsResult || [];
 
       setPlans(Array.isArray(allocatedPlans) ? allocatedPlans : []);
@@ -115,25 +117,57 @@ export default function DistributionTracking() {
     return () => window.removeEventListener(TRACKING_RECORDS_UPDATED_EVENT, handleTrackingRecordsUpdated);
   }, []);
 
-  const untrackedPlans = useMemo(() => {
+  const latestTrackingRecordByPlanId = useMemo(() => {
+    const recordsByPlanId = new Map();
+
+    trackingRecords.forEach((record) => {
+      const planId = getTrackedPlanId(record);
+      if (!planId) return;
+
+      const existing = recordsByPlanId.get(planId);
+      const existingTime = existing ? new Date(existing.createdAt || 0).getTime() : -1;
+      const currentTime = new Date(record.createdAt || 0).getTime();
+
+      if (!existing || currentTime >= existingTime) {
+        recordsByPlanId.set(planId, record);
+      }
+    });
+
+    return recordsByPlanId;
+  }, [trackingRecords]);
+
+  const readyTrackingPlans = useMemo(() => {
+    const finalizedPlanIds = new Set(
+      trackingRecords.filter(isFinalizedTrackingRecord).map((record) => getTrackedPlanId(record))
+    );
+
+    return plans.filter((plan) => !finalizedPlanIds.has(getPlanId(plan)));
+  }, [plans, trackingRecords]);
+
+  const dispatchablePlans = useMemo(() => {
     const trackedPlanIds = new Set(trackingRecords.map((record) => getTrackedPlanId(record)));
     return plans.filter((plan) => !trackedPlanIds.has(getPlanId(plan)));
   }, [plans, trackingRecords]);
 
+  const finalizedTrackingRecords = useMemo(
+    () => trackingRecords.filter((record) => isFinalizedTrackingRecord(record)),
+    [trackingRecords]
+  );
+
   const selectedPlan = useMemo(
-    () => untrackedPlans.find((plan) => getPlanId(plan) === form.planId) || null,
-    [form.planId, untrackedPlans]
+    () => dispatchablePlans.find((plan) => getPlanId(plan) === form.planId) || null,
+    [form.planId, dispatchablePlans]
   );
 
   useEffect(() => {
     if (showDispatchForm && !selectedPlan) {
-      if (untrackedPlans.length > 0) {
-        setForm((prev) => ({ ...prev, planId: getPlanId(untrackedPlans[0]) }));
+      if (dispatchablePlans.length > 0) {
+        setForm((prev) => ({ ...prev, planId: getPlanId(dispatchablePlans[0]) }));
       } else {
         setShowDispatchForm(false);
       }
     }
-  }, [selectedPlan, showDispatchForm, untrackedPlans]);
+  }, [selectedPlan, showDispatchForm, dispatchablePlans]);
 
   function handlePlanSelect(value) {
     setForm((prev) => ({
@@ -190,36 +224,6 @@ export default function DistributionTracking() {
     }
   }
 
-  async function advanceStatus(record) {
-    const current = String(record.status || "prepared");
-    const index = STATUS_SEQUENCE.indexOf(current);
-    if (index < 0 || index >= STATUS_SEQUENCE.length - 1) {
-      return;
-    }
-
-    const next = STATUS_SEQUENCE[index + 1];
-
-    try {
-      setSubmitting(true);
-      await updateTrackingRecordById(record._id, {
-        status: next,
-        currentLocation:
-          next === "in_transit"
-            ? "En route"
-            : next === "delivered"
-              ? "DMC delivery point"
-              : record.currentLocation,
-      });
-      window.dispatchEvent(new Event(TRACKING_RECORDS_UPDATED_EVENT));
-      setNotice(`Tracking status updated to ${next}.`);
-      await loadData();
-    } catch (updateError) {
-      setError(updateError.message || "Failed to update tracking status.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <div className="distribution-tracking-page min-h-screen bg-slate-50 px-6 py-7 text-slate-900">
       <div className="mx-auto w-full max-w-5xl">
@@ -258,13 +262,18 @@ export default function DistributionTracking() {
                 </tr>
               </thead>
               <tbody>
-                {untrackedPlans.length === 0 ? (
+                {readyTrackingPlans.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center text-slate-500">No allocation plans ready for tracking</td>
                   </tr>
                 ) : (
-                  untrackedPlans.map((plan) => (
-                    <tr key={getPlanId(plan)}>
+                  readyTrackingPlans.map((plan) => {
+                    const planId = getPlanId(plan);
+                    const latestRecord = latestTrackingRecordByPlanId.get(planId);
+                    const waitingForConfirmation = Boolean(latestRecord) && !isFinalizedTrackingRecord(latestRecord);
+
+                    return (
+                    <tr key={planId}>
                       <td>{plan.disasterType || "-"}</td>
                       <td>{plan.location || "-"}</td>
                       <td>
@@ -309,18 +318,29 @@ export default function DistributionTracking() {
                         })()}
                       </td>
                       <td>
-                        <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full">READY FOR TRACKING</span>
+                        {waitingForConfirmation ? (
+                          <span className="px-2 py-1 bg-amber-500 text-white text-xs rounded-full">WAITING DMC CONFIRMATION</span>
+                        ) : (
+                          <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full">READY FOR TRACKING</span>
+                        )}
                       </td>
                       <td>
-                        <button
-                          className="btn-primary btn-sm"
-                          onClick={() => handleCreateDispatchClick(getPlanId(plan))}
-                        >
-                          Create Dispatch
-                        </button>
+                        {waitingForConfirmation ? (
+                          <button className="btn-secondary btn-sm" type="button" disabled>
+                            Dispatch In Progress
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-primary btn-sm"
+                            onClick={() => handleCreateDispatchClick(planId)}
+                          >
+                            Create Dispatch
+                          </button>
+                        )}
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -349,7 +369,7 @@ export default function DistributionTracking() {
                 <span>Selected Allocation</span>
                 <select value={form.planId} onChange={(e) => handlePlanSelect(e.target.value)} required>
                   <option value="">Select allocation</option>
-                  {untrackedPlans.map((plan) => (
+                  {dispatchablePlans.map((plan) => (
                     <option key={getPlanId(plan)} value={getPlanId(plan)}>
                       {plan.disasterType} - {plan.location}
                     </option>
@@ -482,12 +502,12 @@ export default function DistributionTracking() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!trackingRecords.length ? (
+                  {!finalizedTrackingRecords.length ? (
                     <tr>
-                      <td colSpan={6} className="text-center text-slate-500">No tracking records yet.</td>
+                      <td colSpan={6} className="text-center text-slate-500">No finalized tracking records yet.</td>
                     </tr>
                   ) : (
-                    trackingRecords.map((record) => (
+                    finalizedTrackingRecords.map((record) => (
                       <tr key={record._id}>
                         <td>
                           {record.disasterId?.disasterType} - {record.disasterId?.location}
@@ -498,20 +518,10 @@ export default function DistributionTracking() {
                         <td>{record.driverName || "-"}</td>
                         <td>
                           <div className="flex flex-col gap-2">
-                            {record.status !== "delivered" && record.status !== "confirmed_delivered" ? (
-                              <button className="btn-primary" disabled={submitting} onClick={() => advanceStatus(record)}>
-                                Advance Status
-                              </button>
-                            ) : record.status === "confirmed_delivered" ? (
-                              <span className="text-xs font-semibold text-emerald-600">Confirmation completed</span>
-                            ) : (
-                              <span className="text-xs text-slate-500">Awaiting DMC confirmation</span>
-                            )}
-                            {record.status === "confirmed_delivered" && (
-                              <span className="text-xs font-semibold text-emerald-600">
-                                Confirmed by {record.confirmedBy?.fullName || record.receivedByName || "DMC Officer"}
-                              </span>
-                            )}
+                            <span className="text-xs font-semibold text-emerald-600">Confirmation completed</span>
+                            <span className="text-xs font-semibold text-emerald-600">
+                              Confirmed by {record.confirmedBy?.fullName || record.receivedByName || "DMC Officer"}
+                            </span>
                             {record.confirmationNotes && (
                               <span className="text-xs text-slate-500">{record.confirmationNotes}</span>
                             )}

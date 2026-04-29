@@ -2282,7 +2282,7 @@ export default function AllocationPage() {
 
                   const currentQty = allocationQuantities[need.inventoryItemId] || 0;
 
-                  const hasStock = currentQty >= 0 && currentQty < available;
+                  const hasStock = currentQty >= 0 && currentQty <= available;
 
                   
 
@@ -2323,8 +2323,6 @@ export default function AllocationPage() {
                           type="number"
 
                           min="0"
-
-                          max={Math.max(available, 0)}
 
                           value={currentQty}
 
@@ -2434,7 +2432,7 @@ export default function AllocationPage() {
 
                 <span>
 
-                  Saving this allocation will update inventory stock and sync the status for DMC officers.
+                  Saving this allocation will update inventory stock and sync the status for DMC officers. If stock is insufficient, the warning stays visible but allocation can still be saved.
 
                 </span>
 
