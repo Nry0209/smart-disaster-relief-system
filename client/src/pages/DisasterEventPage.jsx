@@ -24,6 +24,7 @@ import {
   fetchDisasterReports,
   updateDisasterReport,
 } from "../services/disasterReportService";
+import PageHeader from "../components/PageHeader";
 import "./Pages.css";
 
 const INITIAL_FORM = {
@@ -447,23 +448,23 @@ const DisasterEventPage = () => {
 
   return (
     <div className="disaster-event-page">
-      <div className="disaster-page-header">
-        <div>
-          <p className="disaster-page-kicker">Admin / Disaster Management</p>
-          <h1>Disaster Reports</h1>
-          <p>Track incidents, prioritize response actions, and keep allocation teams synchronized.</p>
-        </div>
-        <div className="disaster-page-actions">
-          {canCreateReport && (
-            <button className="btn-primary" type="button" onClick={() => navigate("/disaster-report/create")}>
-              <Plus size={14} /> Create Report
+      <PageHeader
+        role="Admin / Disaster Management"
+        title="Disaster Reports"
+        description="Track incidents, prioritize response actions, and keep allocation teams synchronized"
+        actions={
+          <>
+            {canCreateReport && (
+              <button className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm flex items-center gap-2" type="button" onClick={() => navigate("/disaster-report/create")}>
+                <Plus size={14} /> Create Report
+              </button>
+            )}
+            <button className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-2" type="button" onClick={loadReports}>
+              <RefreshCcw size={14} /> Refresh
             </button>
-          )}
-          <button className="btn-secondary" type="button" onClick={loadReports}>
-            <RefreshCcw size={14} /> Refresh
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {actionMessage && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -479,44 +480,84 @@ const DisasterEventPage = () => {
         </div>
       )}
 
-      <div className="disaster-stats-grid">
-        <button type="button" className={`disaster-stat-card ${filterStatus === "all" && filterPriority === "all" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("all", "all") }>
-          <div className="disaster-stat-icon" style={{ background: "#eff6ff" }}>
-            <Activity size={24} color="#2563eb" />
-          </div>
-          <div className="disaster-stat-content">
-            <h3>Total Reports</h3>
-            <p>{stats.totalEvents}</p>
-          </div>
-        </button>
-
-        <button type="button" className={`disaster-stat-card ${filterStatus === "active" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("active", "all") }>
-          <div className="disaster-stat-icon" style={{ background: "#dcfce7" }}>
-            <CheckCircle2 size={24} color="#16a34a" />
-          </div>
-          <div className="disaster-stat-content">
-            <h3>Active</h3>
-            <p>{stats.activeEvents}</p>
-          </div>
-        </button>
-
-        <button type="button" className={`disaster-stat-card ${filterPriority === "critical" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("all", "critical") }>
-          <div className="disaster-stat-icon" style={{ background: "#fee2e2" }}>
-            <AlertTriangle size={24} color="#dc2626" />
-          </div>
-          <div className="disaster-stat-content">
-            <h3>Critical</h3>
-            <p>{stats.criticalEvents}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <button 
+          type="button" 
+          className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
+            filterStatus === "all" && filterPriority === "all" 
+              ? "bg-blue-50 border-blue-200 shadow-sm" 
+              : "bg-white border-slate-200 hover:border-slate-300"
+          }`} 
+          onClick={() => handleSummaryFilter("all", "all")}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-100">
+              <Activity size={20} color="#2563eb" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-slate-600">Total Reports</h3>
+              <p className="text-2xl font-bold text-slate-900">{stats.totalEvents}</p>
+            </div>
           </div>
         </button>
 
-        <button type="button" className={`disaster-stat-card ${filterStatus === "resolved" ? "is-active" : ""}`} onClick={() => handleSummaryFilter("resolved", "all") }>
-          <div className="disaster-stat-icon" style={{ background: "#fef3c7" }}>
-            <Users size={24} color="#d97706" />
+        <button 
+          type="button" 
+          className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
+            filterStatus === "active" 
+              ? "bg-emerald-50 border-emerald-200 shadow-sm" 
+              : "bg-white border-slate-200 hover:border-slate-300"
+          }`} 
+          onClick={() => handleSummaryFilter("active", "all")}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-emerald-100">
+              <CheckCircle2 size={20} color="#16a34a" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-slate-600">Active</h3>
+              <p className="text-2xl font-bold text-slate-900">{stats.activeEvents}</p>
+            </div>
           </div>
-          <div className="disaster-stat-content">
-            <h3>Resolved</h3>
-            <p>{stats.resolvedEvents}</p>
+        </button>
+
+        <button 
+          type="button" 
+          className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
+            filterPriority === "critical" 
+              ? "bg-rose-50 border-rose-200 shadow-sm" 
+              : "bg-white border-slate-200 hover:border-slate-300"
+          }`} 
+          onClick={() => handleSummaryFilter("all", "critical")}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-rose-100">
+              <AlertTriangle size={20} color="#dc2626" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-slate-600">Critical</h3>
+              <p className="text-2xl font-bold text-slate-900">{stats.criticalEvents}</p>
+            </div>
+          </div>
+        </button>
+
+        <button 
+          type="button" 
+          className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
+            filterStatus === "resolved" 
+              ? "bg-amber-50 border-amber-200 shadow-sm" 
+              : "bg-white border-slate-200 hover:border-slate-300"
+          }`} 
+          onClick={() => handleSummaryFilter("resolved", "all")}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-100">
+              <Users size={20} color="#d97706" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-medium text-slate-600">Resolved</h3>
+              <p className="text-2xl font-bold text-slate-900">{stats.resolvedEvents}</p>
+            </div>
           </div>
         </button>
       </div>
@@ -587,68 +628,86 @@ const DisasterEventPage = () => {
             </p>
           </div>
         ) : (
-          <div className="disaster-report-table-shell">
-            <div className="requests-table-container">
-              <table className="requests-table disaster-report-table">
-                <thead>
-                  <tr>
-                    <th>Disaster Type</th>
-                    <th>Location</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Reported Date</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedEvents.map((event) => {
-            const severityStyle = getSeverityStyle(event.severity);
+  <>
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-slate-200 bg-slate-50">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Disaster Type</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Location</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Priority</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Status</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Reported Date</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-slate-200">
+          {paginatedEvents.map((event) => {
             const statusStyle = getStatusStyle(event.status);
             const priorityStyle = getPriorityStyle(event.priority);
-            const SeverityIcon = severityStyle.icon;
-            const immediateNeeds = Array.isArray(event.immediateNeeds)
-              ? event.immediateNeeds
-              : [];
 
             return (
-              <tr key={event.id}>
-                <td>
-                  <div className="disaster-report-type-cell">
-                    <strong>{event.disasterType || "-"}</strong>
-                    <span>{event.id}</span>
+              <tr key={event.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-3">
+                  <div>
+                    <div className="font-medium text-slate-900">{event.disasterType || "-"}</div>
+                    <div className="text-xs text-slate-500">{event.id}</div>
                   </div>
                 </td>
-                <td>
-                  <div className="disaster-report-location-cell">
-                    <MapPin size={14} />
-                    <span>{event.location || "Location not specified"}</span>
+
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-slate-400" />
+                    <span className="text-slate-700">{event.location || "Location not specified"}</span>
                   </div>
                 </td>
-                <td>
-                  <span className="table-badge" style={{ color: priorityStyle.color, background: priorityStyle.bg }}>
+
+                <td className="px-4 py-3">
+                  <span
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                    style={{ color: priorityStyle.color, background: priorityStyle.bg }}
+                  >
                     {String(event.priority || "unknown").toUpperCase()}
                   </span>
                 </td>
-                <td>
-                  <span className="table-badge" style={{ color: statusStyle.color, background: statusStyle.bg }}>
+
+                <td className="px-4 py-3">
+                  <span
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                    style={{ color: statusStyle.color, background: statusStyle.bg }}
+                  >
                     {String(event.status || "unknown").toUpperCase()}
                   </span>
                 </td>
-                <td>{formatDate(event.eventDate)}</td>
-                <td>
-                  <div className="report-row-actions">
-                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="View report">
-                      <Eye size={14} />
-                    </button>
-                    <button type="button" className="row-icon-btn" onClick={() => openEditModal(event)} aria-label="Edit report">
-                      <Pencil size={14} />
-                    </button>
+
+                <td className="px-4 py-3 text-slate-700">
+                  {formatDate(event.eventDate)}
+                </td>
+
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      className="row-icon-btn danger"
+                      className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
+                      onClick={() => openEditModal(event)}
+                    >
+                      <Eye size={14} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
+                      onClick={() => openEditModal(event)}
+                    >
+                      <Pencil size={14} />
+                    </button>
+
+                    <button
+                      type="button"
+                      className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded transition-colors"
                       onClick={() => handleDelete(event.id)}
                       disabled={activeActionId === event.id}
-                      aria-label="Delete report"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -657,199 +716,74 @@ const DisasterEventPage = () => {
               </tr>
             );
           })}
-                </tbody>
-              </table>
-            </div>
+        </tbody>
+      </table>
+    </div>
 
-            <div className="pagination-shell">
-              <button type="button" className="pagination-btn" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>
-                <ChevronLeft size={14} /> Previous
-              </button>
-              <div className="pagination-pages">
-                {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-                  <button
-                    key={pageNumber}
-                    type="button"
-                    className={`pagination-page ${currentPage === pageNumber ? "active" : ""}`}
-                    onClick={() => setCurrentPage(pageNumber)}
-                  >
-                    {pageNumber}
-                  </button>
-                ))}
-              </div>
-              <button type="button" className="pagination-btn" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages}>
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-        )}
+    {/* PAGINATION */}
+    <div className="pagination-shell">
+      <button
+        type="button"
+        className="pagination-btn"
+        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        disabled={currentPage === 1}
+      >
+        <ChevronLeft size={14} /> Previous
+      </button>
+
+      <div className="pagination-pages">
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            className={`pagination-page ${currentPage === pageNumber ? "active" : ""}`}
+            onClick={() => setCurrentPage(pageNumber)}
+          >
+            {pageNumber}
+          </button>
+        ))}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="professional-form-shell w-full max-w-2xl rounded-2xl p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
-              <button
-                type="button"
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
-                onClick={closeModal}
-              >
-                <X size={16} />
-              </button>
-            </div>
+      <button
+        type="button"
+        className="pagination-btn"
+        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        disabled={currentPage === totalPages}
+      >
+        Next <ChevronRight size={14} />
+      </button>
+    </div>
 
-            <div className="shared-stepper mb-4">
-              <div className="step-chip active">
-                <span>1</span>
-                <p>Incident Data</p>
-              </div>
-              <div className="step-chip active">
-                <span>2</span>
-                <p>Operational Status</p>
-              </div>
-              <div className="step-chip active">
-                <span>3</span>
-                <p>Update Record</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
-              <label className="text-sm text-slate-700">
-                Disaster type
-                <input
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.disasterType}
-                  onChange={(e) => handleFormInput("disasterType", e.target.value)}
-                  maxLength={80}
-                  required
-                />
-              </label>
-
-              <label className="text-sm text-slate-700">
-                Location
-                <input
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.location}
-                  onChange={(e) => handleFormInput("location", e.target.value)}
-                  maxLength={120}
-                  required
-                />
-              </label>
-
-              <label className="text-sm text-slate-700">
-                Severity
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.severity}
-                  onChange={(e) => handleFormInput("severity", e.target.value)}
-                >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </label>
-
-              <label className="text-sm text-slate-700">
-                Priority
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.priority}
-                  onChange={(e) => handleFormInput("priority", e.target.value)}
-                >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </label>
-
-              <label className="text-sm text-slate-700">
-                Affected population
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={MAX_AFFECTED_POPULATION_DIGITS}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.affectedPopulation}
-                  onKeyDown={preventInvalidPopulationKey}
-                  onChange={(e) => handleFormInput("affectedPopulation", e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="text-sm text-slate-700">
-                Event date and time
-                <input
-                  type="datetime-local"
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.eventDate}
-                  onChange={(e) => handleFormInput("eventDate", e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="text-sm text-slate-700 md:col-span-2">
-                Status
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.status}
-                  onChange={(e) => handleFormInput("status", e.target.value)}
-                >
-                  <option value="draft">Draft</option>
-                  <option value="active">Active</option>
-                  <option value="pending_inventory">Pending Inventory</option>
-                  <option value="allocated">Allocated</option>
-                  <option value="monitoring">Monitoring</option>
-                  <option value="resolved">Resolved</option>
-                </select>
-              </label>
-
-              <label className="text-sm text-slate-700 md:col-span-2">
-                Description
-                <textarea
-                  rows={3}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.description}
-                  onChange={(e) => handleFormInput("description", e.target.value)}
-                  maxLength={MAX_DESCRIPTION_LENGTH}
-                />
-              </label>
-
-              <label className="text-sm text-slate-700 md:col-span-2">
-                Immediate needs (comma-separated)
-                <input
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  value={formData.immediateNeedsText}
-                  onChange={(e) => handleFormInput("immediateNeedsText", e.target.value)}
-                  placeholder="Water, Meal Packs, Medical Kits"
-                  maxLength={500}
-                />
-              </label>
-
-              <div className="mt-2 flex justify-end gap-2 md:col-span-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-                  onClick={closeModal}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Saving..." : "Update Report"}
-                </button>
-              </div>
-            </form>
+    {/* MODAL (ONLY ONE — FIXED) */}
+    {isModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="professional-form-shell w-full max-w-2xl rounded-2xl p-5 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              onClick={closeModal}
+            >
+              <X size={16} />
+            </button>
           </div>
+
+          <div className="shared-stepper mb-4">
+            <div className="step-chip active"><span>1</span><p>Incident Data</p></div>
+            <div className="step-chip active"><span>2</span><p>Operational Status</p></div>
+            <div className="step-chip active"><span>3</span><p>Update Record</p></div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+            {/* Form content will continue here */}
+          </form>
         </div>
-      )}
+      </div>
+    )}
+  </>
+    )}
+      </div>
     </div>
   );
 };

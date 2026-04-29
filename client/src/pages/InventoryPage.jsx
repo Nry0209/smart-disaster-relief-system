@@ -206,16 +206,22 @@ export default function InventoryPage() {
       stock: String(item.stock),
       min: String(item.min),
       warehouse: item.warehouse || "Warehouse 1",
-      unit: item.unit || "units",
     });
   }
+
+  // Auto-fill minimum threshold based on existing data
+  const getAutoFillMinThreshold = (category, itemName) => {
+    const existingItem = items.find(
+      (item) => item.category === category && item.name === itemName
+    );
+    return existingItem ? String(existingItem.min) : "";
+  };
 
   async function handleSaveItem() {
     const normalizedName = itemForm.name.trim();
     const stock = Number(itemForm.stock);
     const min = Number(itemForm.min);
     const normalizedWarehouse = itemForm.warehouse.trim();
-    const normalizedUnit = itemForm.unit.trim();
 
     if (!normalizedName) {
       setError("Item name is required.");
@@ -551,7 +557,7 @@ export default function InventoryPage() {
         <h2>Quick Actions</h2>
         <div className="action-buttons">
           <button className="action-btn add" onClick={() => setModal("add")}>Add New Item</button>
-          <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Update Stock</button>
+          <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Remove</button>
           <button className="action-btn export" onClick={handleExport}>Export Report</button>
         </div>
         <p style={{ fontSize: 13, color: "#64748b", marginTop: 16, textAlign: "center" }}>
@@ -603,7 +609,15 @@ export default function InventoryPage() {
                     <label>Item Name</label>
                     <select
                       value={itemForm.name}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, name: event.target.value }))}
+                      onChange={(event) => {
+                        const itemName = event.target.value;
+                        const autoFillMin = getAutoFillMinThreshold(itemForm.category, itemName);
+                        setItemForm((prev) => ({ 
+                          ...prev, 
+                          name: itemName,
+                          min: autoFillMin
+                        }));
+                      }}
                       disabled={!itemForm.category}
                     >
                       <option value="">Select item</option>
@@ -613,7 +627,7 @@ export default function InventoryPage() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Current Stock</label>
+                    <label>Amount</label>
                     <input
                       type="number"
                       min="0"
@@ -689,7 +703,7 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="form-group">
-                    <label>Quantity</label>
+                    <label>Amount</label>
                     <input
                       type="number"
                       min="0"

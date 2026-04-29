@@ -10,7 +10,6 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 4500,
     min: 6000,
     warehouse: "Warehouse 1",
-    unit: "units",
   },
   {
     name: "Dry Ration",
@@ -18,7 +17,6 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 3900,
     min: 3500,
     warehouse: "Warehouse 1",
-    unit: "units",
   },
   {
     name: "Blankets",
@@ -26,7 +24,6 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 2600,
     min: 2000,
     warehouse: "Warehouse 2",
-    unit: "units",
   },
   {
     name: "Tents",
@@ -34,7 +31,6 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 240,
     min: 400,
     warehouse: "Warehouse 3",
-    unit: "units",
   },
   {
     name: "Medicine Kits",
@@ -42,7 +38,6 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 310,
     min: 500,
     warehouse: "Warehouse 2",
-    unit: "units",
   },
 ];
 
@@ -98,7 +93,6 @@ function formatInventoryItem(item) {
     stock: item.stock,
     min: item.min,
     warehouse: item.warehouse,
-    unit: item.unit,
     stockStatus: getStockStatus(item.stock, item.min),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -127,7 +121,7 @@ async function createActivityLog(data) {
 
 async function createInventoryItem(req, res) {
   try {
-    const { name, category, stock, min, warehouse, unit, performedBy } = req.body;
+    const { name, category, stock, min, warehouse, performedBy } = req.body;
 
     if (!name || category === undefined || stock === undefined || min === undefined) {
       return res.status(400).json({ message: "name, category, stock, and min are required." });
@@ -215,8 +209,10 @@ async function listInventoryItems(req, res) {
 
     if (!items.length && !hasFilters) {
       const activityCount = await InventoryActivity.estimatedDocumentCount();
+      const itemCount = await InventoryItem.estimatedDocumentCount();
 
-      if (activityCount === 0) {
+      // Only use default items if database is completely empty
+      if (activityCount === 0 && itemCount === 0) {
         const seededItems = await InventoryItem.insertMany(DEFAULT_INVENTORY_ITEMS);
 
         await Promise.all(
@@ -244,6 +240,15 @@ async function listInventoryItems(req, res) {
       const normalizedStatus = String(status).trim().toLowerCase();
       formatted = formatted.filter((item) => item.stockStatus === normalizedStatus);
     }
+
+    // Debug logging to check what data is being returned
+    console.log('Backend returning inventory items:', formatted.length);
+    console.log('Sample returned items:', formatted.slice(0, 3).map(item => ({
+      name: item.name,
+      stock: item.stock,
+      min: item.min,
+      category: item.category
+    })));
 
     return res.json(formatted);
   } catch (error) {
@@ -369,10 +374,7 @@ async function updateInventoryItem(req, res) {
       updates.warehouse = normalizedWarehouse;
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, "unit")) {
-      updates.unit = String(updates.unit || "units").trim() || "units";
-    }
-
+    
     const previousStock = item.stock;
     Object.assign(item, updates);
     await item.save();
@@ -486,7 +488,7 @@ async function adjustInventoryStock(req, res) {
     await item.save();
 
     const defaultNotes = {
-      adjust: "Stock adjusted for damaged or expired units.",
+      adjust: "Stock adjusted for damaged or expired items.",
       consume: "Stock consumed for allocation or dispatch.",
       restock: "Stock replenished.",
     };
