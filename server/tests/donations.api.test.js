@@ -15,6 +15,7 @@ const {
   createDonation,
   verifyDonation,
 } = require("../controllers/donationController");
+const { validateDonation } = require("../middleware/validation");
 
 function buildTestApp() {
   const app = express();
@@ -32,7 +33,17 @@ function buildTestApp() {
   return app;
 }
 
+function buildValidatedDonationApp() {
+  const app = express();
+  app.use(express.json());
+
+  app.post("/api/donations", validateDonation, createDonation);
+
+  return app;
+}
+
 let app;
+let validatedApp;
 let dbReady = false;
 
 test.before(async () => {
@@ -40,6 +51,7 @@ test.before(async () => {
   dbReady = Boolean(connected);
   if (dbReady) {
     app = buildTestApp();
+    validatedApp = buildValidatedDonationApp();
   }
 });
 
@@ -92,6 +104,16 @@ test("create donation: organization + inventory", async (t) => {
     return;
   }
 
+  const inventoryItem = await InventoryItem.create({
+    name: "API Relief Water",
+    category: "Drinking Water",
+    stock: 100,
+    min: 10,
+    warehouse: "Warehouse 1",
+    unit: "units",
+    quantityAvailable: 100,
+  });
+
   const response = await request(app)
     .post("/api/donations")
     .send({
@@ -99,9 +121,14 @@ test("create donation: organization + inventory", async (t) => {
       donationType: "inventory",
       donorName: "API Org Contact",
       organizationName: "API Relief Foundation",
-      itemType: "Water Bottles",
-      category: "Water",
-      quantity: 120,
+      items: [
+        {
+          inventoryItemId: inventoryItem._id.toString(),
+          itemName: "API Relief Water",
+          category: "Drinking Water",
+          quantity: 120,
+        },
+      ],
       expectedDeliveryDate: new Date().toISOString().slice(0, 10),
     });
 
@@ -131,6 +158,45 @@ test("create donation: invalid monetary payload rejected", async (t) => {
   assert.match(response.body.message, /valid amount/i);
 });
 
+test("create donation: public inventory payload with item array passes validation", async (t) => {
+  if (!dbReady) {
+    t.skip("Skipping: database is not available");
+    return;
+  }
+
+  const inventoryItem = await InventoryItem.create({
+    name: "API Relief Water",
+    category: "Drinking Water",
+    stock: 100,
+    min: 10,
+    warehouse: "Warehouse 1",
+    unit: "units",
+    quantityAvailable: 100,
+  });
+
+  const response = await request(validatedApp)
+    .post("/api/donations")
+    .send({
+      donorType: "individual",
+      donationType: "inventory",
+      donorName: "API Inventory Donor",
+      email: "inventory.donor@example.com",
+      items: [
+        {
+          inventoryItemId: inventoryItem._id.toString(),
+          itemName: "API Relief Water",
+          category: "Drinking Water",
+          quantity: 12,
+        },
+      ],
+    });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.donation.donationType, "inventory");
+  assert.equal(response.body.donation.items[0].itemName, "API Relief Water");
+  assert.equal(response.body.donation.items[0].category, "Drinking Water");
+});
+
 test("verify donation: inventory donation updates stock", async (t) => {
   if (!dbReady) {
     t.skip("Skipping: database is not available");
@@ -139,7 +205,7 @@ test("verify donation: inventory donation updates stock", async (t) => {
 
   const inventoryItem = await InventoryItem.create({
     name: "API Relief Water",
-    category: "Water",
+    category: "Drinking Water",
     stock: 10,
     min: 5,
     warehouse: "Warehouse 1",
@@ -154,8 +220,14 @@ test("verify donation: inventory donation updates stock", async (t) => {
       donationType: "inventory",
       donorName: "API Org Contact",
       organizationName: "API Relief Foundation",
-      itemType: "API Relief Water",
-      quantity: 25,
+      items: [
+        {
+          inventoryItemId: inventoryItem._id.toString(),
+          itemName: "API Relief Water",
+          category: "Drinking Water",
+          quantity: 25,
+        },
+      ],
     });
 
   assert.equal(created.status, 201);

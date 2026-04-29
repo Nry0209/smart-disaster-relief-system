@@ -220,7 +220,7 @@ async function createDonation(req, res) {
       phone: phone || "",
       items: donationType === "inventory" ? normalizedInventoryItems : [],
       itemType: donationType === "inventory" ? normalizedInventoryItems[0]?.itemName || "" : "",
-      category: donationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "monetary",
+      category: donationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "",
       quantity: donationType === "inventory" ? totalInventoryQuantity : 0,
       amount: donationType === "monetary" ? amount : 0,
       expectedDeliveryDate: donationType === "inventory" ? expectedDeliveryDate || null : null,
@@ -406,7 +406,7 @@ async function verifyDonation(req, res) {
         const activity = new InventoryActivity({
           itemId: inventoryItem._id,
           itemName: inventoryItem.name,
-          action: "donation",
+          action: "restock",
           quantity: donationItem.quantity,
           previousStock,
           newStock: inventoryItem.stock,

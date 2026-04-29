@@ -1,5 +1,6 @@
 // Input validation middleware
 const { body, param, query, validationResult } = require('express-validator');
+const { ITEM_CATEGORY_ENUM } = require('../utils/constants');
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -319,7 +320,7 @@ const validateDonation = [
 
   body('items.*.category')
     .if(body('donationType').equals('inventory'))
-    .isIn(['Water', 'Food', 'Medical', 'Shelter', 'Clothing', 'Other'])
+    .isIn(ITEM_CATEGORY_ENUM)
     .withMessage('Each selected donation item must include a valid category'),
 
   body('items.*.quantity')
