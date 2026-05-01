@@ -5,6 +5,11 @@ import illustration from "../assets/images/loginImage.png";
 import logo from "../assets/images/logo2.png";
 import "./Pages.css";
 
+// Login Page - Supports 3 user types:
+// 1. Admin (System Administrator) - email + password
+// 2. Staff (Internal users: DMC Officer, Inventory Officer, etc.) - OTP first login, then email+password
+// 3. NGO Partners (NGO Partner) - Same flow as Staff (OTP first login, then email+password)
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
 const OTP_PATTERN = /^\d{6}$/;
@@ -29,6 +34,14 @@ function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loginStep, setLoginStep] = useState("credentials"); // credentials, otp, or normal
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({
+    email: "",
+    password: "",
+    otp: "",
+    newPassword: "",
+    confirmPassword: "",
+    forgotPasswordEmail: "",
+  });
 
   // OTP States
   const [otp, setOtp] = useState("");
@@ -44,20 +57,38 @@ function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const getInputClass = (field) =>
+    fieldErrors[field]
+      ? "border border-rose-300 bg-rose-50/50"
+      : "";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const trimmedEmail = email.trim();
+    const nextFieldErrors = {
+      email: "",
+      password: "",
+      otp: "",
+      newPassword: "",
+      confirmPassword: "",
+      forgotPasswordEmail: "",
+    };
 
     if (!trimmedEmail || !EMAIL_PATTERN.test(trimmedEmail)) {
-      setFormError("Enter a valid email address.");
-      return;
+      nextFieldErrors.email = "Enter a valid email address.";
     }
 
     if (!password) {
-      setFormError("Password is required.");
+      nextFieldErrors.password = "Password is required.";
+    }
+
+    if (nextFieldErrors.email || nextFieldErrors.password) {
+      setFieldErrors(nextFieldErrors);
+      setFormError("Please fix highlighted fields.");
       return;
     }
 
+    setFieldErrors(nextFieldErrors);
     setFormError("");
     setIsLoading(true);
 
@@ -108,12 +139,23 @@ function LoginPage() {
 
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
+    const nextFieldErrors = {
+      email: "",
+      password: "",
+      otp: "",
+      newPassword: "",
+      confirmPassword: "",
+      forgotPasswordEmail: "",
+    };
 
     if (!OTP_PATTERN.test(otp)) {
-      setFormError('Enter the 6-digit OTP sent to your email.');
+      nextFieldErrors.otp = "Enter the 6-digit OTP sent to your email.";
+      setFieldErrors(nextFieldErrors);
+      setFormError("Please fix highlighted fields.");
       return;
     }
 
+    setFieldErrors(nextFieldErrors);
     setFormError("");
     setIsLoading(true);
 
@@ -150,18 +192,31 @@ function LoginPage() {
 
   const handleSetPassword = async (e) => {
     e.preventDefault();
+    const nextFieldErrors = {
+      email: "",
+      password: "",
+      otp: "",
+      newPassword: "",
+      confirmPassword: "",
+      forgotPasswordEmail: "",
+    };
 
     const passwordError = getPasswordValidationMessage(newPassword);
     if (passwordError) {
-      setFormError(passwordError);
-      return;
+      nextFieldErrors.newPassword = passwordError;
     }
 
     if (newPassword !== confirmPassword) {
-      setFormError('Passwords do not match');
+      nextFieldErrors.confirmPassword = "Passwords do not match.";
+    }
+
+    if (nextFieldErrors.newPassword || nextFieldErrors.confirmPassword) {
+      setFieldErrors(nextFieldErrors);
+      setFormError("Please fix highlighted fields.");
       return;
     }
 
+    setFieldErrors(nextFieldErrors);
     setFormError("");
     setIsLoading(true);
 
@@ -203,12 +258,23 @@ function LoginPage() {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
+    const nextFieldErrors = {
+      email: "",
+      password: "",
+      otp: "",
+      newPassword: "",
+      confirmPassword: "",
+      forgotPasswordEmail: "",
+    };
 
     if (!EMAIL_PATTERN.test(forgotPasswordEmail.trim())) {
-      setFormError('Enter a valid email address.');
+      nextFieldErrors.forgotPasswordEmail = "Enter a valid email address.";
+      setFieldErrors(nextFieldErrors);
+      setFormError("Please fix highlighted fields.");
       return;
     }
 
+    setFieldErrors(nextFieldErrors);
     setFormError("");
     setIsLoading(true);
 
@@ -328,14 +394,19 @@ function LoginPage() {
                   <input
                     type="text"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={(e) => {
+                      setOtp(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, otp: "" }));
+                    }}
                     placeholder="Enter 6-digit OTP"
                     required
                     disabled={isLoading}
                     maxLength="6"
                     inputMode="numeric"
                     pattern="[0-9]{6}"
+                    className={getInputClass("otp")}
                   />
+                  {fieldErrors.otp && <p className="mt-1 text-xs text-rose-600">{fieldErrors.otp}</p>}
                   <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
                     Enter the 6-digit code. OTP expires in 15 minutes. If SMTP is not configured, use the OTP provided by admin/server logs.
                   </p>
@@ -434,7 +505,10 @@ function LoginPage() {
                   <input
                     type="password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, newPassword: "" }));
+                    }}
                     placeholder="Enter new password (minimum 6 characters)"
                     required
                     disabled={isLoading}
@@ -442,7 +516,9 @@ function LoginPage() {
                     autoComplete="new-password"
                     pattern={PASSWORD_PATTERN.source}
                     title="At least 6 characters including uppercase, lowercase, and a number."
+                    className={getInputClass("newPassword")}
                   />
+                  {fieldErrors.newPassword && <p className="mt-1 text-xs text-rose-600">{fieldErrors.newPassword}</p>}
                 </div>
 
                 <div className="login-form-group">
@@ -450,13 +526,18 @@ function LoginPage() {
                   <input
                     type="password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                    }}
                     placeholder="Confirm your password"
                     required
                     disabled={isLoading}
                     minLength="6"
                     autoComplete="new-password"
+                    className={getInputClass("confirmPassword")}
                   />
+                  {fieldErrors.confirmPassword && <p className="mt-1 text-xs text-rose-600">{fieldErrors.confirmPassword}</p>}
                 </div>
 
                 <button
@@ -547,12 +628,17 @@ function LoginPage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, email: "" }));
+                  }}
                   placeholder="officer@dmc.gov.lk"
                   required
                   disabled={isLoading}
                   autoComplete="email"
+                  className={getInputClass("email")}
                 />
+                {fieldErrors.email && <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>}
               </div>
 
               <div className="login-form-group">
@@ -560,12 +646,17 @@ function LoginPage() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, password: "" }));
+                  }}
                   placeholder="Enter password"
                   required
                   disabled={isLoading}
                   autoComplete="current-password"
+                  className={getInputClass("password")}
                 />
+                {fieldErrors.password && <p className="mt-1 text-xs text-rose-600">{fieldErrors.password}</p>}
               </div>
 
               <div className="login-form-group">
@@ -577,6 +668,7 @@ function LoginPage() {
                   <option value="allocation_officer">Allocation Officer</option>
                   <option value="tracking_officer">Tracking Officer</option>
                   <option value="charity_staff">Charity Staff</option>
+                  <option value="ngo_partner">NGO Partner</option>
                 </select>
               </div>
 
@@ -658,13 +750,21 @@ function LoginPage() {
                   <input
                     type="email"
                     value={forgotPasswordEmail}
-                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    onChange={(e) => {
+                      setForgotPasswordEmail(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, forgotPasswordEmail: "" }));
+                    }}
                     placeholder="Enter your email"
                     required
                     disabled={isLoading}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      fieldErrors.forgotPasswordEmail ? "border-rose-300 bg-rose-50/50" : "border-slate-200"
+                    }`}
                     autoComplete="email"
                   />
+                  {fieldErrors.forgotPasswordEmail && (
+                    <p className="mt-1 text-xs text-rose-600">{fieldErrors.forgotPasswordEmail}</p>
+                  )}
                 </div>
                 <button
                   type="submit"

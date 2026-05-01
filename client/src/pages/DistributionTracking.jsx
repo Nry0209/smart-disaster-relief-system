@@ -4,43 +4,13 @@ import { RefreshCw } from "lucide-react";
 import { fetchDisasterReports } from "../services/disasterReportService";
 import {
   createTrackingRecord as createTrackingRecordRequest,
+  deleteTrackingRecordById,
   fetchTrackingRecords,
+  fetchTransportAssets,
 } from "../services/workflowService";
 import "./Pages.css";
 
 const TRACKING_RECORDS_UPDATED_EVENT = "tracking-records-updated";
-
-// Sri Lankan driver names
-const SRI_LANKAN_DRIVERS = [
-  "Kumara Bandara",
-  "Nimal Perera", 
-  "Sunil Fernando",
-  "Rohan Silva",
-  "Chaminda Rajapaksa",
-  "Mahinda Wijesinghe",
-  "Saman Kumara",
-  "Priyantha Bandara",
-  "Lalith Perera",
-  "Dinesh Fernando"
-];
-
-// Truck numbers
-const TRUCK_NUMBERS = [
-  "WP-CA-1234",
-  "WP-CB-5678", 
-  "WP-CC-9012",
-  "WP-CD-3456",
-  "WP-CE-7890"
-];
-
-// Transport types
-const TRANSPORT_TYPES = [
-  "Refrigerated Truck",
-  "Emergency Vehicle", 
-  "Heavy Truck",
-  "Medium Truck",
-  "Light Van"
-];
 
 // Warehouse options
 const WAREHOUSES = [
@@ -63,34 +33,41 @@ function isFinalizedTrackingRecord(record) {
 export default function DistributionTracking() {
   const [plans, setPlans] = useState([]);
   const [trackingRecords, setTrackingRecords] = useState([]);
+  const [transportAssets, setTransportAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showDispatchForm, setShowDispatchForm] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [form, setForm] = useState({
     planId: "",
-    transportDetails: "",
-    driverName: "",
-    vehicleNumber: "",
-    currentLocation: "Warehouse",
+    transportAssetId: "",
+    currentLocation: "",
     dispatchDate: new Date().toISOString().split("T")[0],
   });
+
+  const selectedTransportAsset = useMemo(
+    () => transportAssets.find((asset) => String(asset._id) === String(form.transportAssetId)) || null,
+    [form.transportAssetId, transportAssets]
+  );
 
   async function loadData() {
     try {
       setLoading(true);
 
       // Load allocation plans (allocated status)
-      const reportsResult = await fetchDisasterReports({ status: "allocated" });
+      const [reportsResult, recordsResult, assetsResult] = await Promise.all([
+        fetchDisasterReports({ status: "allocated" }),
+        fetchTrackingRecords({ limit: 1000 }),
+        fetchTransportAssets({ dispatchDate: form.dispatchDate }),
+      ]);
       const allocatedPlans = reportsResult?.filter((report) => report?.allocatedResources?.lineItems?.length > 0) || [];
-
-      // Load tracking records separately
-      const recordsResult = await fetchTrackingRecords({ limit: 1000 });
       const records = recordsResult || [];
 
       setPlans(Array.isArray(allocatedPlans) ? allocatedPlans : []);
       setTrackingRecords(Array.isArray(records) ? records : []);
+      setTransportAssets(Array.isArray(assetsResult) ? assetsResult : []);
 
       if (reportsResult && recordsResult) {
         setError("");
@@ -107,6 +84,29 @@ export default function DistributionTracking() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!showDispatchForm) return;
+
+    let cancelled = false;
+    async function refreshTransportAssets() {
+      try {
+        const assetsResult = await fetchTransportAssets({ dispatchDate: form.dispatchDate });
+        if (!cancelled) {
+          setTransportAssets(Array.isArray(assetsResult) ? assetsResult : []);
+        }
+      } catch (fetchError) {
+        if (!cancelled) {
+          setError(fetchError.message || "Failed to load transport assets.");
+        }
+      }
+    }
+
+    refreshTransportAssets();
+    return () => {
+      cancelled = true;
+    };
+  }, [showDispatchForm, form.dispatchDate]);
 
   useEffect(() => {
     function handleTrackingRecordsUpdated() {
@@ -174,13 +174,17 @@ export default function DistributionTracking() {
       ...prev,
       planId: value,
     }));
+    setFieldErrors((prev) => ({ ...prev, planId: "" }));
   }
 
   function handleCreateDispatchClick(planId) {
     setForm((prev) => ({
       ...prev,
       planId,
+      transportAssetId: "",
+      currentLocation: "",
     }));
+    setFieldErrors({});
     setShowDispatchForm(true);
   }
 
@@ -188,6 +192,28 @@ export default function DistributionTracking() {
     event.preventDefault();
     setError("");
     setNotice("");
+    setFieldErrors({});
+
+    const nextFieldErrors = {};
+
+    if (!form.planId) {
+      nextFieldErrors.planId = "Allocation is required.";
+    }
+    if (!form.dispatchDate) {
+      nextFieldErrors.dispatchDate = "Dispatch date is required.";
+    }
+    if (!form.transportAssetId) {
+      nextFieldErrors.transportAssetId = "Transport asset is required.";
+    }
+    if (!form.currentLocation) {
+      nextFieldErrors.currentLocation = "Starting warehouse is required.";
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setError("Please fix highlighted fields.");
+      return;
+    }
 
     if (!selectedPlan) {
       setError("Select an allocated plan to start dispatch tracking.");
@@ -199,9 +225,7 @@ export default function DistributionTracking() {
       await createTrackingRecordRequest({
         disasterId: getPlanId(selectedPlan),
         dispatchDate: form.dispatchDate ? new Date(form.dispatchDate).toISOString() : new Date().toISOString(),
-        transportDetails: form.transportDetails,
-        driverName: form.driverName,
-        vehicleNumber: form.vehicleNumber,
+        transportAssetId: form.transportAssetId,
         currentLocation: form.currentLocation,
       });
 
@@ -210,15 +234,34 @@ export default function DistributionTracking() {
       setShowDispatchForm(false);
       setForm({
         planId: "",
-        transportDetails: "",
-        driverName: "",
-        vehicleNumber: "",
-        currentLocation: "Warehouse",
+        transportAssetId: "",
+        currentLocation: "",
         dispatchDate: new Date().toISOString().split("T")[0],
       });
       await loadData();
     } catch (createError) {
       setError(createError.message || "Failed to create tracking record.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemoveTracking(recordId) {
+    if (!recordId) return;
+
+    const accepted = window.confirm("Remove this tracking record?");
+    if (!accepted) return;
+
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+
+    try {
+      await deleteTrackingRecordById(recordId);
+      setNotice("Tracking record removed.");
+      await loadData();
+    } catch (removeError) {
+      setError(removeError.message || "Failed to remove tracking record.");
     } finally {
       setSubmitting(false);
     }
@@ -357,7 +400,7 @@ export default function DistributionTracking() {
               </div>
               <div className="step-chip active">
                 <span>2</span>
-                <p>Transport Details</p>
+                <p>Transport Asset</p>
               </div>
               <div className="step-chip active">
                 <span>3</span>
@@ -367,7 +410,12 @@ export default function DistributionTracking() {
             <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2">
               <label className="form-group md:col-span-2">
                 <span>Selected Allocation</span>
-                <select value={form.planId} onChange={(e) => handlePlanSelect(e.target.value)} required>
+                <select
+                  className={fieldErrors.planId ? "border border-rose-300 bg-rose-50/50" : ""}
+                  value={form.planId}
+                  onChange={(e) => handlePlanSelect(e.target.value)}
+                  required
+                >
                   <option value="">Select allocation</option>
                   {dispatchablePlans.map((plan) => (
                     <option key={getPlanId(plan)} value={getPlanId(plan)}>
@@ -375,65 +423,55 @@ export default function DistributionTracking() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.planId && <p className="mt-1 text-xs text-rose-600">{fieldErrors.planId}</p>}
               </label>
 
               <label className="form-group">
                 <span>Dispatch Date</span>
                 <input
+                  className={fieldErrors.dispatchDate ? "border border-rose-300 bg-rose-50/50" : ""}
                   type="date"
                   value={form.dispatchDate}
-                  onChange={(e) => setForm((prev) => ({ ...prev, dispatchDate: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, dispatchDate: e.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, dispatchDate: "" }));
+                  }}
                   required
                 />
+                {fieldErrors.dispatchDate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.dispatchDate}</p>}
               </label>
 
               <label className="form-group">
-                <span>Transport Type</span>
+                <span>Transport Asset</span>
                 <select
-                  value={form.transportDetails}
-                  onChange={(e) => setForm((prev) => ({ ...prev, transportDetails: e.target.value }))}
+                  className={fieldErrors.transportAssetId ? "border border-rose-300 bg-rose-50/50" : ""}
+                  value={form.transportAssetId}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, transportAssetId: e.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, transportAssetId: "" }));
+                  }}
                   required
                 >
-                  <option value="">Select transport type</option>
-                  {TRANSPORT_TYPES.map((type) => (
-                    <option key={type} value={type}>{type}</option>
+                  <option value="">Select transport asset</option>
+                  {transportAssets.map((asset) => (
+                    <option key={asset._id} value={asset._id} disabled={!asset.isAvailable}>
+                      {asset.driverName} - {asset.transportType} - {asset.vehicleNumber}
+                      {asset.isAvailable ? "" : " (In use)"}
+                    </option>
                   ))}
                 </select>
-              </label>
-
-              <label className="form-group">
-                <span>Driver Name</span>
-                <select
-                  value={form.driverName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, driverName: e.target.value }))}
-                  required
-                >
-                  <option value="">Select driver</option>
-                  {SRI_LANKAN_DRIVERS.map((driver) => (
-                    <option key={driver} value={driver}>{driver}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="form-group">
-                <span>Vehicle Number</span>
-                <select
-                  value={form.vehicleNumber}
-                  onChange={(e) => setForm((prev) => ({ ...prev, vehicleNumber: e.target.value }))}
-                  required
-                >
-                  <option value="">Select vehicle</option>
-                  {TRUCK_NUMBERS.map((number) => (
-                    <option key={number} value={number}>{number}</option>
-                  ))}
-                </select>
+                {fieldErrors.transportAssetId && <p className="mt-1 text-xs text-rose-600">{fieldErrors.transportAssetId}</p>}
               </label>
 
               <label className="form-group">
                 <span>Starting Warehouse</span>
                 <select
+                  className={fieldErrors.currentLocation ? "border border-rose-300 bg-rose-50/50" : ""}
                   value={form.currentLocation}
-                  onChange={(e) => setForm((prev) => ({ ...prev, currentLocation: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, currentLocation: e.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, currentLocation: "" }));
+                  }}
                   required
                 >
                   <option value="">Select warehouse</option>
@@ -441,6 +479,7 @@ export default function DistributionTracking() {
                     <option key={warehouse} value={warehouse}>{warehouse}</option>
                   ))}
                 </select>
+                {fieldErrors.currentLocation && <p className="mt-1 text-xs text-rose-600">{fieldErrors.currentLocation}</p>}
               </label>
 
               {selectedPlan && (
@@ -456,6 +495,15 @@ export default function DistributionTracking() {
                 </div>
               )}
 
+              {selectedTransportAsset && (
+                <div className="md:col-span-2 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+                  <strong className="block text-slate-900">Selected Transport Asset</strong>
+                  <div>Driver: {selectedTransportAsset.driverName}</div>
+                  <div>Transport Type: {selectedTransportAsset.transportType}</div>
+                  <div>Vehicle Number: {selectedTransportAsset.vehicleNumber}</div>
+                </div>
+              )}
+
               <div className="md:col-span-2 flex gap-2">
                 <button type="submit" className="btn-primary" disabled={submitting || loading}>
                   {submitting ? "Creating..." : "Create Tracking Record"}
@@ -468,12 +516,11 @@ export default function DistributionTracking() {
                       setShowDispatchForm(false);
                       setForm({
                         planId: "",
-                        transportDetails: "",
-                        driverName: "",
-                        vehicleNumber: "",
-                        currentLocation: "Warehouse",
+                        transportAssetId: "",
+                        currentLocation: "",
                         dispatchDate: new Date().toISOString().split("T")[0],
                       });
+                      setFieldErrors({});
                     }
                   }
                 >
@@ -497,7 +544,7 @@ export default function DistributionTracking() {
                     <th>Allocation</th>
                     <th>Status</th>
                     <th>Location</th>
-                    <th>Driver</th>
+                    <th>Transport Asset</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -515,7 +562,19 @@ export default function DistributionTracking() {
                         <td>{record.allocationId?._id || record.allocationId}</td>
                         <td>{record.status}</td>
                         <td>{record.currentLocation || "-"}</td>
-                        <td>{record.driverName || "-"}</td>
+                        <td>
+                          <div className="text-sm">
+                            <div className="font-medium text-slate-900">
+                              {record.transportAssetId?.driverName || record.driverName || "-"}
+                            </div>
+                            <div className="text-slate-600">
+                              {record.transportAssetId?.transportType || record.transportDetails || "-"}
+                            </div>
+                            <div className="text-slate-500">
+                              {record.transportAssetId?.vehicleNumber || record.vehicleNumber || "-"}
+                            </div>
+                          </div>
+                        </td>
                         <td>
                           <div className="flex flex-col gap-2">
                             <span className="text-xs font-semibold text-emerald-600">Confirmation completed</span>
@@ -525,6 +584,14 @@ export default function DistributionTracking() {
                             {record.confirmationNotes && (
                               <span className="text-xs text-slate-500">{record.confirmationNotes}</span>
                             )}
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => handleRemoveTracking(record._id)}
+                              disabled={submitting}
+                            >
+                              Remove
+                            </button>
                           </div>
                         </td>
                       </tr>

@@ -76,10 +76,12 @@ export async function createResourceRequest(payload) {
   return data.resourceRequest;
 }
 
-export async function createPublicDonation(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/donations`, {
+// Public donation endpoint removed — use authenticated NGO donation instead.
+
+export async function createNGODonation(payload) {
+  const response = await fetch(`${API_BASE_URL}/api/donations/ngo`, {
     method: "POST",
-    headers: buildHeaders({ includeJson: true, includeAuth: false }),
+    headers: buildHeaders({ includeJson: true, includeAuth: true }),
     body: JSON.stringify(payload),
   });
 
@@ -127,6 +129,16 @@ export async function fetchTrackingRecords(params = {}) {
   return data?.data?.trackingRecords || [];
 }
 
+export async function fetchTransportAssets(params = {}) {
+  const query = buildQuery(params);
+  const response = await fetch(`${API_BASE_URL}/api/tracking/transport-assets${query}`, {
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  const data = await parseResponse(response, "Failed to fetch transport assets.");
+  return data?.data?.transportAssets || [];
+}
+
 export async function createTrackingRecord(payload) {
   const response = await fetch(`${API_BASE_URL}/api/tracking`, {
     method: "POST",
@@ -158,4 +170,13 @@ export async function confirmTrackingDelivery(id, payload) {
 
   const data = await parseResponse(response, "Failed to confirm delivery.");
   return data?.data?.trackingRecord;
+}
+
+export async function deleteTrackingRecordById(id) {
+  const response = await fetch(`${API_BASE_URL}/api/tracking/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  return parseResponse(response, "Failed to delete tracking record.");
 }

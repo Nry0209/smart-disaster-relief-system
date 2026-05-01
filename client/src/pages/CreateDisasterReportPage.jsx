@@ -25,6 +25,7 @@ const MAX_IMMEDIATE_NEED_LENGTH = 60;
 const MIN_AFFECTED_POPULATION = 1;
 const MAX_AFFECTED_POPULATION = 10000000;
 const MAX_AFFECTED_POPULATION_DIGITS = String(MAX_AFFECTED_POPULATION).length;
+const DIGIT_PATTERN = /\d/;
 
 // Disaster types for dropdown
 const DISASTER_TYPES = [
@@ -67,6 +68,12 @@ function sanitizePopulationInput(value) {
 
 function preventInvalidPopulationKey(event) {
   if (["e", "E", "+", "-", ".", ","].includes(event.key)) {
+    event.preventDefault();
+  }
+}
+
+function preventNumericKey(event) {
+  if (/\d/.test(event.key)) {
     event.preventDefault();
   }
 }
@@ -129,8 +136,9 @@ function CreateDisasterReportPage() {
   }, []);
 
   const handleInputChange = (field, value) => {
+    const normalizedValue = field === "location" ? String(value || "").replace(/\d/g, "") : value;
     setLastEditedAt(new Date());
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: normalizedValue }));
   };
 
   const handleAffectedPopulationChange = (value) => {
@@ -298,6 +306,7 @@ function CreateDisasterReportPage() {
     const affectedPopulation = Number(formData.affectedPopulation);
     const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
     const parsedEventDate = formData.eventDate ? new Date(formData.eventDate) : null;
+    const requiredItems = Array.isArray(formData.requiredItems) ? formData.requiredItems : [];
 
     return {
       disasterType:
@@ -306,6 +315,7 @@ function CreateDisasterReportPage() {
         disasterType.length > MAX_DISASTER_TYPE_LENGTH,
       location:
         !location ||
+        DIGIT_PATTERN.test(location) ||
         location.length < MIN_LOCATION_LENGTH ||
         location.length > MAX_LOCATION_LENGTH,
       eventDate:
@@ -323,6 +333,16 @@ function CreateDisasterReportPage() {
       immediateNeeds:
         normalizedNeeds.length > MAX_IMMEDIATE_NEEDS ||
         normalizedNeeds.some((item) => item.length > MAX_IMMEDIATE_NEED_LENGTH),
+      requiredItems: requiredItems.map((item) => ({
+        hasError: 
+          !String(item.category || "").trim() ||
+          !String(item.itemName || "").trim() ||
+          !Number.isInteger(Number(item.requiredQuantity)) ||
+          Number(item.requiredQuantity) < 1,
+        categoryError: !String(item.category || "").trim() ? "Category is required." : "",
+        itemNameError: !String(item.itemName || "").trim() ? "Item name is required." : "",
+        quantityError: !Number.isInteger(Number(item.requiredQuantity)) || Number(item.requiredQuantity) < 1 ? "Quantity must be at least 1." : "",
+      })),
     };
   }, [formData]);
 
@@ -353,6 +373,10 @@ function CreateDisasterReportPage() {
 
     if (!location || location.length < MIN_LOCATION_LENGTH) {
       return `Location must be at least ${MIN_LOCATION_LENGTH} characters.`;
+    }
+
+    if (DIGIT_PATTERN.test(location)) {
+      return "Location/area cannot contain numbers.";
     }
 
     if (location.length > MAX_LOCATION_LENGTH) {
@@ -568,6 +592,11 @@ function CreateDisasterReportPage() {
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
+                  {fieldErrors.disasterType && (
+                    <p className="text-[11px] font-medium text-rose-600">
+                      Disaster type is required.
+                    </p>
+                  )}
                   <p className="text-[11px] font-medium text-slate-500">
                     Select the type of disaster event
                   </p>
@@ -580,9 +609,15 @@ function CreateDisasterReportPage() {
                     type="text"
                     placeholder="Gampaha / Biyagama"
                     value={formData.location}
+                    onKeyDown={preventNumericKey}
                     onChange={(e) => handleInputChange("location", e.target.value)}
                     maxLength={MAX_LOCATION_LENGTH}
                   />
+                  {fieldErrors.location && (
+                    <p className="text-[11px] font-medium text-rose-600">
+                      Location must be 3-120 characters and cannot include numbers.
+                    </p>
+                  )}
                 </label>
 
                 <label className="space-y-1 text-xs font-semibold text-slate-600">
@@ -612,6 +647,11 @@ function CreateDisasterReportPage() {
                     onKeyDown={preventInvalidPopulationKey}
                     onChange={(e) => handleAffectedPopulationChange(e.target.value)}
                   />
+                  {fieldErrors.affectedPopulation && (
+                    <p className="text-[11px] font-medium text-rose-600">
+                      Must be a whole number between {MIN_AFFECTED_POPULATION} and {MAX_AFFECTED_POPULATION}.
+                    </p>
+                  )}
                   <p className="text-[11px] font-medium text-slate-500">
                     Enter a whole number between {MIN_AFFECTED_POPULATION} and {MAX_AFFECTED_POPULATION}.
                   </p>
@@ -636,6 +676,11 @@ function CreateDisasterReportPage() {
                     step={60}
                     onChange={(e) => handleInputChange("eventDate", e.target.value)}
                   />
+                  {fieldErrors.eventDate && (
+                    <p className="text-[11px] font-medium text-rose-600">
+                      Date and time is required and cannot be in the future.
+                    </p>
+                  )}
                   <p className="text-[11px] font-medium text-slate-500">
                     Future date/time is disabled to keep reports audit-safe.
                   </p>
@@ -673,6 +718,14 @@ function CreateDisasterReportPage() {
                     onChange={(e) => handleInputChange("description", e.target.value)}
                     maxLength={MAX_DESCRIPTION_LENGTH}
                   />
+                  {fieldErrors.description && (
+                    <p className="text-[11px] font-medium text-rose-600">
+                      Summary is required and must not exceed {MAX_DESCRIPTION_LENGTH} characters.
+                    </p>
+                  )}
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {formData.description.length}/{MAX_DESCRIPTION_LENGTH} characters
+                  </p>
                 </label>
 
                 <div className="block space-y-2 text-xs font-semibold text-slate-600">
@@ -686,13 +739,14 @@ function CreateDisasterReportPage() {
 
                   {(Array.isArray(formData.requiredItems) ? formData.requiredItems : []).map((resource, index) => {
                     const itemOptions = getItemsByCategory(resource.category);
+                    const itemError = fieldErrors.requiredItems[index];
 
                     return (
-                      <div key={`required-item-${index}`} className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-12">
+                      <div key={`required-item-${index}`} className={`grid gap-2 rounded-xl border p-3 md:grid-cols-12 ${itemError?.hasError ? 'border-rose-300 bg-rose-50/60' : 'border-slate-200 bg-slate-50'}`}>
                         <label className="space-y-1 md:col-span-4">
                           <span className="text-[11px]">Category</span>
                           <select
-                            className={inputBaseClass}
+                            className={itemError?.categoryError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
                             value={resource.category}
                             onChange={(e) => updateRequiredItem(index, "category", e.target.value)}
                           >
@@ -701,12 +755,15 @@ function CreateDisasterReportPage() {
                               <option key={category} value={category}>{category}</option>
                             ))}
                           </select>
+                          {itemError?.categoryError && (
+                            <p className="text-[11px] font-medium text-rose-600">{itemError.categoryError}</p>
+                          )}
                         </label>
 
                         <label className="space-y-1 md:col-span-5">
                           <span className="text-[11px]">Item name</span>
                           <select
-                            className={inputBaseClass}
+                            className={itemError?.itemNameError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
                             value={resource.itemName}
                             onChange={(e) => updateRequiredItem(index, "itemName", e.target.value)}
                             disabled={!resource.category}
@@ -716,18 +773,24 @@ function CreateDisasterReportPage() {
                               <option key={itemName} value={itemName}>{itemName}</option>
                             ))}
                           </select>
+                          {itemError?.itemNameError && (
+                            <p className="text-[11px] font-medium text-rose-600">{itemError.itemNameError}</p>
+                          )}
                         </label>
 
                         <label className="space-y-1 md:col-span-2">
                           <span className="text-[11px]">Quantity</span>
                           <input
-                            className={inputBaseClass}
+                            className={itemError?.quantityError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
                             type="number"
                             min="1"
                             step="1"
                             value={resource.requiredQuantity}
                             onChange={(e) => updateRequiredItem(index, "requiredQuantity", e.target.value)}
                           />
+                          {itemError?.quantityError && (
+                            <p className="text-[11px] font-medium text-rose-600">{itemError.quantityError}</p>
+                          )}
                         </label>
 
                         <div className="md:col-span-1 flex items-end">

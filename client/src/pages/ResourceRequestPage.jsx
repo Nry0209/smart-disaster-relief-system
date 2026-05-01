@@ -8,7 +8,6 @@ import {
   fetchPartners,
 } from "../services/workflowService";
 import { fetchInventoryItems } from "../services/inventoryService";
-import { ITEM_CATEGORIES, ITEM_MAPPING } from "../utils/constants";
 import "./Pages.css";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,10 +20,13 @@ const MIN_ADDRESS_LENGTH = 10;
 const MAX_ITEM_NAME_LENGTH = 80;
 const MIN_ITEM_NAME_LENGTH = 2;
 const MAX_REQUEST_QUANTITY = 999999;
+const MIN_REQUEST_AMOUNT = 1000;
+const MIN_ITEM_QUANTITY = 1;
 const DEFAULT_REQUEST_ITEM = {
   inventoryItemId: "",
   category: "",
   itemName: "",
+  unit: "",
   quantity: "",
 };
 
@@ -65,6 +67,11 @@ function validateEmail(value) {
   return "";
 }
 
+function formatInventoryLabel(item) {
+  const unit = String(item?.unit || "").trim();
+  return unit ? `${item.name} (${unit})` : item.name;
+}
+
 export default function ResourceRequestPage() {
   const [disasters, setDisasters] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -74,6 +81,14 @@ export default function ResourceRequestPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({
+    ngoPartner: "",
+    deliveryWarehouse: "",
+    expectedDeliveryDate: "",
+    problemNote: "",
+    amount: "",
+    items: {},
+  });
 
   const [form, setForm] = useState({
     ngoPartner: "",
@@ -110,6 +125,8 @@ export default function ResourceRequestPage() {
                 id: String(item.id),
                 name: String(item.name),
                 category: String(item.category),
+                unit: String(item.unit || "units"),
+                isSelectable: item?.isSelectable !== false,
               }))
           : [];
 
@@ -130,6 +147,17 @@ export default function ResourceRequestPage() {
     };
   }, []);
 
+  const selectableInventoryItems = useMemo(
+    () => inventoryItems.filter((item) => item.isSelectable !== false),
+    [inventoryItems]
+  );
+
+  const inventoryCategories = useMemo(() => {
+    return [...new Set(selectableInventoryItems.map((item) => item.category))].sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [selectableInventoryItems]);
+
   const selectedDisaster = useMemo(
     () => disasters.find((d) => d.id === form.disasterId),
     [disasters, form.disasterId]
@@ -137,6 +165,7 @@ export default function ResourceRequestPage() {
 
   function updateField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((prev) => ({ ...prev, [name]: "" }));
   }
 
   function updateItem(index, field, value) {
@@ -145,6 +174,14 @@ export default function ResourceRequestPage() {
       nextItems[index] = { ...nextItems[index], [field]: value };
       return { ...prev, items: nextItems };
     });
+
+    setFieldErrors((prev) => ({
+      ...prev,
+      items: {
+        ...prev.items,
+        [index]: "",
+      },
+    }));
   }
 
   function addItem() {
@@ -160,27 +197,43 @@ export default function ResourceRequestPage() {
 
   // Validation functions
   function validateForm() {
-    const errors = [];
+    const nextFieldErrors = {
+      ngoPartner: "",
+      deliveryWarehouse: "",
+      expectedDeliveryDate: "",
+      problemNote: "",
+      amount: "",
+      items: {},
+    };
 
     // Required fields validation (except resource request items)
     if (!form.ngoPartner.trim()) {
-      errors.push("Please select an NGO/Partner.");
+      nextFieldErrors.ngoPartner = "Please select an NGO/Partner.";
     }
 
     if (!form.deliveryWarehouse.trim()) {
-      errors.push("Please select a delivery warehouse.");
+      nextFieldErrors.deliveryWarehouse = "Please select a delivery warehouse.";
     }
 
     if (!form.expectedDeliveryDate.trim()) {
-      errors.push("Expected delivery date is required.");
+      nextFieldErrors.expectedDeliveryDate = "Expected delivery date is required.";
     } else if (new Date(form.expectedDeliveryDate).getTime() < new Date(getTodayDateLocal()).getTime()) {
-      errors.push("Delivery date cannot be in the past.");
+      nextFieldErrors.expectedDeliveryDate = "Delivery date cannot be in the past.";
+    }
+
+    if (!form.problemNote.trim()) {
+      nextFieldErrors.problemNote = "Problem description is required.";
     }
 
     // Monetary request validation if selected
     if (form.requestType === "monetary") {
-      if (!form.amount.trim() || Number(form.amount) <= 0) {
-        errors.push("Please enter a valid amount for monetary request.");
+      const amount = Number(form.amount);
+      if (!form.amount.trim()) {
+        nextFieldErrors.amount = "Amount is required.";
+      } else if (amount <= 0) {
+        nextFieldErrors.amount = "Please enter an amount greater than 0.";
+      } else if (amount < MIN_REQUEST_AMOUNT) {
+        nextFieldErrors.amount = `Minimum request amount is LKR ${MIN_REQUEST_AMOUNT.toLocaleString()}.`;
       }
     }
 
@@ -188,16 +241,23 @@ export default function ResourceRequestPage() {
     if (form.requestType === "inventory") {
       const validItems = form.items.filter(item => item.itemName.trim() && item.quantity.trim());
       if (validItems.length === 0) {
-        errors.push("Please add at least one item for inventory request.");
+        nextFieldErrors.items[0] = "Please add at least one item for inventory request.";
       } else {
-        const hasNegativeQuantity = validItems.some(item => Number(item.quantity) < 0);
-        if (hasNegativeQuantity) {
-          errors.push("Quantity cannot be negative.");
-        }
+        form.items.forEach((item, index) => {
+          if (!item.category || !item.inventoryItemId) {
+            nextFieldErrors.items[index] = "Select category and item.";
+            return;
+          }
+          const quantity = Number(item.quantity);
+          if (!Number.isInteger(quantity) || quantity < MIN_ITEM_QUANTITY) {
+            nextFieldErrors.items[index] = `Quantity must be at least ${MIN_ITEM_QUANTITY}.`;
+          }
+        });
       }
     }
 
-    return errors;
+    setFieldErrors(nextFieldErrors);
+    return nextFieldErrors;
   }
 
   async function handleSubmit(event) {
@@ -206,8 +266,13 @@ export default function ResourceRequestPage() {
     setSuccess(null);
 
     const validationErrors = validateForm();
-    if (validationErrors.length > 0) {
-      setError(validationErrors.join(" "));
+    const hasErrors =
+      Object.values(validationErrors).some((value) =>
+        typeof value === "string" ? Boolean(value) : Object.values(value).some(Boolean)
+      );
+
+    if (hasErrors) {
+      setError("Please fix highlighted fields.");
       return;
     }
 
@@ -234,6 +299,7 @@ export default function ResourceRequestPage() {
             category: item.category,
             itemName: item.itemName.trim(),
             quantity: Number(item.quantity),
+            unit: item.unit || "units",
           }));
       }
 
@@ -302,6 +368,7 @@ export default function ResourceRequestPage() {
               <label className="form-group">
                 <span>NGO/Partner *</span>
                 <select
+                  className={fieldErrors.ngoPartner ? "border border-rose-300 bg-rose-50/50" : ""}
                   value={form.ngoPartner}
                   onChange={(e) => updateField("ngoPartner", e.target.value)}
                   required
@@ -313,6 +380,7 @@ export default function ResourceRequestPage() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.ngoPartner && <p className="mt-1 text-xs text-rose-600">{fieldErrors.ngoPartner}</p>}
               </label>
 
               {/* Request Type */}
@@ -332,12 +400,14 @@ export default function ResourceRequestPage() {
                 <label className="form-group">
                   <span>Expected Delivery Date *</span>
                   <input
+                    className={fieldErrors.expectedDeliveryDate ? "border border-rose-300 bg-rose-50/50" : ""}
                     type="date"
                     value={form.expectedDeliveryDate}
                     min={getTodayDateLocal()}
                     onChange={(e) => updateField("expectedDeliveryDate", e.target.value)}
                     required
                   />
+                  {fieldErrors.expectedDeliveryDate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.expectedDeliveryDate}</p>}
                 </label>
               </div>
 
@@ -345,6 +415,7 @@ export default function ResourceRequestPage() {
               <label className="form-group">
                 <span>Delivery Warehouse *</span>
                 <select
+                  className={fieldErrors.deliveryWarehouse ? "border border-rose-300 bg-rose-50/50" : ""}
                   value={form.deliveryWarehouse}
                   onChange={(e) => updateField("deliveryWarehouse", e.target.value)}
                   required
@@ -356,12 +427,14 @@ export default function ResourceRequestPage() {
                     </option>
                   ))}
                 </select>
+                {fieldErrors.deliveryWarehouse && <p className="mt-1 text-xs text-rose-600">{fieldErrors.deliveryWarehouse}</p>}
               </label>
 
               {/* Problem Note */}
               <label className="form-group">
                 <span>Problem Description *</span>
                 <textarea
+                  className={fieldErrors.problemNote ? "border border-rose-300 bg-rose-50/50" : ""}
                   rows={3}
                   value={form.problemNote}
                   onChange={(e) => updateField("problemNote", e.target.value)}
@@ -369,6 +442,7 @@ export default function ResourceRequestPage() {
                   required
                   maxLength={MAX_NOTE_LENGTH}
                 />
+                {fieldErrors.problemNote && <p className="mt-1 text-xs text-rose-600">{fieldErrors.problemNote}</p>}
               </label>
 
               {/* Monetary Request */}
@@ -376,6 +450,7 @@ export default function ResourceRequestPage() {
                 <label className="form-group">
                   <span>Requested Amount (LKR) *</span>
                   <input
+                    className={fieldErrors.amount ? "border border-rose-300 bg-rose-50/50" : ""}
                     type="number"
                     value={form.amount}
                     onChange={(e) => updateField("amount", e.target.value)}
@@ -383,6 +458,8 @@ export default function ResourceRequestPage() {
                     min="1"
                     required
                   />
+                  {fieldErrors.amount && <p className="mt-1 text-xs text-rose-600">{fieldErrors.amount}</p>}
+                  <p className="mt-1 text-xs text-slate-500">Minimum request amount: LKR {MIN_REQUEST_AMOUNT.toLocaleString()}</p>
                 </label>
               )}
 
@@ -400,35 +477,58 @@ export default function ResourceRequestPage() {
                     {form.items.map((item, index) => (
                       <div key={index} className="grid gap-3 md:grid-cols-[2fr_2fr_1fr_auto]">
                         <select
-                          className="resource-line-input"
+                          className={`resource-line-input ${fieldErrors.items[index] ? "border border-rose-300 bg-rose-50/50" : ""}`}
                           value={item.category}
                           onChange={(e) => {
-                            updateItem(index, "category", e.target.value);
-                            updateItem(index, "itemName", ""); // Reset item when category changes
+                            setForm((prev) => {
+                              const nextItems = [...prev.items];
+                              nextItems[index] = {
+                                ...nextItems[index],
+                                category: e.target.value,
+                                inventoryItemId: "",
+                                itemName: "",
+                              };
+                              return { ...prev, items: nextItems };
+                            });
                           }}
                         >
                           <option value="">Select category</option>
-                          {Object.values(ITEM_CATEGORIES).map((category) => (
+                          {inventoryCategories.map((category) => (
                             <option key={category} value={category}>
                               {category}
                             </option>
                           ))}
                         </select>
                         <select
-                          className="resource-line-input"
-                          value={item.itemName}
-                          onChange={(e) => updateItem(index, "itemName", e.target.value)}
+                          className={`resource-line-input ${fieldErrors.items[index] ? "border border-rose-300 bg-rose-50/50" : ""}`}
+                          value={item.inventoryItemId}
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const selectedItem = selectableInventoryItems.find((invItem) => invItem.id === selectedId);
+                            setForm((prev) => {
+                              const nextItems = [...prev.items];
+                              nextItems[index] = {
+                                ...nextItems[index],
+                                inventoryItemId: selectedId,
+                                itemName: selectedItem?.name || "",
+                                unit: selectedItem?.unit || "units",
+                              };
+                              return { ...prev, items: nextItems };
+                            });
+                          }}
                           disabled={!item.category}
                         >
                           <option value="">Select item</option>
-                          {item.category && ITEM_MAPPING[item.category]?.map((itemName) => (
-                            <option key={itemName} value={itemName}>
-                              {itemName}
-                            </option>
-                          ))}
+                          {selectableInventoryItems
+                            .filter((invItem) => !item.category || invItem.category === item.category)
+                            .map((invItem) => (
+                              <option key={invItem.id} value={invItem.id}>
+                                {formatInventoryLabel(invItem)}
+                              </option>
+                            ))}
                         </select>
                         <input
-                          className="resource-line-input"
+                          className={`resource-line-input ${fieldErrors.items[index] ? "border border-rose-300 bg-rose-50/50" : ""}`}
                           type="number"
                           min="1"
                           step="1"
@@ -439,6 +539,9 @@ export default function ResourceRequestPage() {
                         <button type="button" className="btn-remove" onClick={() => removeItem(index)}>
                           <Trash2 size={16} />
                         </button>
+                        {fieldErrors.items[index] && (
+                          <p className="md:col-span-4 text-xs text-rose-600">{fieldErrors.items[index]}</p>
+                        )}
                       </div>
                     ))}
                   </div>

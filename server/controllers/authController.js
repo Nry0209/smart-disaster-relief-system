@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Partner = require('../models/Partner');
 const mongoose = require('mongoose');
 
 const { generateToken } = require('../config/auth');
@@ -10,6 +11,8 @@ const { sendStaffOnboardingEmail, sendTestEmail, sendPasswordResetEmail, sendFir
 const crypto = require('crypto');
 
 const isDatabaseConnected = () => mongoose.connection.readyState === 1;
+
+const STAFF_ROLES = ['dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff', 'ngo_partner'];
 
 
 
@@ -154,12 +157,12 @@ const adminLogin = async (req, res) => {
 
 
 
-// Staff User Login (All roles except admin)
-
+// Staff & NGO User Login (All roles except admin)
+// Applies to: dmc_officer, inventory_officer, tracking_officer, charity_staff, ngo_partner
+// First login: Must use OTP → Set password (in otpLogin & setPasswordAfterOTP endpoints)
+// Subsequent logins: Use email + password
 const staffLogin = async (req, res) => {
-
   try {
-
     const { email, password } = req.body;
 
 
@@ -195,7 +198,7 @@ const staffLogin = async (req, res) => {
 
         email: email.toLowerCase(), 
 
-        role: { $in: ['dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff'] },
+        role: { $in: STAFF_ROLES },
 
         status: 'active'
 
@@ -275,7 +278,7 @@ const staffLogin = async (req, res) => {
 
         success: true,
 
-        message: 'Staff login successful',
+        message: staffUser.role === 'ngo_partner' ? 'NGO login successful' : 'Staff login successful',
 
         data: {
 
@@ -335,13 +338,13 @@ const staffLogin = async (req, res) => {
 
 
 
-// Create Staff User (Admin only)
-
+// Create Staff User or NGO Partner (Admin only)
+// Supports: dmc_officer, inventory_officer, allocation_officer, tracking_officer, charity_staff, ngo_partner
+// NGO Flow: Creates both User (for login) and Partner (for org details) records
+// All users go through: OTP verification → Password setup → Regular login
 const createStaff = async (req, res) => {
-
   try {
-
-    const { fullName, email, role, phone, department } = req.body;
+    const { fullName, email, role, phone, department, partnerEmail, organizationName } = req.body;
 
 
 
@@ -363,7 +366,7 @@ const createStaff = async (req, res) => {
 
     // Validate role
 
-    const validRoles = ['dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff'];
+    const validRoles = STAFF_ROLES;
 
     if (!validRoles.includes(role)) {
 
@@ -425,90 +428,63 @@ const createStaff = async (req, res) => {
 
       // Create new staff user
 
-      const newStaff = new User({
-
-        fullName,
-
-        email: email.toLowerCase(),
-
-        password: tempPassword,
-
-        role,
-
-        phone: phone || '',
-
-        department: department || '',
-
-        status: 'active',
-
-        isFirstLogin: true,
-
-        otp: otp,
-
-        otpExpires: otpExpires,
-
-        resetPasswordToken,
-
-        resetPasswordExpires,
-
-        createdBy: req.user.id // Admin who created this user
-
-      });
-
-
-
       await newStaff.save();
 
-
+      // If creating an NGO partner, create Partner record and send onboarding to partner email too
+      let partnerRecord = null;
+      if (role === 'ngo_partner') {
+        const pEmail = (partnerEmail || email).toLowerCase();
+        partnerRecord = new Partner({
+          organizationName: organizationName || fullName,
+          contactPerson: fullName,
+          email: pEmail,
+          phone: phone || '',
+          status: 'active',
+          createdBy: req.user.id,
+          userId: newStaff._id
+        });
+        await partnerRecord.save();
+      }
 
       const setupLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password/${setupToken}`;
 
+      // Send OTP + setup link via email to the user account
+      const emailSentToUser = await sendStaffOnboardingEmail(newStaff.email, otp, fullName, setupToken);
 
+      // Also send to partner email if different and partner was created
+      let emailSentToPartner = false;
+      if (partnerRecord && partnerRecord.email && partnerRecord.email !== newStaff.email) {
+        emailSentToPartner = await sendStaffOnboardingEmail(partnerRecord.email, otp, organizationName || fullName, setupToken);
+      }
 
-      // Send OTP + setup link via email
+      const anyEmailSent = emailSentToUser || emailSentToPartner;
 
-      const emailSent = await sendStaffOnboardingEmail(email, otp, fullName, setupToken);
-
-
-
-      const message = emailSent
-
-        ? 'Staff user created successfully. OTP and password setup link have been sent to their email.'
-
-        : 'Staff user created successfully. Email not sent; use OTP/setup link from response or server logs.';
-
-
+      const message = anyEmailSent
+        ? (role === 'ngo_partner' ? 'NGO partner created successfully. OTP and password setup link have been sent.' : 'Staff user created successfully. OTP and password setup link have been sent to their email.')
+        : 'User created successfully. Email not sent; use OTP/setup link from response or server logs.';
 
       res.status(201).json({
-
         success: true,
-
         message: message,
-
         data: {
-
+          userType: role === 'ngo_partner' ? 'ngo_partner' : 'staff',
           user: {
-
             id: newStaff._id,
-
             fullName: newStaff.fullName,
-
             email: newStaff.email,
-
             role: newStaff.role,
-
             status: newStaff.status
-
           },
-
-          emailSent: emailSent,
-
-          otp: process.env.NODE_ENV === 'development' || !emailSent ? otp : undefined,
-
-          setupLink: process.env.NODE_ENV === 'development' || !emailSent ? setupLink : undefined
-
+          partner: partnerRecord ? {
+            id: partnerRecord._id,
+            organizationName: partnerRecord.organizationName,
+            email: partnerRecord.email
+          } : null,
+          emailSentToUser,
+          emailSentToPartner,
+          otp: process.env.NODE_ENV === 'development' || !anyEmailSent ? otp : undefined,
+          setupLink: process.env.NODE_ENV === 'development' || !anyEmailSent ? setupLink : undefined
         }
-
       });
 
 
@@ -1007,12 +983,11 @@ const deleteUser = async (req, res) => {
 
 
 
-// OTP Login for First-time Staff (OTP-based authentication)
-
+// OTP Login for First-time Staff & NGO Partners
+// Applies to: All staff roles + ngo_partner on their first login
+// Flow: OTP sent via email → User verifies OTP → Gets temp token → Sets password
 const otpLogin = async (req, res) => {
-
   try {
-
     const { email, otp } = req.body;
 
 
@@ -1033,16 +1008,11 @@ const otpLogin = async (req, res) => {
 
 
 
-    // Find staff user
-
+    // Find staff or NGO user on their first login
     const staffUser = await User.findOne({
-
       email: email.toLowerCase(),
-
-      role: { $in: ['dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff'] },
-
+      role: { $in: STAFF_ROLES }, // Includes: dmc_officer, inventory_officer, tracking_officer, charity_staff, ngo_partner
       isFirstLogin: true
-
     });
 
 
@@ -1167,12 +1137,11 @@ const otpLogin = async (req, res) => {
 
 
 
-// Set Password After First-time OTP Login
-
+// Set Password After First-time OTP Login (Staff & NGO)
+// Applies to: Staff users and NGO partners after OTP verification
+// This completes the first-login flow: OTP → Set Password → Regular email+password login
 const setPasswordAfterOTP = async (req, res) => {
-
   try {
-
     const { newPassword, confirmPassword } = req.body;
 
 

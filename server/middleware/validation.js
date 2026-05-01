@@ -44,7 +44,7 @@ const validateUserCreation = [
     .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
   
   body('role')
-    .isIn(['admin', 'dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff'])
+    .isIn(['admin', 'dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff', 'ngo_partner'])
     .withMessage('Invalid role specified'),
   
   body('phone')
@@ -73,8 +73,8 @@ const validateLogin = [
     .withMessage('Password is required'),
   
   body('role')
-    .isIn(['admin', 'staff'])
-    .withMessage('Role must be either admin or staff'),
+    .isIn(['admin', 'staff', 'ngo_partner'])
+    .withMessage('Role must be admin, staff, or ngo_partner'),
   
   handleValidationErrors
 ];

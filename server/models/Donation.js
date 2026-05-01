@@ -35,6 +35,11 @@ const donationSchema = new mongoose.Schema(
       ref: "Partner",
       default: null,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     donorName: {
       type: String,
       required: true,

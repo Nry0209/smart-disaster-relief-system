@@ -8,7 +8,8 @@ const {
   deleteTrackingRecord,
   getTrackingByAllocation,
   getTrackingByDisaster,
-  updateTrackingStatus
+  updateTrackingStatus,
+  getTransportAssets
 } = require('../controllers/trackingController');
 const {
   authenticateToken,
@@ -25,6 +26,9 @@ router.get('/allocation/:allocationId', authenticateToken, internalStaffOnly, ge
 
 // Get tracking records by disaster ID
 router.get('/disaster/:disasterId', authenticateToken, internalStaffOnly, getTrackingByDisaster);
+
+// Get transport assets for tracking allocation
+router.get('/transport-assets', authenticateToken, internalStaffOnly, getTransportAssets);
 
 // Get tracking record by ID
 router.get('/:id', authenticateToken, internalStaffOnly, getTrackingRecordById);

@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Donation = require("../models/Donation");
 const Partner = require("../models/Partner");
 const InventoryItem = require("../models/InventoryItem");
-const InventoryActivity = require("../models/InventoryActivity");
+const inventoryActivityService = require("../services/inventoryActivityService");
 
 const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -28,6 +28,126 @@ function normalizeDonationPayload(payload = {}) {
     partnerId: payload.partnerId || null,
   };
 }
+// Create NGO donation (Authenticated NGO partners only)
+async function createNGODonation(req, res) {
+  try {
+    // Extract authenticated user ID (NGO staff user)
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required for NGO donations." });
+    }
+
+    // Find partner by linked userId first, then by user email
+    let partner = await Partner.findOne({ userId: userId });
+    if (!partner) {
+      partner = await Partner.findOne({ email: req.user?.email });
+    }
+
+    if (!partner) {
+      // If Partner doesn't exist, create one from user data and link to user
+      partner = new Partner({
+        organizationName: req.user?.organizationName || req.user?.email?.split('@')[0] || 'Unknown NGO',
+        contactPerson: req.user?.fullName || req.user?.email,
+        email: req.user?.email,
+        status: 'active',
+        createdBy: userId,
+        userId: userId
+      });
+      await partner.save();
+    }
+
+    const {
+      donationType,
+      organizationName,
+      email,
+      phone,
+      items,
+      amount,
+      expectedDeliveryDate,
+      notes
+    } = req.body;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    if (!organizationName || !String(organizationName).trim()) {
+      return res.status(400).json({ message: "Organization name is required." });
+    }
+
+    const normalizedDonationType = donationType === "monetary" ? "monetary" : "inventory";
+
+    let normalizedInventoryItems = [];
+    let totalInventoryQuantity = 0;
+
+    if (normalizedDonationType === "inventory") {
+      try {
+        const normalized = await normalizeInventoryDonationItems({
+          items,
+          itemType: "",
+          category: "",
+          quantity: 0,
+        });
+
+        normalizedInventoryItems = normalized.normalizedItems;
+        totalInventoryQuantity = normalized.totalQuantity;
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
+      }
+
+      if (!normalizedInventoryItems.length || totalInventoryQuantity <= 0) {
+        return res.status(400).json({
+          message: "For inventory donations, select at least one inventory item and quantity."
+        });
+      }
+    }
+
+    if (normalizedDonationType === "monetary") {
+      const parsedAmount = Number(amount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({
+          message: "For monetary donations, a valid amount greater than 0 is required."
+        });
+      }
+    }
+
+    const donation = new Donation({
+      partnerId: partner._id,  // NGO donations reference Partner, not User
+      userId: userId,           // Keep userId for audit trail
+      donorType: "organization",
+      donationType: normalizedDonationType,
+      donorName: String(organizationName).trim(),
+      organizationName: String(organizationName).trim(),
+      email: String(email || "").trim(),
+      phone: String(phone || "").trim(),
+      items: normalizedDonationType === "inventory" ? normalizedInventoryItems : [],
+      itemType: normalizedDonationType === "inventory" ? normalizedInventoryItems[0]?.itemName || "" : "",
+      category: normalizedDonationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "",
+      quantity: normalizedDonationType === "inventory" ? totalInventoryQuantity : 0,
+      amount: normalizedDonationType === "monetary" ? Number(amount) : 0,
+      expectedDeliveryDate: normalizedDonationType === "inventory" ? expectedDeliveryDate || null : null,
+      status: "pending_verification",
+      notes: String(notes || "").trim()
+    });
+
+    await donation.save();
+
+    return res.status(201).json({
+      message: "Donation submitted successfully. It will be reviewed by our inventory team.",
+      donation
+    });
+
+  } catch (error) {
+    console.error("Create NGO donation error:", error);
+    return res.status(500).json({ 
+      message: "Failed to submit donation.", 
+      error: error.message 
+    });
+  }
+}
+
 
 function normalizeLineQuantity(value) {
   const parsed = Number(value);
@@ -403,7 +523,7 @@ async function verifyDonation(req, res) {
         inventoryItem.lastUpdatedBy = req.user.id;
         await inventoryItem.save();
 
-        const activity = new InventoryActivity({
+        await inventoryActivityService.createActivity({
           itemId: inventoryItem._id,
           itemName: inventoryItem.name,
           action: "restock",
@@ -418,8 +538,6 @@ async function verifyDonation(req, res) {
           },
           performedBy: req.user.fullName || req.user.name || req.user.id,
         });
-
-        await activity.save();
       }
     }
 
@@ -652,6 +770,7 @@ async function getDonationStatistics(req, res) {
 
 module.exports = {
   createDonation,
+    createNGODonation,
   listDonations,
   getDonationById,
   verifyDonation,

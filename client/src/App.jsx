@@ -8,16 +8,19 @@ import UserManagement from "./pages/UserManagement";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import DmcDashboardPage from "./pages/DmcDashboardPage";
 import DmcDeliveryVerificationPage from "./pages/DmcDeliveryVerificationPage";
-import PublicDonationPage from "./pages/PublicDonationPage";
 
 import InventoryPage from "./pages/InventoryPage";
+import InventoryFormPage from "./pages/InventoryFormPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
+import NGODonationPage from "./pages/NGODonationPage";
 import AllocationPage from "./pages/AllocationPage";
+import AllocationFormPage from "./pages/AllocationFormPage";
 import DisasterEventPage from "./pages/DisasterEventPage";
 import CreateDisasterReportPage from "./pages/CreateDisasterReportPage";
 import ReportsAnalyticsPage from "./pages/ReportsAnalyticsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import PartnerFormPage from "./pages/PartnerFormPage";
 import { useAuth } from "./context/AuthContext";
 import "./App.css";
 
@@ -55,11 +58,12 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
-      <Route path="/public-donation" element={<PublicDonationPage />} />
       <Route path="/dashboard" element={
-        <DashboardLayout>
-          <DashboardPage />
-        </DashboardLayout>
+        <RoleRoute allowedRoles={["admin", "dmc_officer", "inventory_officer", "allocation_officer", "tracking_officer"]} fallback="/inventory">
+          <DashboardLayout>
+            <DashboardPage />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="/dmc-dashboard" element={
         <DashboardLayout>
@@ -78,9 +82,35 @@ function App() {
           <InventoryPage />
         </DashboardLayout>
       } />
+      <Route path="/inventory/new" element={
+        <RoleRoute allowedRoles={["admin", "inventory_officer"]} fallback="/inventory">
+          <DashboardLayout>
+            <InventoryFormPage mode="create" />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
+      <Route path="/inventory/adjust" element={
+        <RoleRoute allowedRoles={["admin", "inventory_officer"]} fallback="/inventory">
+          <DashboardLayout>
+            <InventoryFormPage mode="adjust" />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
+      <Route path="/inventory/:itemId/edit" element={
+        <RoleRoute allowedRoles={["admin", "inventory_officer"]} fallback="/inventory">
+          <DashboardLayout>
+            <InventoryFormPage mode="edit" />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
       <Route path="/resource-requests" element={
         <DashboardLayout>
           <ResourceRequestPage />
+        </DashboardLayout>
+      } />
+      <Route path="/ngo-donation" element={
+        <DashboardLayout>
+          <NGODonationPage />
         </DashboardLayout>
       } />
       <Route path="/donations/verify" element={
@@ -102,9 +132,28 @@ function App() {
           </DashboardLayout>
         </RoleRoute>
       } />
+      <Route path="/users/partners/new" element={
+        <RoleRoute allowedRoles={["admin"]} fallback="/users">
+          <DashboardLayout>
+            <PartnerFormPage mode="create" />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
+      <Route path="/users/partners/:partnerId/edit" element={
+        <RoleRoute allowedRoles={["admin"]} fallback="/users">
+          <DashboardLayout>
+            <PartnerFormPage mode="edit" />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
       <Route path="/allocations" element={
         <DashboardLayout>
           <AllocationPage />
+        </DashboardLayout>
+      } />
+      <Route path="/allocations/:reportId/manage" element={
+        <DashboardLayout>
+          <AllocationFormPage />
         </DashboardLayout>
       } />
       <Route path="/allocation-dashboard" element={<Navigate to="/allocations" replace />} />
@@ -122,9 +171,11 @@ function App() {
         </DashboardLayout>
       } />
       <Route path="/reports-analytics" element={
-        <DashboardLayout>
-          <ReportsAnalyticsPage />
-        </DashboardLayout>
+        <RoleRoute allowedRoles={["admin", "dmc_officer", "inventory_officer", "allocation_officer", "tracking_officer"]} fallback="/inventory">
+          <DashboardLayout>
+            <ReportsAnalyticsPage />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="/prediction" element={<Navigate to="/reports-analytics" replace />} />
       <Route path="/audit-logs" element={

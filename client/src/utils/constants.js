@@ -5,6 +5,7 @@ export const ROLES = {
   ALLOCATION: "allocation_officer",
   TRACKING: "tracking_officer",
   CHARITY: "charity_staff",
+  NGO: "ngo_partner",
 };
 
 // Item Categories - New Safe Category Design
@@ -80,7 +81,6 @@ export const SIDEBAR_ITEMS = [
       ROLES.INVENTORY,
       ROLES.ALLOCATION,
       ROLES.TRACKING,
-      ROLES.CHARITY,
     ],
   },
   {
@@ -109,7 +109,12 @@ export const SIDEBAR_ITEMS = [
   {
     label: "Inventory",
     path: "/inventory",
-    roles: [ROLES.ADMIN, ROLES.INVENTORY],
+    roles: [ROLES.ADMIN, ROLES.INVENTORY, ROLES.CHARITY, ROLES.NGO],
+  },
+  {
+    label: "Submit Donation",
+    path: "/ngo-donation",
+    roles: [ROLES.NGO],
   },
   {
     label: "Resource Requests",
@@ -139,7 +144,7 @@ export const SIDEBAR_ITEMS = [
   {
     label: "Reports",
     path: "/reports-analytics",
-    roles: [ROLES.ADMIN, ROLES.INVENTORY, ROLES.DMC, ROLES.ALLOCATION, ROLES.CHARITY],
+    roles: [ROLES.ADMIN, ROLES.INVENTORY, ROLES.DMC, ROLES.ALLOCATION],
   },
   {
     label: "Audit Logs",

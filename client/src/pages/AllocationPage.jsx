@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { Package, AlertTriangle, Users, CheckCircle, Clock, ArrowRight, Search, Filter, Truck, MapPin, Calendar, Bell, Trash2, RefreshCcw, RefreshCw } from "lucide-react";
 
@@ -136,6 +137,8 @@ function formatEventDate(value) {
 
 export default function AllocationPage() {
 
+  const navigate = useNavigate();
+
   const [inventory, setInventory] = useState([]);
 
   const [disasterEvents, setDisasterEvents] = useState([]);
@@ -262,7 +265,7 @@ export default function AllocationPage() {
 
         console.log('Frontend inventory loading failed:', inventoryResult.reason);
 
-        setInventory([]);
+      setInventory([]);
 
         setInventoryError(inventoryResult.reason?.message || "Failed to load inventory from the backend.");
 
@@ -275,6 +278,8 @@ export default function AllocationPage() {
         setActionMessage("Allocation queue refreshed.");
 
       }
+
+
 
     } catch (error) {
 
@@ -479,19 +484,12 @@ export default function AllocationPage() {
 
 
   const handlePreviewPrediction = async (eventId) => {
-
-    const event = findEventById(eventId);
-
-    if (!event) return;
+    navigate(`/allocations/${eventId}/manage`);
+  };
 
 
-
-    setPredictionPreviewEvent(event);
-
-    setPredictionPreviewModal(true);
-
-    await fetchPredictionForEvent(event);
-
+  const handleAllocate = (eventId) => {
+    navigate(`/allocations/${eventId}/manage`);
   };
 
 
@@ -829,46 +827,6 @@ export default function AllocationPage() {
     document.body.removeChild(anchor);
 
     URL.revokeObjectURL(url);
-
-  };
-
-
-
-  const handleAllocate = (eventId) => {
-
-    const event = findEventById(eventId);
-
-    if (!event) return;
-
-    setSelectedEvent(event);
-
-    
-
-    // Check if there's an existing allocation
-
-    if (event.allocatedResources) {
-
-      setExistingAllocation(event.allocatedResources);
-
-      setAllocationQuantities(event.allocatedResources.quantities || {});
-
-      setAllocationMessage(event.allocatedResources.message || "");
-
-    } else {
-
-      setExistingAllocation(null);
-
-      setAllocationQuantities({});
-
-      setAllocationMessage("");
-
-    }
-
-    
-
-    setAllocationModal(true);
-
-    fetchPredictionForEvent(event);
 
   };
 
@@ -1891,10 +1849,7 @@ export default function AllocationPage() {
 
 
       {predictionPreviewModal && predictionPreviewEvent && (
-
-        <div className="modal-overlay" onClick={closePredictionPreview}>
-
-          <div className="modal-content" onClick={(event) => event.stopPropagation()}>
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
 
             <div className="modal-header">
 
@@ -2048,19 +2003,14 @@ export default function AllocationPage() {
 
             </div>
 
-          </div>
-
-        </div>
+        </section>
 
       )}
 
 
 
       {allocationModal && selectedEvent && (
-
-        <div className="modal-overlay" onClick={() => setAllocationModal(false)}>
-
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
 
             <div className="modal-header">
 
@@ -2510,9 +2460,7 @@ export default function AllocationPage() {
 
             </div>
 
-          </div>
-
-        </div>
+        </section>
 
       )}
 

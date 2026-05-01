@@ -295,7 +295,7 @@ const PartnerDirectory = () => {
         role={isInventoryOfficer ? 'Inventory Officer / NGO Directory' : 'Admin / Partner Management'}
         title="Partner Directory"
         description={isInventoryOfficer 
-          ? "View and search registered NGO partners and their contact information" 
+            ? "View and search NGO partners and their contact information" 
           : "Manage NGO partner organizations and their contact details"}
         showReadOnlyBadge={isInventoryOfficer}
       />

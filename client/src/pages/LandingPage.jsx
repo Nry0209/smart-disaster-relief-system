@@ -59,13 +59,11 @@ function LandingPage() {
         </div>
 
         <div className="landing-top-actions">
-          <button
+          {/* <button
             className="btn-base btn-light"
-            onClick={() => navigate("/public-donation")}
           >
-            Donate Now
-          </button>
-
+            Public View
+          </button> */}
           <button
             className="btn-base btn-primary"
             onClick={() => navigate("/login")}
@@ -92,13 +90,6 @@ function LandingPage() {
               onClick={() => navigate("/login")}
             >
               Access Staff Dashboard
-            </button>
-
-            <button
-              className="btn-base btn-light"
-              onClick={() => navigate("/public-donation")}
-            >
-              Donate Now
             </button>
           </div>
 

@@ -69,6 +69,7 @@ function DashboardPage() {
   const getRoleTitle = () => {
     switch(user?.role) {
       case 'charity_staff': return 'Charity Staff Member';
+      case 'ngo_partner': return 'NGO Partner';
       case 'admin': return 'System Administrator';
       case 'inventory_officer': return 'Inventory Officer';
       case 'allocation_officer': return 'Allocation Officer';

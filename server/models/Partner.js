@@ -55,6 +55,11 @@ const partnerSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -63,5 +68,8 @@ const partnerSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// index to ensure quick lookups and uniqueness (sparse to avoid conflicts)
+partnerSchema.index({ userId: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Partner", partnerSchema);

@@ -18,6 +18,12 @@ const trackingRecordSchema = new mongoose.Schema(
       required: true,
     },
 
+    transportAssetId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TransportAsset',
+      default: null,
+    },
+
     dispatchDate: {
       type: Date,
       default: null,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, MapPin, Phone, Mail, Building, Users, Search, Filter, X, Upload, MoreVertical, UserCog, Activity } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
@@ -7,28 +8,30 @@ import './Pages.css';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[0-9+()\-\s]{7,20}$/;
+const PHONE_PATTERN = /^0\d{9}$/;
 const MIN_NAME_LENGTH = 2;
 const MAX_NAME_LENGTH = 100;
 const MIN_DEPARTMENT_LENGTH = 2;
 const MAX_DEPARTMENT_LENGTH = 100;
 const MIN_ADDRESS_LENGTH = 10;
 const MAX_ADDRESS_LENGTH = 200;
-const MAX_PHONE_DIGITS = 15;
+const MAX_PHONE_DIGITS = 10;
 
 function validatePhoneNumber(value) {
-  const normalized = String(value || '').trim();
+  const normalized = String(value || '').trim().replace(/\s+/g, '');
   if (!normalized) return '';
 
   const digitsOnly = normalized.replace(/\D/g, '');
-  if (digitsOnly.length < 7 || digitsOnly.length > MAX_PHONE_DIGITS || !PHONE_PATTERN.test(normalized)) {
-    return 'Enter a valid phone number, including country code if needed.';
+  if (digitsOnly.length !== MAX_PHONE_DIGITS || !PHONE_PATTERN.test(digitsOnly)) {
+    return 'Phone number must start with 0 and contain exactly 10 digits.';
   }
 
   return '';
 }
 
 const UserManagement = () => {
+
+  const navigate = useNavigate();
 
   const { user } = useAuth();
 
@@ -273,7 +276,9 @@ const UserManagement = () => {
 
     { value: 'tracking_officer', label: 'Tracking Officer' },
 
-    { value: 'charity_staff', label: 'Charity Staff' }
+    { value: 'charity_staff', label: 'Charity Staff' },
+
+    { value: 'ngo_partner', label: 'NGO Partner' }
 
   ];
 
@@ -405,6 +410,7 @@ const UserManagement = () => {
     allocation_officer: 'bg-amber-50 text-amber-700 border-amber-200',
     tracking_officer: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     charity_staff: 'bg-slate-100 text-slate-700 border-slate-200',
+    ngo_partner: 'bg-teal-50 text-teal-700 border-teal-200',
   };
 
   const roleFilterOptions = roleOptions.filter((option) => option.value !== 'all');
@@ -964,6 +970,14 @@ eligibility for partnership in relief operations.
     });
 
     const [formError, setFormError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const getInputClass = (field) =>
+      `w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent ${
+        fieldErrors[field]
+          ? 'border-rose-300 bg-rose-50 focus:ring-rose-200'
+          : 'border-slate-200 focus:ring-blue-500'
+      }`;
 
 
 
@@ -992,6 +1006,7 @@ eligibility for partnership in relief operations.
     const handleSubmit = (e) => {
 
       e.preventDefault();
+      const nextFieldErrors = {};
 
       const fullName = String(formData.fullName || '').trim();
       const email = String(formData.email || '').trim();
@@ -999,31 +1014,43 @@ eligibility for partnership in relief operations.
       const department = String(formData.department || '').trim();
 
       if (!fullName || fullName.length < MIN_NAME_LENGTH || fullName.length > MAX_NAME_LENGTH) {
-        setFormError(`Full name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
-        return;
+        nextFieldErrors.fullName = `Full name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`;
       }
 
       if (!email || !EMAIL_PATTERN.test(email)) {
-        setFormError('Enter a valid email address.');
-        return;
+        nextFieldErrors.email = 'Enter a valid email address.';
+      }
+
+      if (!phone) {
+        nextFieldErrors.phone = 'Phone number is required.';
       }
 
       const phoneError = validatePhoneNumber(phone);
       if (phoneError) {
-        setFormError(phoneError);
-        return;
+        nextFieldErrors.phone = phoneError;
       }
 
-      if (department && (department.length < MIN_DEPARTMENT_LENGTH || department.length > MAX_DEPARTMENT_LENGTH)) {
-        setFormError(`Department must be between ${MIN_DEPARTMENT_LENGTH} and ${MAX_DEPARTMENT_LENGTH} characters.`);
-        return;
+      if (!department) {
+        nextFieldErrors.department = 'Department is required.';
+      } else if (department.length < MIN_DEPARTMENT_LENGTH || department.length > MAX_DEPARTMENT_LENGTH) {
+        nextFieldErrors.department = `Department must be between ${MIN_DEPARTMENT_LENGTH} and ${MAX_DEPARTMENT_LENGTH} characters.`;
       }
 
       if (!formData.role) {
-        setFormError('Role is required.');
+        nextFieldErrors.role = 'Role is required.';
+      }
+
+      if (!formData.status) {
+        nextFieldErrors.status = 'Status is required.';
+      }
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors);
+        setFormError('Please fix highlighted fields.');
         return;
       }
 
+      setFieldErrors({});
       setFormError('');
 
       if (user) {
@@ -1117,11 +1144,12 @@ eligibility for partnership in relief operations.
                     required
                     value={formData.fullName}
                     onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('fullName')}
                     placeholder="Enter full name"
                     minLength={MIN_NAME_LENGTH}
                     maxLength={MAX_NAME_LENGTH}
                   />
+                  {fieldErrors.fullName && <p className="mt-1 text-xs text-rose-600">{fieldErrors.fullName}</p>}
                 </div>
 
                 <div>
@@ -1131,10 +1159,11 @@ eligibility for partnership in relief operations.
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('email')}
                     placeholder="Enter email address"
                     autoComplete="email"
                   />
+                  {fieldErrors.email && <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>}
                 </div>
               </div>
 
@@ -1143,25 +1172,30 @@ eligibility for partnership in relief operations.
                   <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
                   <input
                     type="tel"
+                    required
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('phone')}
                     placeholder="Enter phone number"
                     inputMode="tel"
+                    maxLength={MAX_PHONE_DIGITS}
                   />
+                  {fieldErrors.phone && <p className="mt-1 text-xs text-rose-600">{fieldErrors.phone}</p>}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Department</label>
                   <input
                     type="text"
+                    required
                     value={formData.department}
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('department')}
                     placeholder="Enter department"
                     minLength={MIN_DEPARTMENT_LENGTH}
                     maxLength={MAX_DEPARTMENT_LENGTH}
                   />
+                  {fieldErrors.department && <p className="mt-1 text-xs text-rose-600">{fieldErrors.department}</p>}
                 </div>
               </div>
 
@@ -1171,14 +1205,16 @@ eligibility for partnership in relief operations.
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('role')}
                   >
                     <option value="dmc_officer">DMC Officer</option>
                     <option value="inventory_officer">Inventory Officer</option>
                     <option value="allocation_officer">Allocation Officer</option>
                     <option value="tracking_officer">Tracking Officer</option>
                     <option value="charity_staff">Charity Staff</option>
+                    <option value="ngo_partner">NGO Partner</option>
                   </select>
+                  {fieldErrors.role && <p className="mt-1 text-xs text-rose-600">{fieldErrors.role}</p>}
                 </div>
 
                 <div>
@@ -1186,11 +1222,12 @@ eligibility for partnership in relief operations.
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={getInputClass('status')}
                   >
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
+                  {fieldErrors.status && <p className="mt-1 text-xs text-rose-600">{fieldErrors.status}</p>}
                 </div>
               </div>
 
@@ -1454,8 +1491,8 @@ eligibility for partnership in relief operations.
 
 
     return (
-      <div className="management-modal fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="management-modal-card bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <section className="management-modal mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]" style={{ width: "100%", maxWidth: "none" }}>
+        <div className="management-modal-card w-full max-h-none overflow-visible" style={{ maxWidth: "none" }}>
           <div className="flex items-center justify-between p-6 border-b border-slate-200">
             <h2 className="text-xl font-bold text-slate-900">{partner ? 'Edit NGO Partner' : 'Add New NGO Partner'}</h2>
             <button 
@@ -1744,7 +1781,7 @@ eligibility for partnership in relief operations.
             </div>
           </form>
         </div>
-      </div>
+      </section>
     );
   };
 
@@ -2126,7 +2163,7 @@ eligibility for partnership in relief operations.
                 {canEditPartners && (
                   <button
                     className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-slate-800"
-                    onClick={() => setShowPartnerForm(true)}
+                    onClick={() => navigate('/users/partners/new')}
                   >
                     + Create Partner
                   </button>
@@ -2188,7 +2225,7 @@ eligibility for partnership in relief operations.
                               <MoreVertical size={14} />
                             </summary>
                             <div className="absolute right-0 top-7 z-10 min-w-[120px] rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => setEditingPartner(partner)}>Edit</button>
+                              <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => navigate(`/users/partners/${partner.id}/edit`)}>Edit</button>
                               <button className="w-full rounded-md px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100" onClick={() => handleTogglePartnerStatus(partner.id)}>{partner.status === 'active' ? 'Deactivate' : 'Activate'}</button>
                               <button
                                 className="w-full rounded-md px-2 py-1 text-left text-xs text-rose-600 hover:bg-rose-50"
@@ -2293,7 +2330,7 @@ eligibility for partnership in relief operations.
 
                     {canEditPartners && (
                       <div className="flex gap-2">
-                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => setEditingPartner(selectedPartner)}>
+                        <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => navigate(`/users/partners/${selectedPartner.id}/edit`)}>
                           Edit Partner
                         </button>
                         <button className="flex-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg hover:bg-slate-800" onClick={() => handleTogglePartnerStatus(selectedPartner.id)}>

@@ -1,0 +1,24 @@
+{
+  "donorName": "Test NGO Partner",
+  "donorType": "organization",
+  "organizationName": "Test NGO Partner",
+  "email": "test-ngo@example.org",
+  "phone": "0123456789",
+  "donationType": "inventory",
+  "items": [
+    {
+      "inventoryItemId": "69f100fe337488a364cf522c",
+      "itemName": "infant formula",
+      "category": "Baby Food",
+      "quantity": 10
+    },
+    {
+      "inventoryItemId": "69f100fe337488a364cf522d",
+      "itemName": "baby cereal",
+      "category": "Baby Food",
+      "quantity": 15
+    }
+  ],
+  "expectedDeliveryDate": "2026-05-15",
+  "notes": "Test donation for NGO flow verification"
+}

@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const InventoryItem = require("../models/InventoryItem");
-const InventoryActivity = require("../models/InventoryActivity");
+const inventoryActivityService = require("../services/inventoryActivityService");
 const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const DEFAULT_INVENTORY_ITEMS = [
@@ -10,6 +10,7 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 4500,
     min: 6000,
     warehouse: "Warehouse 1",
+    unit: "500 ml bottle",
   },
   {
     name: "Dry Ration",
@@ -17,6 +18,7 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 3900,
     min: 3500,
     warehouse: "Warehouse 1",
+    unit: "1 kg pack",
   },
   {
     name: "Blankets",
@@ -24,6 +26,7 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 2600,
     min: 2000,
     warehouse: "Warehouse 2",
+    unit: "1 pc",
   },
   {
     name: "Tents",
@@ -31,6 +34,7 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 240,
     min: 400,
     warehouse: "Warehouse 3",
+    unit: "1 unit",
   },
   {
     name: "Medicine Kits",
@@ -38,11 +42,12 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 310,
     min: 500,
     warehouse: "Warehouse 2",
+    unit: "1 kit",
   },
 ];
 
 const ALLOWED_ACTION_TYPES = ["adjust", "consume", "restock"];
-const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse"];
+const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse", "unit"];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
@@ -86,6 +91,8 @@ function getStockStatus(stock, min) {
 }
 
 function formatInventoryItem(item) {
+  const isSelectable = item.status !== "expired" && item.status !== "damaged";
+
   return {
     id: item._id.toString(),
     name: item.name,
@@ -93,6 +100,9 @@ function formatInventoryItem(item) {
     stock: item.stock,
     min: item.min,
     warehouse: item.warehouse,
+    unit: item.unit || "units",
+    status: item.status,
+    isSelectable,
     stockStatus: getStockStatus(item.stock, item.min),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -116,12 +126,12 @@ function formatInventoryActivity(activity) {
 }
 
 async function createActivityLog(data) {
-  await InventoryActivity.create(data);
+  await inventoryActivityService.createActivity(data);
 }
 
 async function createInventoryItem(req, res) {
   try {
-    const { name, category, stock, min, warehouse, performedBy } = req.body;
+    const { name, category, stock, min, warehouse, unit, performedBy } = req.body;
 
     if (!name || category === undefined || stock === undefined || min === undefined) {
       return res.status(400).json({ message: "name, category, stock, and min are required." });
@@ -133,10 +143,10 @@ async function createInventoryItem(req, res) {
     }
 
     const stockValue = toNonNegativeNumber(stock);
-    const minValue = toNonNegativeNumber(min);
+    const minValue = toPositiveNumber(min);
 
     if (stockValue === null || minValue === null) {
-      return res.status(400).json({ message: "stock and min must be non-negative numbers." });
+      return res.status(400).json({ message: "stock must be a non-negative number and min must be at least 1." });
     }
 
     if (!isDbConnected()) {
@@ -151,6 +161,7 @@ async function createInventoryItem(req, res) {
       stock: stockValue,
       min: minValue,
       warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
+      unit: String(unit || "units").trim() || "units",
     });
 
     await createActivityLog({
@@ -208,11 +219,17 @@ async function listInventoryItems(req, res) {
     const hasFilters = Boolean(category || search || warehouse || status);
 
     if (!items.length && !hasFilters) {
-      const activityCount = await InventoryActivity.estimatedDocumentCount();
+      // Count activities by aggregating across items
+      const activityAgg = await InventoryItem.aggregate([
+        { $project: { count: { $size: { $ifNull: ["$activities", []] } } } },
+        { $group: { _id: null, total: { $sum: "$count" } } },
+      ]);
+      const activityCount = (activityAgg && activityAgg[0] && activityAgg[0].total) || 0;
       const itemCount = await InventoryItem.estimatedDocumentCount();
 
       // Only use default items if database is completely empty
       if (activityCount === 0 && itemCount === 0) {
+
         const seededItems = await InventoryItem.insertMany(DEFAULT_INVENTORY_ITEMS);
 
         await Promise.all(
@@ -267,10 +284,7 @@ async function listInventoryActivities(req, res) {
       });
     }
 
-    const activities = await InventoryActivity.find({})
-      .sort({ createdAt: -1 })
-      .limit(safeLimit);
-
+    const activities = await inventoryActivityService.listActivities(safeLimit);
     return res.json(activities.map(formatInventoryActivity));
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch inventory activity.", error: error.message });
@@ -359,9 +373,9 @@ async function updateInventoryItem(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "min")) {
-      const normalizedMin = toNonNegativeNumber(updates.min);
+      const normalizedMin = toPositiveNumber(updates.min);
       if (normalizedMin === null) {
-        return res.status(400).json({ message: "min must be a non-negative number." });
+        return res.status(400).json({ message: "min must be at least 1." });
       }
       updates.min = normalizedMin;
     }
@@ -372,6 +386,14 @@ async function updateInventoryItem(req, res) {
         return res.status(400).json({ message: "warehouse cannot be empty." });
       }
       updates.warehouse = normalizedWarehouse;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "unit")) {
+      const normalizedUnit = String(updates.unit || "").trim();
+      if (!normalizedUnit) {
+        return res.status(400).json({ message: "unit cannot be empty." });
+      }
+      updates.unit = normalizedUnit;
     }
 
     

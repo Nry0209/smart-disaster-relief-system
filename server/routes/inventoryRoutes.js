@@ -1,4 +1,5 @@
 const express = require("express");
+const { authenticateToken, inventoryOfficerOnly } = require("../config/auth");
 const {
   createInventoryItem,
   listInventoryItems,
@@ -11,12 +12,12 @@ const {
 
 const router = express.Router();
 
-router.get("/", listInventoryItems);
-router.post("/", createInventoryItem);
-router.get("/activity", listInventoryActivities);
-router.get("/:id", getInventoryItemById);
-router.put("/:id", updateInventoryItem);
-router.delete("/:id", deleteInventoryItem);
-router.post("/:id/adjust", adjustInventoryStock);
+router.get("/", authenticateToken, listInventoryItems);
+router.post("/", authenticateToken, inventoryOfficerOnly, createInventoryItem);
+router.get("/activity", authenticateToken, listInventoryActivities);
+router.get("/:id", authenticateToken, getInventoryItemById);
+router.put("/:id", authenticateToken, inventoryOfficerOnly, updateInventoryItem);
+router.delete("/:id", authenticateToken, inventoryOfficerOnly, deleteInventoryItem);
+router.post("/:id/adjust", authenticateToken, inventoryOfficerOnly, adjustInventoryStock);
 
 module.exports = router;

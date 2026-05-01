@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, Package, AlertTriangle, Warehouse, RefreshCw } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader";
+import { useAuth } from "../context/AuthContext";
 import {
   fetchInventoryItems,
   fetchInventoryActivity,
@@ -24,6 +26,7 @@ const DEFAULT_ITEM_FORM = {
   id: "",
   name: "",
   category: ITEM_CATEGORIES.DRINKING_WATER,
+  unit: "",
   stock: "",
   min: "",
   warehouse: "Kandy Regional Warehouse",
@@ -89,6 +92,11 @@ function formatActivityEntry(activity) {
   return `${actionLabel} ${activity.itemName} (${quantityLabel} units) - ${when}`;
 }
 
+function formatInventoryLabel(item) {
+  const unit = String(item?.unit || "").trim();
+  return unit ? `${item.name} (${unit})` : item.name;
+}
+
 function getModalTitle(modal) {
   if (modal === "add") return "Add New Stock Item";
   if (modal === "edit") return "Edit Stock Item";
@@ -104,6 +112,8 @@ function getModalSubmitLabel(modal) {
 }
 
 export default function InventoryPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   const [activeCat, setActiveCat] = useState("All");
@@ -115,6 +125,12 @@ export default function InventoryPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const canManageInventory = user?.role === "admin" || user?.role === "inventory_officer";
+  const pageRoleLabel = canManageInventory
+    ? "Inventory Officer / Stock Management"
+    : user?.role === "ngo_partner"
+      ? "NGO Partner / Inventory Access"
+      : "Staff / Inventory Access";
 
   async function loadInventoryData(showLoader = true) {
     if (showLoader) {
@@ -189,24 +205,13 @@ export default function InventoryPage() {
   }
 
   function openActionModal(type) {
-    setModal(type);
-    setActionForm({
-      ...DEFAULT_ACTION_FORM,
-      category: "",
-      itemId: "",
-    });
+    if (type === "adjust") {
+      navigate("/inventory/adjust");
+    }
   }
 
   function openEditModal(item) {
-    setModal("edit");
-    setItemForm({
-      id: item.id,
-      name: item.name,
-      category: item.category,
-      stock: String(item.stock),
-      min: String(item.min),
-      warehouse: item.warehouse || "Warehouse 1",
-    });
+    navigate(`/inventory/${item.id}/edit`);
   }
 
   // Auto-fill minimum threshold based on existing data
@@ -218,7 +223,13 @@ export default function InventoryPage() {
   };
 
   async function handleSaveItem() {
+    if (!canManageInventory) {
+      setError("You can only view inventory items.");
+      return;
+    }
+
     const normalizedName = itemForm.name.trim();
+    const normalizedUnit = String(itemForm.unit || "").trim();
     const stock = Number(itemForm.stock);
     const min = Number(itemForm.min);
     const normalizedWarehouse = itemForm.warehouse.trim();
@@ -243,11 +254,17 @@ export default function InventoryPage() {
       return;
     }
 
+    if (!normalizedUnit) {
+      setError("Unit or pack size is required.");
+      return;
+    }
+
     // Find existing item with same name and category
     const existingItem = items.find(
       (item) =>
         item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
-        item.category === itemForm.category
+        item.category === itemForm.category &&
+        String(item.unit || "").trim().toLowerCase() === normalizedUnit.toLowerCase()
     );
 
     if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
@@ -271,6 +288,7 @@ export default function InventoryPage() {
         const payload = {
           name: normalizedName,
           category: itemForm.category,
+          unit: normalizedUnit,
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -286,6 +304,7 @@ export default function InventoryPage() {
         await createInventoryItem({
           name: normalizedName,
           category: itemForm.category,
+          unit: normalizedUnit,
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -308,6 +327,11 @@ export default function InventoryPage() {
   }
 
   async function handleDeleteItem(item) {
+    if (!canManageInventory) {
+      setError("You can only view inventory items.");
+      return;
+    }
+
     const shouldDelete = window.confirm(`Delete ${item.name} from inventory?`);
     if (!shouldDelete) {
       return;
@@ -327,6 +351,11 @@ export default function InventoryPage() {
   }
 
   async function handleApplyAction() {
+    if (!canManageInventory) {
+      setError("You can only view inventory items.");
+      return;
+    }
+
     const quantity = Number(actionForm.quantity);
     const selectedItem = items.find((item) => item.name === actionForm.itemId && item.category === actionForm.category);
     const normalizedNote = actionForm.note.trim();
@@ -426,7 +455,7 @@ export default function InventoryPage() {
   return (
     <div className="inventory-page">
       <PageHeader
-        role="Inventory Officer / Stock Management"
+        role={pageRoleLabel}
         title="Inventory Management"
         description="Track stock, apply operational updates, and keep the allocation pipeline supplied"
       />
@@ -474,6 +503,7 @@ export default function InventoryPage() {
             <tr>
               <th>Item Name</th>
               <th>Category</th>
+              <th>Unit</th>
               <th>Current Stock</th>
               <th>Minimum Required</th>
               <th>Warehouse</th>
@@ -486,7 +516,7 @@ export default function InventoryPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
                   Loading inventory data...
                 </td>
               </tr>
@@ -494,7 +524,7 @@ export default function InventoryPage() {
 
             {!isLoading && filteredItems.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                <td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                   No inventory items found for the selected filters.
                 </td>
               </tr>
@@ -507,8 +537,9 @@ export default function InventoryPage() {
 
                 return (
                   <tr key={item.id}>
-                    <td><span className="item-name">{item.name}</span></td>
+                    <td><span className="item-name">{formatInventoryLabel(item)}</span></td>
                     <td><span className="category-badge">{item.category}</span></td>
+                    <td><span className="min-quantity">{item.unit || "units"}</span></td>
                     <td><span className="stock-quantity">{item.stock.toLocaleString()}</span></td>
                     <td><span className="min-quantity">{item.min.toLocaleString()}</span></td>
                     <td><span className="min-quantity">{item.warehouse}</span></td>
@@ -527,24 +558,28 @@ export default function InventoryPage() {
                       <span className={`status-badge ${status.label.toLowerCase()}`}>{status.label}</span>
                     </td>
                     <td>
-                      <div className="inventory-row-actions">
-                        <button
-                          type="button"
-                          className="inventory-row-btn edit"
-                          onClick={() => openEditModal(item)}
-                          disabled={isSaving}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="inventory-row-btn delete"
-                          onClick={() => handleDeleteItem(item)}
-                          disabled={isSaving}
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      {canManageInventory ? (
+                        <div className="inventory-row-actions">
+                          <button
+                            type="button"
+                            className="inventory-row-btn edit"
+                            onClick={() => openEditModal(item)}
+                            disabled={isSaving}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="inventory-row-btn delete"
+                            onClick={() => handleDeleteItem(item)}
+                            disabled={isSaving}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-500">View only</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -554,14 +589,16 @@ export default function InventoryPage() {
       </div>
 
       <div className="quick-actions">
-        <h2>Quick Actions</h2>
+        <h2>{canManageInventory ? "Quick Actions" : "Inventory View"}</h2>
         <div className="action-buttons">
-          <button className="action-btn add" onClick={() => setModal("add")}>Add New Item</button>
-          <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Remove</button>
+          {canManageInventory && <button className="action-btn add" onClick={() => navigate("/inventory/new")}>Add New Item</button>}
+          {canManageInventory && <button className="action-btn adjust" onClick={() => openActionModal("adjust")}>Remove</button>}
           <button className="action-btn export" onClick={handleExport}>Export Report</button>
         </div>
         <p style={{ fontSize: 13, color: "#64748b", marginTop: 16, textAlign: "center" }}>
-          Inventory actions are persisted and tracked in activity logs.
+          {canManageInventory
+            ? "Inventory actions are persisted and tracked in activity logs."
+            : "Read-only access for registered staff and NGO accounts."}
         </p>
       </div>
 
@@ -575,10 +612,12 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {modal && (
-        <div className="inventory-modal-overlay" onClick={closeModal}>
-          <div className="inventory-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="inventory-modal-header">
+      {canManageInventory && modal && (
+        <section
+          className="inventory-modal mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]"
+          style={{ width: "100%", maxWidth: "none", maxHeight: "none" }}
+        >
+          <div className="inventory-modal-header">
               <h2>{getModalTitle(modal)}</h2>
               <button className="close-btn" onClick={closeModal}>x</button>
             </div>
@@ -625,6 +664,15 @@ export default function InventoryPage() {
                         <option key={itemName} value={itemName}>{itemName}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Unit / Pack Size</label>
+                    <input
+                      type="text"
+                      value={itemForm.unit || ""}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, unit: event.target.value }))}
+                      placeholder="e.g. 1 kg pack"
+                    />
                   </div>
                   <div className="form-group">
                     <label>Amount</label>
@@ -725,7 +773,7 @@ export default function InventoryPage() {
 
                   {selectedActionItem && (
                     <p style={{ fontSize: 13, color: "#64748b" }}>
-                      Selected: {selectedActionItem.name} | Stock: {selectedActionItem.stock} | Warehouse: {selectedActionItem.warehouse}
+                      Selected: {formatInventoryLabel(selectedActionItem)} | Stock: {selectedActionItem.stock} | Warehouse: {selectedActionItem.warehouse}
                     </p>
                   )}
                 </>
@@ -751,8 +799,7 @@ export default function InventoryPage() {
                 </button>
               )}
             </div>
-          </div>
-        </div>
+        </section>
       )}
     </div>
   );

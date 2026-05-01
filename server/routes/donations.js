@@ -9,6 +9,7 @@ const {
   deleteDonation,
   getDonationStatistics
 } = require('../controllers/donationController');
+const { createNGODonation } = require('../controllers/donationController');
 const {
   authenticateToken,
   inventoryOfficerOnly,
@@ -22,8 +23,11 @@ router.get('/', authenticateToken, inventoryOfficerOnly, listDonations);
 // Get donation statistics (Inventory Officer and Admin only)
 router.get('/statistics', authenticateToken, inventoryOfficerOnly, getDonationStatistics);
 
-// Create donation (public - no authentication required)
-router.post('/', validateDonation, createDonation);
+// Create donation (NGO authenticated only)
+router.post('/', authenticateToken, validateDonation, createDonation);
+// Create NGO donation (Authenticated NGO partners only)
+router.post('/ngo', authenticateToken, validateDonation, createNGODonation);
+
 
 // Get donation by ID (Inventory Officer and Admin only)
 router.get('/:id', authenticateToken, inventoryOfficerOnly, getDonationById);

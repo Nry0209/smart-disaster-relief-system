@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Allocation = require("../models/Allocation");
 const DisasterReport = require("../models/DisasterReport");
 const InventoryItem = require("../models/InventoryItem");
-const InventoryActivity = require("../models/InventoryActivity");
+const inventoryActivityService = require("../services/inventoryActivityService");
 const TrackingRecord = require("../models/TrackingRecord");
 
 const isDbConnected = () => {
@@ -173,8 +173,8 @@ async function confirmAllocation(req, res) {
       await inventoryItem.save();
 
       // Create inventory activity record
-      const activity = new InventoryActivity({
-        inventoryItemId: update.inventoryItemId,
+      await inventoryActivityService.createActivity({
+        itemId: update.inventoryItemId,
         itemName: update.itemName,
         category: inventoryItem.category,
         type: "allocation",
@@ -187,8 +187,6 @@ async function confirmAllocation(req, res) {
         performedByName: req.user.fullName || req.user.name,
         notes: `Allocated for disaster: ${allocation.disasterId.disasterType} at ${allocation.disasterId.location}`
       });
-
-      await activity.save();
     }
 
     // Update allocation status
