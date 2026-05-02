@@ -238,7 +238,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.organizationName}
-                  onChange={(event) => setForm((prev) => ({ ...prev, organizationName: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, organizationName: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, organizationName: "" }));
+                  }}
                   className={getInputClass("organizationName")}
                   placeholder="Enter organization name"
                 />
@@ -249,7 +252,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.contactPerson}
-                  onChange={(event) => setForm((prev) => ({ ...prev, contactPerson: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, contactPerson: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, contactPerson: "" }));
+                  }}
                   className={getInputClass("contactPerson")}
                   placeholder="Enter contact person"
                 />
@@ -263,7 +269,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="email"
                   value={form.email}
-                  onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, email: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, email: "" }));
+                  }}
                   className={getInputClass("email")}
                   placeholder="Enter email address"
                 />
@@ -274,7 +283,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, phone: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, phone: "" }));
+                  }}
                   className={getInputClass("phone")}
                   maxLength={10}
                   placeholder="Enter phone number"
@@ -288,7 +300,10 @@ export default function PartnerFormPage({ mode = "create" }) {
               <input
                 type="text"
                 value={form.address}
-                onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+                onChange={(event) => {
+                  setForm((prev) => ({ ...prev, address: event.target.value }));
+                  setFieldErrors((prev) => ({ ...prev, address: "" }));
+                }}
                 className={getInputClass("address")}
                 placeholder="Enter complete address"
               />
@@ -301,7 +316,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.registrationNumber}
-                  onChange={(event) => setForm((prev) => ({ ...prev, registrationNumber: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, registrationNumber: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, registrationNumber: "" }));
+                  }}
                   className={getInputClass("registrationNumber")}
                   placeholder="Registration number"
                 />
@@ -309,7 +327,14 @@ export default function PartnerFormPage({ mode = "create" }) {
               </div>
               <div className="form-group">
                 <label>Status</label>
-                <select className={getInputClass("status")} value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}>
+                <select
+                  className={getInputClass("status")}
+                  value={form.status}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, status: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, status: "" }));
+                  }}
+                >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
@@ -322,7 +347,10 @@ export default function PartnerFormPage({ mode = "create" }) {
               <input
                 type="text"
                 value={form.preferredCategoriesText}
-                onChange={(event) => setForm((prev) => ({ ...prev, preferredCategoriesText: event.target.value }))}
+                onChange={(event) => {
+                  setForm((prev) => ({ ...prev, preferredCategoriesText: event.target.value }));
+                  setFieldErrors((prev) => ({ ...prev, preferredCategoriesText: "" }));
+                }}
                 className={getInputClass("preferredCategoriesText")}
                 placeholder="Comma-separated categories"
               />
@@ -335,7 +363,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.organizationProfileDocument}
-                  onChange={(event) => setForm((prev) => ({ ...prev, organizationProfileDocument: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, organizationProfileDocument: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, organizationProfileDocument: "" }));
+                  }}
                   className={getInputClass("organizationProfileDocument")}
                   placeholder="Document path or URL"
                 />
@@ -346,7 +377,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.registrationCertificate}
-                  onChange={(event) => setForm((prev) => ({ ...prev, registrationCertificate: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, registrationCertificate: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, registrationCertificate: "" }));
+                  }}
                   className={getInputClass("registrationCertificate")}
                   placeholder="Document path or URL"
                 />
@@ -357,7 +391,10 @@ export default function PartnerFormPage({ mode = "create" }) {
                 <input
                   type="text"
                   value={form.verificationDocument}
-                  onChange={(event) => setForm((prev) => ({ ...prev, verificationDocument: event.target.value }))}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, verificationDocument: event.target.value }));
+                    setFieldErrors((prev) => ({ ...prev, verificationDocument: "" }));
+                  }}
                   className={getInputClass("verificationDocument")}
                   placeholder="Document path or URL"
                 />

@@ -133,6 +133,12 @@ function formatEventDate(value) {
 
 }
 
+function getResolvedInventoryStock(item) {
+  const stockValue = item?.stock ?? item?.quantityAvailable ?? item?.quantity ?? 0;
+  const parsedStock = Number(stockValue);
+  return Number.isFinite(parsedStock) && parsedStock >= 0 ? parsedStock : 0;
+}
+
 
 
 export default function AllocationPage() {
@@ -243,7 +249,16 @@ export default function AllocationPage() {
 
       if (inventoryResult.status === "fulfilled") {
 
-        const inventoryData = Array.isArray(inventoryResult.value) ? inventoryResult.value : [];
+        const inventoryData = Array.isArray(inventoryResult.value)
+          ? inventoryResult.value.map((item) => ({
+              ...item,
+              stock: getResolvedInventoryStock(item),
+            }))
+          : [];
+        const normalizedInventoryData = inventoryData.map((item) => ({
+          ...item,
+          stock: getResolvedInventoryStock(item),
+        }));
 
         console.log('Frontend received inventory data:', inventoryData.length, 'items');
 
@@ -259,7 +274,7 @@ export default function AllocationPage() {
 
         })));
 
-        setInventory(inventoryData);
+        setInventory(normalizedInventoryData);
 
       } else {
 
@@ -520,6 +535,18 @@ export default function AllocationPage() {
 
     }));
 
+  };
+
+
+
+  const hasAllocationErrors = () => {
+    if (!selectedEvent) return true;
+    
+    return getRequestedItems(selectedEvent).some((need) => {
+      const currentQty = allocationQuantities[need.inventoryItemId] || 0;
+      const available = getAvailableStock(need.inventoryItemId);
+      return currentQty < 1 || currentQty > available;
+    });
   };
 
 
@@ -1245,45 +1272,26 @@ export default function AllocationPage() {
 
 
   const getAvailableStock = (inventoryItemId) => {
-
-    const item = inventory.find(inv => String(inv.id || inv._id || "") === String(inventoryItemId));
-
-    
-
-    console.log('getAvailableStock debug:', {
-
-      inventoryItemId,
-
-      foundItem: item ? item.name : 'NOT FOUND',
-
-      itemStock: item ? item.stock : 'N/A',
-
-      allocatedQty: existingAllocation?.quantities?.[String(item?.id || item?._id || "")] || 0
-
+    // First try to find by MongoDB ID
+    let item = inventory.find(inv => {
+      const invId = String(inv.id || inv._id || "");
+      const searchId = String(inventoryItemId || "");
+      return invId === searchId;
     });
 
-    
+    // Fallback: if not found by ID, try to find by name (for backward compatibility)
+    if (!item) {
+      item = inventory.find(inv => String(inv.name || "").toLowerCase() === String(inventoryItemId || "").toLowerCase());
+    }
 
-    if (!item) return 0;
-
-    
+    if (!item) {
+      return 0;
+    }
 
     const itemId = String(item?.id || item?._id || "");
-
-    const allocatedQty = existingAllocation?.quantities?.[itemId] || 0;
-
-    
-
-    const availableStock = Math.max(0, item.stock - allocatedQty);
-
-    console.log('Final available stock for', item.name, ':', availableStock);
-
-    
-
-    // Return actual available stock (current stock minus already allocated)
-
-    return availableStock;
-
+    // Ensure stock is treated as number (handle potential string conversion)
+    const stockNumber = Number(item.stock) || 0;
+    return Math.max(0, stockNumber);
   };
 
 
@@ -2009,464 +2017,205 @@ export default function AllocationPage() {
 
 
 
-      {allocationModal && selectedEvent && (
+
+
+              {allocationModal && selectedEvent && (
         <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+          <div className="modal-header">
+            <h2>{existingAllocation ? 'Manage Allocation' : 'Allocate Resources'}</h2>
+            <button className="close-btn" onClick={() => setAllocationModal(false)}>×</button>
+          </div>
 
-            <div className="modal-header">
+          <div className="modal-body">
+            {allocationError && (
+              <div style={{ marginBottom: "16px", color: "#dc2626", fontWeight: 700 }}>
+                {allocationError}
+              </div>
+            )}
 
-              <h2>{existingAllocation ? 'Manage Allocation' : 'Allocate Resources'}</h2>
-
-              <button className="close-btn" onClick={() => setAllocationModal(false)}>×</button>
-
+            <div className="request-summary">
+              <h3>Disaster Event Details</h3>
+              <div className="summary-grid">
+                <div className="summary-item">
+                  <span>Event ID:</span>
+                  <strong>{selectedEvent.id}</strong>
+                </div>
+                <div className="summary-item">
+                  <span>Disaster:</span>
+                  <strong>{selectedEvent.disasterType}</strong>
+                </div>
+                <div className="summary-item">
+                  <span>Location:</span>
+                  <strong>{selectedEvent.location}</strong>
+                </div>
+                <div className="summary-item">
+                  <span>Priority:</span>
+                  <strong>{String(selectedEvent.priority || "unknown").toUpperCase()}</strong>
+                </div>
+                <div className="summary-item">
+                  <span>Affected Population:</span>
+                  <strong>{Number(selectedEvent.affectedPopulation || 0).toLocaleString()}</strong>
+                </div>
+                <div className="summary-item">
+                  <span>Reported By:</span>
+                  <strong>{selectedEvent.reportedBy}</strong>
+                </div>
+              </div>
             </div>
 
-
-
-            <div className="modal-body">
-
-              {allocationError && (
-
-                <div style={{ marginBottom: "16px", color: "#dc2626", fontWeight: 700 }}>
-
-                  {allocationError}
-
-                </div>
-
-              )}
-
-
-
-              <div className="request-summary">
-
-                <h3>Disaster Event Details</h3>
-
-                <div className="summary-grid">
-
-                  <div className="summary-item">
-
-                    <span>Event ID:</span>
-
-                    <strong>{selectedEvent.id}</strong>
-
-                  </div>
-
-                  <div className="summary-item">
-
-                    <span>Disaster:</span>
-
-                    <strong>{selectedEvent.disasterType}</strong>
-
-                  </div>
-
-                  <div className="summary-item">
-
-                    <span>Location:</span>
-
-                    <strong>{selectedEvent.location}</strong>
-
-                  </div>
-
-                  <div className="summary-item">
-
-                    <span>Priority:</span>
-
-                    <strong>{String(selectedEvent.priority || "unknown").toUpperCase()}</strong>
-
-                  </div>
-
-                  <div className="summary-item">
-
-                    <span>Affected Population:</span>
-
-                    <strong>{Number(selectedEvent.affectedPopulation || 0).toLocaleString()}</strong>
-
-                  </div>
-
-                  <div className="summary-item">
-
-                    <span>Reported By:</span>
-
-                    <strong>{selectedEvent.reportedBy}</strong>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-
-
-              <div className="allocation-requested-needs">
-
-                <h3>DMC Requested Needs</h3>
-
-                <div className="items-summary">
-
-                  {getRequestedItems(selectedEvent).length > 0 ? (
-
-                    getRequestedItems(selectedEvent).map((need, idx) => (
-
-                      <div key={`${selectedEvent.id}-modal-need-${idx}`} className="item-line">
-
-                        {need.itemName} ({need.category})
-
-                      </div>
-
-                    ))
-
-                  ) : (
-
-                    <div className="item-line">No specific needs listed by DMC.</div>
-
-                  )}
-
-                </div>
-
-              </div>
-
-
-
-              <div className="allocation-prediction-section">
-
-                <h3>Prediction-Based Recommendation</h3>
-
-
-
-                {predictionLoading ? (
-
-                  <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
-
-                ) : predictionError ? (
-
-                  <p className="allocation-error-inline">{predictionError}</p>
-
-                ) : predictedResources ? (
-
-                  <>
-
-                    <div className="prediction-grid">
-
-                      <div className="prediction-card">
-
-                        <span className="prediction-label">Food Needed</span>
-
-                        <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
-
-                      </div>
-
-
-
-                      <div className="prediction-card">
-
-                        <span className="prediction-label">Water Needed</span>
-
-                        <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
-
-                      </div>
-
-
-
-                      <div className="prediction-card">
-
-                        <span className="prediction-label">Medicine Needed</span>
-
-                        <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
-
-                      </div>
-
+            <div className="allocation-requested-needs">
+              <h3>DMC Requested Needs</h3>
+              <div className="items-summary">
+                {getRequestedItems(selectedEvent).length > 0 ? (
+                  getRequestedItems(selectedEvent).map((need, idx) => (
+                    <div key={`${selectedEvent.id}-modal-need-${idx}`} className="item-line">
+                      {need.itemName} ({need.category})
                     </div>
-
-
-
-                    <div className="prediction-actions">
-
-                      <button
-
-                        type="button"
-
-                        className="prediction-apply-btn"
-
-                        onClick={applyPredictionAsSuggestion}
-
-                        disabled={isProcessing}
-
-                      >
-
-                        Use Prediction as Suggested Allocation
-
-                      </button>
-
-                    </div>
-
-                  </>
-
+                  ))
                 ) : (
-
-                  <p className="allocation-info-inline">No prediction available.</p>
-
+                  <div className="item-line">No specific needs listed by DMC.</div>
                 )}
-
-
-
-                <div className="prediction-note">
-
-                  These values are system-generated recommendations based on disaster type,
-
-                  severity, and affected population. The Allocation Officer can adjust final
-
-                  quantities according to current inventory availability.
-
-                </div>
-
               </div>
-
-
-
-              <div className="allocation-details">
-
-                <h3>Resource Allocation</h3>
-
-                {getRequestedItems(selectedEvent).map((need, index) => {
-
-                  const available = getAvailableStock(need.inventoryItemId);
-
-                  const currentQty = allocationQuantities[need.inventoryItemId] || 0;
-
-                  const hasStock = currentQty >= 0 && currentQty <= available;
-
-                  
-
-                  console.log('Allocation item debug:', {
-
-                    itemName: need.itemName,
-
-                    inventoryItemId: need.inventoryItemId,
-
-                    available,
-
-                    currentQty,
-
-                    hasStock,
-
-                    comparison: `${currentQty} <= ${available} = ${hasStock}`
-
-                  });
-
-
-
-                  return (
-
-                    <div key={`${selectedEvent.id}-allocation-${index}`} className="allocation-item">
-
-                      <div className="item-info">
-
-                        <span className="item-name">{need.itemName}</span>
-
-                        <span className="item-quantity">Available: {available.toLocaleString()}</span>
-
-                      </div>
-
-                      <div className="quantity-input">
-
-                        <input
-
-                          type="number"
-
-                          min="0"
-
-                          value={currentQty}
-
-                          onChange={(event) => handleQuantityChange(need.inventoryItemId, event.target.value)}
-
-                          className={hasStock ? "valid" : "invalid"}
-
-                        />
-
-                        <span className="unit-label">stock</span>
-
-                      </div>
-
-                      <div className="stock-info">
-
-                        <span className={`available-stock ${hasStock ? "sufficient" : "insufficient"}`}>
-
-                          {hasStock ? "Available" : "Insufficient"}
-
-                        </span>
-
-                        {!hasStock && <AlertTriangle size={16} color="#dc2626" />}
-
-                      </div>
-
-                    </div>
-
-                  );
-
-                })}
-
-              </div>
-
-
-
-              <div className="message-section">
-
-                <h3>Allocation Notes</h3>
-
-                <textarea
-
-                  value={allocationMessage}
-
-                  onChange={(event) => setAllocationMessage(event.target.value)}
-
-                  placeholder="Add handling notes, handover instructions, or location specific details..."
-
-                  className="message-textarea"
-
-                  rows="4"
-
-                  maxLength={MAX_ALLOCATION_NOTE_LENGTH}
-
-                />
-
-              </div>
-
-
-
-              {existingAllocation && (
-
-                <div className="allocation-info">
-
-                  <h4>Current Allocation Details</h4>
-
-                  <div className="info-grid">
-
-                    <div className="info-item">
-
-                      <span>Allocated Date:</span>
-
-                      <strong>{formatEventDate(existingAllocation.allocatedDate)}</strong>
-
-                    </div>
-
-                    <div className="info-item">
-
-                      <span>Allocated By:</span>
-
-                      <strong>{existingAllocation.allocatedBy || "Allocation Officer"}</strong>
-
-                    </div>
-
-                    {existingAllocation.lastUpdated && (
-
-                      <div className="info-item">
-
-                        <span>Last Updated:</span>
-
-                        <strong>{formatEventDate(existingAllocation.lastUpdated)}</strong>
-
-                      </div>
-
-                    )}
-
-                  </div>
-
-                </div>
-
-              )}
-
-
-
-              <div className="warning-message">
-
-                <AlertTriangle size={16} color="#d97706" />
-
-                <span>
-
-                  Saving this allocation will update inventory stock and sync the status for DMC officers. If stock is insufficient, the warning stays visible but allocation can still be saved.
-
-                </span>
-
-              </div>
-
             </div>
 
+            <div className="allocation-prediction-section">
+              <h3>Prediction-Based Recommendation</h3>
+              {predictionLoading ? (
+                <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
+              ) : predictionError ? (
+                <p className="allocation-error-inline">{predictionError}</p>
+              ) : predictedResources ? (
+                <>
+                  <div className="prediction-grid">
+                    <div className="prediction-card">
+                      <span className="prediction-label">Food Needed</span>
+                      <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Water Needed</span>
+                      <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Medicine Needed</span>
+                      <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                  </div>
+                  <div className="prediction-actions">
+                    <button
+                      type="button"
+                      className="prediction-apply-btn"
+                      onClick={applyPredictionAsSuggestion}
+                      disabled={isProcessing}
+                    >
+                      Use Prediction as Suggested Allocation
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="allocation-info-inline">No prediction available.</p>
+              )}
+              <div className="prediction-note">
+                These values are system-generated recommendations based on disaster type,
+                severity, and affected population. The Allocation Officer can adjust final
+                quantities according to current inventory availability.
+              </div>
+            </div>
 
+            <div className="allocation-details">
+              <h3>Resource Allocation</h3>
+              {getRequestedItems(selectedEvent).map((need, index) => {
+                const available = getAvailableStock(need.inventoryItemId);
+                const currentQty = allocationQuantities[need.inventoryItemId] || 0;
+                const hasStock = available > 0;
+                const canAllocateCurrentQty = currentQty > 0 && currentQty <= available;
+                const hasError = currentQty < 1 || currentQty > available;
+                
+                return (
+                  <div key={`${selectedEvent.id}-allocation-${index}`} className="allocation-item">
+                    <div className="item-info">
+                      <span className="item-name">{need.itemName}</span>
+                      <span className="item-quantity">Current stock: {available.toLocaleString()}</span>
+                    </div>
+                    <div className="quantity-input">
+                      <input
+                        type="number"
+                        min="1"
+                        max={available}
+                        value={currentQty}
+                        onChange={(event) => handleQuantityChange(need.inventoryItemId, event.target.value)}
+                        className={hasError ? "invalid" : "valid"}
+                        style={{
+                          borderColor: hasError ? "#dc2626" : "#16a34a",
+                          backgroundColor: hasError ? "#fee2e2" : "#dcfce7"
+                        }}
+                      />
+                      <span className="unit-label">units</span>
+                    </div>
+                    <div className="stock-info">
+                      <span className={`available-stock ${hasStock ? "sufficient" : "insufficient"}`}>
+                        {hasStock ? "Sufficient" : "Insufficient"}
+                      </span>
+                      {hasError && <AlertTriangle size={16} color="#dc2626" />}
+                    </div>
+                    {hasError && (
+                      <div className="validation-error" style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px" }}>
+                        {currentQty < 1 && "Minimum allocation quantity is 1"}
+                        {currentQty > available && `Only ${available} available in inventory`}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="message-section">
+              <h3>Allocation Notes</h3>
+              <textarea
+                value={allocationMessage}
+                onChange={(event) => setAllocationMessage(event.target.value)}
+                placeholder="Add handling notes, handover instructions, or location specific details..."
+                className="message-textarea"
+                rows="4"
+                maxLength={MAX_ALLOCATION_NOTE_LENGTH}
+              />
+            </div>
+
+            {existingAllocation && (
+              <div className="allocation-info">
+                <h4>Current Allocation Details</h4>
+                <div className="existing-allocation-details">
+                  {Object.entries(existingAllocation.quantities || {}).map(([itemId, qty]) => {
+                    const item = inventory.find(inv => String(inv.id || inv._id) === itemId);
+                    return (
+                      <div key={itemId} className="existing-item">
+                        <span>{item?.name || itemId}:</span>
+                        <strong>{qty.toLocaleString()}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="allocation-meta">
+                  Allocated by: {existingAllocation.allocatedBy || 'Unknown'} on{' '}
+                  {existingAllocation.allocatedDate ? new Date(existingAllocation.allocatedDate).toLocaleDateString() : 'Unknown date'}
+                </p>
+              </div>
+            )}
 
             <div className="modal-actions">
-
               <button className="btn-secondary" onClick={() => setAllocationModal(false)}>
-
                 Cancel
-
               </button>
-
-
-
-              {existingAllocation ? (
-
-                <>
-
-                  <button 
-
-                    className="btn-primary"
-
-                    onClick={updateAllocation}
-
-                  >
-
-                    Update Allocation
-
-                  </button>
-
-                  <button 
-
-                    className="btn-danger"
-
-                    onClick={() => {
-
-                      if (window.confirm('Are you sure you want to delete this allocation? This will return all allocated resources to inventory and cannot be undone.')) {
-
-                        deleteAllocation();
-
-                      }
-
-                    }}
-
-                  >
-
-                    Delete Allocation
-
-                  </button>
-
-                </>
-
-              ) : (
-
-                <button 
-
-                  className="btn-primary"
-
-                  onClick={confirmAllocation}
-
-                  disabled={Object.values(allocationQuantities).every(qty => qty === 0)}
-
-                >
-
-                  Confirm Allocation
-
-                </button>
-
-              )}
-
+              <button
+                className="btn-primary"
+                onClick={existingAllocation ? updateAllocation : confirmAllocation}
+                disabled={isProcessing || hasAllocationErrors()}
+              >
+                {isProcessing ? 'Processing...' : (existingAllocation ? 'Update Allocation' : 'Confirm Allocation')}
+              </button>
             </div>
-
+          </div>
         </section>
-
       )}
-
     </div>
-
   );
-
 }
-

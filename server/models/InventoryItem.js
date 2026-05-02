@@ -28,6 +28,11 @@ const inventoryItemSchema = new mongoose.Schema(
       default: "Warehouse 1",
       trim: true,
     },
+    packageSize: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     unit: {
       type: String,
       default: "units",

@@ -10,24 +10,84 @@ import "./Pages.css";
 
 const MAX_ALLOCATION_NOTE_LENGTH = 400;
 
+function getTodayDateString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatCoverageDays(days) {
+  const parsedDays = Number(days);
+  if (!Number.isInteger(parsedDays) || parsedDays < 1) {
+    return "selected coverage window";
+  }
+
+  return `${parsedDays} day${parsedDays === 1 ? "" : "s"}`;
+}
+
+function getInventoryItemDetails(inventory, itemId, fallbackName = "") {
+  const matched = inventory.find(
+    (item) => String(item.id || item._id || "") === String(itemId || "")
+  );
+
+  if (matched) {
+    return {
+      unit: String(matched.unit || "units").trim(),
+      packageSize: String(matched.packageSize || "").trim(),
+    };
+  }
+
+  return {
+    unit: "units",
+    packageSize: String(fallbackName || "").trim(),
+  };
+}
+
+function findInventoryItem(inventory, itemId, fallbackName = "") {
+  const normalizedId = String(itemId || "").trim();
+  const normalizedName = String(fallbackName || "").trim().toLowerCase();
+
+  const byId = inventory.find((item) => {
+    const candidateIds = [item?.id, item?._id, item?.inventoryItemId, item?.inventoryId].filter(Boolean);
+    return candidateIds.some((candidate) => String(candidate) === normalizedId);
+  });
+
+  if (byId) {
+    return byId;
+  }
+
+  if (normalizedName) {
+    return inventory.find((item) => String(item?.name || "").trim().toLowerCase() === normalizedName) || null;
+  }
+
+  return null;
+}
+
 function getRequestedItems(report, inventory) {
   if (Array.isArray(report?.requiredItems) && report.requiredItems.length > 0) {
     return report.requiredItems
-      .map((item) => ({
-        inventoryItemId: String(item.inventoryItemId || ""),
-        itemName: String(item.itemName || "").trim(),
-        category: String(item.category || "").trim(),
-        requiredQuantity: Number(item.requiredQuantity || 0),
-      }))
+      .map((item) => {
+        const matched = findInventoryItem(inventory, item.inventoryItemId, item.itemName);
+        return {
+          inventoryItemId: String(item.inventoryItemId || matched?.id || matched?._id || ""),
+          itemName: String(item.itemName || matched?.name || "").trim(),
+          category: String(item.category || matched?.category || "").trim(),
+          requiredQuantity: Number(item.requiredQuantity || 0),
+          stock: getResolvedInventoryStock(matched),
+          min: Number(matched?.min) || 0,
+          warehouse: String(matched?.warehouse || matched?.warehouseLocation || "").trim(),
+          ...getInventoryItemDetails(inventory, item.inventoryItemId, item.itemName),
+        };
+      })
       .filter((item) => item.inventoryItemId && item.itemName);
   }
 
   const needs = Array.isArray(report?.immediateNeeds) ? report.immediateNeeds : [];
   return needs
     .map((need) => {
-      const matched = inventory.find(
-        (item) => String(item.name || "").toLowerCase() === String(need || "").toLowerCase()
-      );
+      const matched = findInventoryItem(inventory, "", need);
 
       if (!matched) {
         return null;
@@ -38,6 +98,10 @@ function getRequestedItems(report, inventory) {
         itemName: matched.name,
         category: matched.category,
         requiredQuantity: 0,
+        stock: getResolvedInventoryStock(matched),
+        min: Number(matched?.min) || 0,
+        warehouse: String(matched?.warehouse || matched?.warehouseLocation || "").trim(),
+        ...getInventoryItemDetails(inventory, matched.id || matched._id, matched.packageSize || matched.unit),
       };
     })
     .filter(Boolean);
@@ -78,6 +142,22 @@ function getPredictionSuggestion(item, prediction, currentQuantity) {
   return Number(currentQuantity || 0);
 }
 
+function getResolvedInventoryStock(item) {
+  const stockValue = item?.stock ?? item?.quantityAvailable ?? item?.quantity ?? 0;
+  const parsedStock = Number(stockValue);
+  return Number.isFinite(parsedStock) && parsedStock >= 0 ? parsedStock : 0;
+}
+
+function getInventoryStatus(stock, min) {
+  const m = Number(min) || 0;
+  if (m <= 0) return { label: "Good", tone: "good" };
+  const ratio = stock / m;
+  if (ratio >= 1) return { label: "Good", tone: "good" };
+  if (ratio >= 0.7) return { label: "Warning", tone: "warning" };
+  if (ratio >= 0.4) return { label: "Low", tone: "low" };
+  return { label: "Critical", tone: "critical" };
+}
+
 export default function AllocationFormPage() {
   const navigate = useNavigate();
   const { reportId } = useParams();
@@ -88,6 +168,10 @@ export default function AllocationFormPage() {
   const [existingAllocation, setExistingAllocation] = useState(null);
   const [allocationQuantities, setAllocationQuantities] = useState({});
   const [allocationMessage, setAllocationMessage] = useState("");
+  const [incidentDate, setIncidentDate] = useState("");
+  const [incidentDateError, setIncidentDateError] = useState("");
+  const [allocatedDays, setAllocatedDays] = useState("");
+  const [allocatedDaysError, setAllocatedDaysError] = useState("");
   const [loading, setLoading] = useState(true);
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -122,10 +206,12 @@ export default function AllocationFormPage() {
           selectedInventory = inventoryResult.data;
         }
 
-        // Ensure all items have stock field
+        // Ensure all items have stock field and normalize min/warehouse
         selectedInventory = selectedInventory.map(item => ({
           ...item,
-          stock: item.stock ?? item.quantityAvailable ?? item.quantity ?? 0
+          stock: getResolvedInventoryStock(item),
+          min: Number(item?.min) || 0,
+          warehouse: String(item?.warehouse || item?.warehouseLocation || "").trim(),
         }));
 
         console.log('Allocation form loaded inventory:', { count: selectedInventory.length, sample: selectedInventory.slice(0, 2).map(i => ({ name: i.name, stock: i.stock })) });
@@ -137,6 +223,8 @@ export default function AllocationFormPage() {
         setExistingAllocation(allocation);
         setAllocationQuantities(allocation?.quantities || {});
         setAllocationMessage(allocation?.message || "");
+        setIncidentDate(allocation?.incidentDate ? new Date(allocation.incidentDate).toISOString().slice(0,10) : "");
+        setAllocatedDays(allocation?.allocatedDays ? String(allocation.allocatedDays) : "");
 
         if (selectedReport) {
           setPredictionLoading(true);
@@ -170,12 +258,9 @@ export default function AllocationFormPage() {
   const availableStock = (itemId) => {
     const item = inventory.find((entry) => String(entry.id || entry._id) === String(itemId));
     if (!item) {
-      console.warn(`Item not found in inventory: ${itemId}`);
       return 0;
     }
-    // MongoDB stores count in 'stock' field
-    const stock = Number(item.stock || 0);
-    return stock;
+    return getResolvedInventoryStock(item);
   };
 
   const handleHardRefresh = async () => {
@@ -203,7 +288,7 @@ export default function AllocationFormPage() {
       // Ensure all items have stock field
       selectedInventory = selectedInventory.map(item => ({
         ...item,
-        stock: item.stock ?? item.quantityAvailable ?? item.quantity ?? 0
+        stock: getResolvedInventoryStock(item),
       }));
 
       console.log('Hard refresh loaded inventory:', { count: selectedInventory.length, sample: selectedInventory.slice(0, 2).map(i => ({ name: i.name, stock: i.stock })) });
@@ -236,6 +321,36 @@ export default function AllocationFormPage() {
     setQuantityErrors((prev) => ({ ...prev, [itemId]: "" }));
   };
 
+  const handleAllocatedDaysChange = (value) => {
+    if (value === "") {
+      setAllocatedDays("");
+      setAllocatedDaysError("");
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
+      setAllocatedDays(value);
+      setAllocatedDaysError("Allocated days must be an integer >= 1");
+      return;
+    }
+
+    setAllocatedDays(String(parsed));
+    setAllocatedDaysError("");
+  };
+
+  const handleIncidentDateChange = (value) => {
+    const today = getTodayDateString();
+
+    if (!existingAllocation && value && value < today) {
+      setIncidentDateError("Incident date cannot be in the past.");
+      return;
+    }
+
+    setIncidentDate(value);
+    setIncidentDateError("");
+  };
+
   const applyPredictionAsSuggestion = () => {
     if (!predictedResources) return;
 
@@ -255,6 +370,11 @@ export default function AllocationFormPage() {
     event.preventDefault();
     if (!report) return;
 
+    if (!existingAllocation && incidentDate && incidentDate < getTodayDateString()) {
+      setIncidentDateError("Incident date cannot be in the past.");
+      return;
+    }
+
     const nextQuantityErrors = {};
     requestedItems.forEach((item) => {
       const quantity = Number(allocationQuantities[item.inventoryItemId]);
@@ -265,7 +385,7 @@ export default function AllocationFormPage() {
 
     if (Object.keys(nextQuantityErrors).length > 0) {
       setQuantityErrors(nextQuantityErrors);
-      setError("Please fix highlighted quantity fields.");
+      // Show validation inline on each field instead of a top-level error banner
       return;
     }
 
@@ -288,9 +408,11 @@ export default function AllocationFormPage() {
         lineItems,
         message: allocationMessage,
         allocatedBy: "Allocation Officer",
+        incidentDate: incidentDate || null,
+        allocatedDays: allocatedDays ? Number(allocatedDays) : null,
       });
 
-      navigate("/allocations", { replace: true });
+      navigate("/distribution-tracking", { replace: true });
     } catch (saveError) {
       setError(saveError.message || "Failed to save allocation.");
     } finally {
@@ -339,6 +461,36 @@ export default function AllocationFormPage() {
                 <div className="summary-item"><span>Affected Population:</span><strong>{Number(report.affectedPopulation || 0).toLocaleString()}</strong></div>
                 <div className="summary-item"><span>Reported By:</span><strong>{report.reportedBy || "-"}</strong></div>
               </div>
+              <div className="allocation-meta grid gap-3 mt-4">
+                <div className="meta-row">
+                  <label className="block text-sm font-medium text-slate-700">Incident Date</label>
+                  <input
+                    type="date"
+                    value={incidentDate}
+                    onChange={(e) => handleIncidentDateChange(e.target.value)}
+                    min={!existingAllocation ? getTodayDateString() : undefined}
+                    className="mt-1 block w-full border-slate-200 rounded px-2 py-1"
+                  />
+                  {incidentDateError ? (
+                    <p className="mt-1 text-xs text-red-600">{incidentDateError}</p>
+                  ) : null}
+                </div>
+
+                <div className="meta-row">
+                  <label className="block text-sm font-medium text-slate-700">Allocated Days (prediction window)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={allocatedDays}
+                    onChange={(e) => handleAllocatedDaysChange(e.target.value)}
+                    className="mt-1 block w-full border-slate-200 rounded px-2 py-1"
+                    placeholder="Number of days resources should cover"
+                  />
+                  {allocatedDaysError ? (
+                    <p className="mt-1 text-xs text-red-600">{allocatedDaysError}</p>
+                  ) : null}
+                </div>
+              </div>
             </div>
 
             <div className="allocation-prediction-section">
@@ -350,9 +502,24 @@ export default function AllocationFormPage() {
               ) : predictedResources ? (
                 <>
                   <div className="prediction-grid">
-                    <div className="prediction-card"><span className="prediction-label">Food Needed</span><strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong></div>
-                    <div className="prediction-card"><span className="prediction-label">Water Needed</span><strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong></div>
-                    <div className="prediction-card"><span className="prediction-label">Medicine Needed</span><strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong></div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Food Needed</span>
+                      <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Water Needed</span>
+                      <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Medicine Needed</span>
+                      <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    These recommendations are sized for {formatCoverageDays(allocatedDays)}.
                   </div>
                   <div className="prediction-actions">
                     <button type="button" className="prediction-apply-btn" onClick={applyPredictionAsSuggestion} disabled={saving}>
@@ -366,42 +533,79 @@ export default function AllocationFormPage() {
             </div>
 
             <div className="allocation-details">
-              <h3>Resource Allocation</h3>
-              {requestedItems.length === 0 ? (
-                <p className="allocation-info-inline">No specific needs listed by DMC.</p>
-              ) : (
-                requestedItems.map((need) => {
-                  const rawQty = allocationQuantities[need.inventoryItemId];
-                  const currentQty = rawQty === "" || rawQty === undefined ? "" : Number(rawQty);
-                  const available = availableStock(need.inventoryItemId);
-                  const sufficient = Number(currentQty || 0) <= available;
-                  const hasError = Boolean(quantityErrors[need.inventoryItemId]);
-                  const hasEmptyError = rawQty === "";
+              <h3>Requested Items</h3>
 
-                  return (
-                    <div key={need.inventoryItemId} className={`allocation-item ${hasError || hasEmptyError || !sufficient ? 'border-rose-300 bg-rose-50' : ''}`}>
-                      <div className="item-info">
-                        <span className="item-name">{need.itemName}</span>
-                        <span className="item-quantity">Available: {available.toLocaleString()}</span>
-                      </div>
-                      <div className="quantity-input">
-                        <input
-                          type="number"
-                          min="1"
-                          value={currentQty}
-                          onChange={(event) => handleQuantityChange(need.inventoryItemId, event.target.value)}
-                          className={`${hasError || hasEmptyError || !sufficient ? 'border-rose-300 bg-rose-50 focus:border-rose-400 focus:ring-rose-100' : 'border-slate-200'} w-full px-2 py-1 border rounded`}
-                          placeholder="Enter quantity"
-                        />
-                      </div>
-                      <div className="error-messages">
-                        {hasEmptyError && <p className="text-xs text-rose-600 font-medium">Quantity is required.</p>}
-                        {hasError && <p className="text-xs text-rose-600 font-medium">{quantityErrors[need.inventoryItemId]}</p>}
-                        {!hasError && !sufficient && <p className="text-xs text-rose-600 font-medium">Quantity cannot exceed available stock ({available}).</p>}
-                      </div>
-                    </div>
-                  );
-                })
+              {requestedItems.length > 0 && (
+                <div className="requested-items-table mb-4 overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500">
+                        <th className="pb-2">Category</th>
+                        <th className="pb-2">Item Name</th>
+                        <th className="pb-2">Size</th>
+                        <th className="pb-2">Inventory Stock</th>
+                        <th className="pb-2">Allocate</th>
+                        <th className="pb-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requestedItems.map((ref) => {
+                        const stock = Number(ref.stock ?? 0);
+                        const min = Number(ref.min ?? 0);
+                        const status = getInventoryStatus(stock, min);
+                        const toneClass =
+                          status.tone === "good"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : status.tone === "warning"
+                              ? "bg-amber-50 text-amber-700"
+                              : status.tone === "low"
+                                ? "bg-orange-50 text-orange-700"
+                                : "bg-rose-50 text-rose-700";
+
+                        return (
+                          <tr key={ref.inventoryItemId} className="border-t">
+                            <td className="py-2 text-slate-700">{ref.category || "-"}</td>
+                            <td className="py-2 font-medium text-slate-900">{ref.itemName}</td>
+                            <td className="py-2 text-slate-700">{ref.packageSize || ref.unit || "units"}</td>
+                            <td className="py-2 text-slate-700">{stock.toLocaleString()}</td>
+                            <td className="py-2">
+                              <div className="space-y-1">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={allocationQuantities[ref.inventoryItemId] || ""}
+                                  onChange={(event) => handleQuantityChange(ref.inventoryItemId, event.target.value)}
+                                  className={`${quantityErrors[ref.inventoryItemId] || (allocationQuantities[ref.inventoryItemId] !== "" && Number(allocationQuantities[ref.inventoryItemId] || 0) > stock)
+                                    ? "border-rose-300 bg-rose-50 focus:border-rose-400 focus:ring-rose-100"
+                                    : "border-slate-200"
+                                  } w-full rounded border px-3 py-2`}
+                                  placeholder="Allocated quantity"
+                                />
+                                {quantityErrors[ref.inventoryItemId] ? (
+                                  <p className="text-xs font-medium text-rose-600">{quantityErrors[ref.inventoryItemId]}</p>
+                                ) : null}
+                                {allocationQuantities[ref.inventoryItemId] !== "" && Number(allocationQuantities[ref.inventoryItemId] || 0) > stock ? (
+                                  <p className="text-xs font-medium text-rose-600">
+                                    Quantity cannot exceed available stock ({stock}).
+                                  </p>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="py-2">
+                              <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${toneClass}`}>
+                                {status.label} ({min > 0 ? `${stock}/${min}` : `${stock}`})
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {requestedItems.length === 0 && (
+                <p className="allocation-info-inline">No specific items were requested for this report.</p>
               )}
             </div>
 
@@ -416,16 +620,6 @@ export default function AllocationFormPage() {
                 maxLength={MAX_ALLOCATION_NOTE_LENGTH}
               />
             </div>
-
-            {existingAllocation && (
-              <div className="allocation-info">
-                <h4>Current Allocation Details</h4>
-                <div className="info-grid">
-                  <div className="info-item"><span>Allocated Date:</span><strong>{existingAllocation.allocatedDate ? new Date(existingAllocation.allocatedDate).toLocaleDateString("en-IN") : "-"}</strong></div>
-                  <div className="info-item"><span>Allocated By:</span><strong>{existingAllocation.allocatedBy || "Allocation Officer"}</strong></div>
-                </div>
-              </div>
-            )}
 
             <div className="warning-message">
               <AlertTriangle size={16} color="#d97706" />

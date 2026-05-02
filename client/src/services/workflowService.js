@@ -73,6 +73,25 @@ export async function createResourceRequest(payload) {
   });
 
   const data = await parseResponse(response, "Failed to create resource request.");
+  return data.resourceRequest || data.data || null;
+}
+
+export async function fetchResourceRequests(params = {}) {
+  const query = buildQuery(params);
+  const response = await fetch(`${API_BASE_URL}/api/resource-requests${query}`, {
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  const data = await parseResponse(response, "Failed to fetch resource requests.");
+  return data.resourceRequests || [];
+}
+
+export async function fetchResourceRequestById(id) {
+  const response = await fetch(`${API_BASE_URL}/api/resource-requests/${id}`, {
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  const data = await parseResponse(response, "Failed to fetch resource request.");
   return data.resourceRequest;
 }
 

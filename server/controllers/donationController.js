@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Donation = require("../models/Donation");
 const Partner = require("../models/Partner");
 const InventoryItem = require("../models/InventoryItem");
+const ResourceRequest = require("../models/ResourceRequest");
 const inventoryActivityService = require("../services/inventoryActivityService");
 
 const isDbConnected = () => {
@@ -26,6 +27,7 @@ function normalizeDonationPayload(payload = {}) {
     amount: Number(payload.amount),
     expectedDeliveryDate: payload.expectedDeliveryDate || null,
     partnerId: payload.partnerId || null,
+    sourceResourceRequestId: payload.sourceResourceRequestId || null,
   };
 }
 // Create NGO donation (Authenticated NGO partners only)
@@ -64,6 +66,7 @@ async function createNGODonation(req, res) {
       items,
       amount,
       expectedDeliveryDate,
+      sourceResourceRequestId,
       notes
     } = req.body;
 
@@ -113,6 +116,26 @@ async function createNGODonation(req, res) {
       }
     }
 
+    let linkedResourceRequest = null;
+    if (sourceResourceRequestId) {
+      if (!mongoose.Types.ObjectId.isValid(sourceResourceRequestId)) {
+        return res.status(400).json({ message: "Invalid resource request ID." });
+      }
+
+      linkedResourceRequest = await ResourceRequest.findById(sourceResourceRequestId).populate(
+        "ngoPartner",
+        "organizationName contactPerson email phone userId"
+      );
+
+      if (!linkedResourceRequest) {
+        return res.status(404).json({ message: "Resource request not found." });
+      }
+
+      if (String(linkedResourceRequest.ngoPartner?._id || linkedResourceRequest.ngoPartner) !== String(partner._id)) {
+        return res.status(403).json({ message: "This resource request does not belong to your NGO." });
+      }
+    }
+
     const donation = new Donation({
       partnerId: partner._id,  // NGO donations reference Partner, not User
       userId: userId,           // Keep userId for audit trail
@@ -128,6 +151,7 @@ async function createNGODonation(req, res) {
       quantity: normalizedDonationType === "inventory" ? totalInventoryQuantity : 0,
       amount: normalizedDonationType === "monetary" ? Number(amount) : 0,
       expectedDeliveryDate: normalizedDonationType === "inventory" ? expectedDeliveryDate || null : null,
+      sourceResourceRequestId: linkedResourceRequest ? linkedResourceRequest._id : null,
       status: "pending_verification",
       notes: String(notes || "").trim()
     });
@@ -539,6 +563,14 @@ async function verifyDonation(req, res) {
           performedBy: req.user.fullName || req.user.name || req.user.id,
         });
       }
+    }
+
+    if (donation.sourceResourceRequestId) {
+      await ResourceRequest.findByIdAndUpdate(donation.sourceResourceRequestId, {
+        status: status === "verified" ? "fulfilled" : "rejected",
+        reviewedBy: req.user.id,
+        reviewedAt: new Date(),
+      });
     }
 
     await donation.save();

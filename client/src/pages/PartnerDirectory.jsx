@@ -3,6 +3,25 @@ import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^0\d{9}$/;
+const MIN_NAME_LENGTH = 2;
+const MAX_NAME_LENGTH = 100;
+const MIN_ADDRESS_LENGTH = 10;
+const MAX_ADDRESS_LENGTH = 200;
+
+function validatePhoneNumber(value) {
+  const normalized = String(value || '').trim().replace(/\s+/g, '');
+  if (!normalized) return '';
+
+  const digitsOnly = normalized.replace(/\D/g, '');
+  if (digitsOnly.length !== 10 || !PHONE_PATTERN.test(digitsOnly)) {
+    return 'Phone number must start with 0 and contain exactly 10 digits.';
+  }
+
+  return '';
+}
+
 const PartnerDirectory = () => {
   const { user } = useAuth();
   const [partners, setPartners] = useState([]);
@@ -145,6 +164,15 @@ const PartnerDirectory = () => {
       profilePicture: partner?.profilePicture || null
     });
 
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const getInputClass = (field) =>
+      `w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent ${
+        fieldErrors[field]
+          ? 'border-rose-300 bg-rose-50 focus:ring-rose-200'
+          : 'border-slate-200 focus:ring-emerald-500'
+      }`;
+
     const handleImageUpload = (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -158,10 +186,55 @@ const PartnerDirectory = () => {
 
     const handleSubmit = (e) => {
       e.preventDefault();
+
+      const nextFieldErrors = {};
+      const name = String(formData.name || '').trim();
+      const contactPerson = String(formData.contactPerson || '').trim();
+      const email = String(formData.email || '').trim();
+      const phone = String(formData.phone || '').trim();
+      const address = String(formData.address || '').trim();
+      const specialization = String(formData.specialization || '').trim();
+
+      if (!name || name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
+        nextFieldErrors.name = `Organization name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`;
+      }
+
+      if (!contactPerson || contactPerson.length < MIN_NAME_LENGTH || contactPerson.length > MAX_NAME_LENGTH) {
+        nextFieldErrors.contactPerson = `Contact person must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`;
+      }
+
+      if (!email || !EMAIL_PATTERN.test(email)) {
+        nextFieldErrors.email = 'Enter a valid email address.';
+      }
+
+      const phoneError = validatePhoneNumber(phone);
+      if (phoneError) {
+        nextFieldErrors.phone = phoneError;
+      }
+
+      if (!address || address.length < MIN_ADDRESS_LENGTH || address.length > MAX_ADDRESS_LENGTH) {
+        nextFieldErrors.address = `Address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`;
+      }
+
+      if (!specialization) {
+        nextFieldErrors.specialization = 'Specialization is required.';
+      }
+
+      if (!formData.status) {
+        nextFieldErrors.status = 'Status is required.';
+      }
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors);
+        return;
+      }
+
+      setFieldErrors({});
+
       if (partner) {
-        handleUpdatePartner(partner.id, formData);
+        handleUpdatePartner(partner.id, { ...formData, name, contactPerson, email, phone, address, specialization });
       } else {
-        handleCreatePartner(formData);
+        handleCreatePartner({ ...formData, name, contactPerson, email, phone, address, specialization });
       }
     };
 
@@ -212,68 +285,103 @@ const PartnerDirectory = () => {
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, name: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, name: '' }));
+                  }}
+                  className={getInputClass('name')}
                 required
               />
+                {fieldErrors.name && <p className="mt-1 text-xs text-rose-600">{fieldErrors.name}</p>}
             </div>
             <div className="form-group">
               <label>Contact Person</label>
               <input
                 type="text"
                 value={formData.contactPerson}
-                onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, contactPerson: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, contactPerson: '' }));
+                  }}
+                  className={getInputClass('contactPerson')}
                 required
               />
+                {fieldErrors.contactPerson && <p className="mt-1 text-xs text-rose-600">{fieldErrors.contactPerson}</p>}
             </div>
             <div className="form-group">
               <label>Email Address</label>
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, email: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, email: '' }));
+                  }}
+                  className={getInputClass('email')}
                 required
               />
+                {fieldErrors.email && <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>}
             </div>
             <div className="form-group">
               <label>Phone Number</label>
               <input
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, phone: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                  }}
+                  className={getInputClass('phone')}
                 required
               />
+                {fieldErrors.phone && <p className="mt-1 text-xs text-rose-600">{fieldErrors.phone}</p>}
             </div>
             <div className="form-group">
               <label>Address</label>
               <textarea
                 value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, address: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, address: '' }));
+                  }}
+                  className={getInputClass('address')}
                 required
                 rows={3}
               />
+                {fieldErrors.address && <p className="mt-1 text-xs text-rose-600">{fieldErrors.address}</p>}
             </div>
             <div className="form-group">
               <label>Specialization</label>
               <select
                 value={formData.specialization}
-                onChange={(e) => setFormData({...formData, specialization: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, specialization: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, specialization: '' }));
+                  }}
+                  className={getInputClass('specialization')}
                 required
               >
                 {specializationOptions.map(spec => (
                   <option key={spec} value={spec}>{spec}</option>
                 ))}
               </select>
+                {fieldErrors.specialization && <p className="mt-1 text-xs text-rose-600">{fieldErrors.specialization}</p>}
             </div>
             <div className="form-group">
               <label>Status</label>
               <select
                 value={formData.status}
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  onChange={(e) => {
+                    setFormData({...formData, status: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, status: '' }));
+                  }}
+                  className={getInputClass('status')}
                 required
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
+                {fieldErrors.status && <p className="mt-1 text-xs text-rose-600">{fieldErrors.status}</p>}
             </div>
             <div className="form-actions">
               <button type="button" className="btn-secondary" onClick={onCancel}>

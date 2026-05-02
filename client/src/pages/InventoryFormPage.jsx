@@ -10,7 +10,7 @@ const WAREHOUSE_OPTIONS = ["Colombo Central Warehouse", "Kandy Regional Warehous
 const DEFAULT_FORM = {
   category: ITEM_CATEGORIES.DRINKING_WATER,
   itemName: "",
-  unit: "",
+  packageSize: "",
   stock: "",
   min: "",
   warehouse: WAREHOUSE_OPTIONS[1],
@@ -67,7 +67,7 @@ export default function InventoryFormPage({ mode = "create" }) {
           setForm({
             category: target.category || ITEM_CATEGORIES.DRINKING_WATER,
             itemName: target.name || "",
-            unit: target.unit || "",
+            packageSize: target.packageSize || target.unit || "",
             stock: String(target.stock ?? ""),
             min: String(target.min ?? ""),
             warehouse: target.warehouse || WAREHOUSE_OPTIONS[1],
@@ -100,15 +100,13 @@ export default function InventoryFormPage({ mode = "create" }) {
     [items, form.category]
   );
 
-  const unitOptions = ["1 kg pack", "500 g pack", "250 g pack", "1 L bottle", "500 ml bottle", "1 pc", "1 unit"];
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setFieldErrors({});
 
     const normalizedName = String(form.itemName || "").trim();
-    const normalizedUnit = String(form.unit || "").trim();
+    const normalizedPackageSize = String(form.packageSize || "").trim();
     const normalizedCategory = String(form.category || "").trim();
     const normalizedWarehouse = String(form.warehouse || "").trim();
     const nextFieldErrors = {};
@@ -179,8 +177,8 @@ export default function InventoryFormPage({ mode = "create" }) {
       return;
     }
 
-    if (!normalizedUnit) {
-      nextFieldErrors.unit = "Unit or pack size is required.";
+    if (!normalizedPackageSize) {
+      nextFieldErrors.packageSize = "Measure is required.";
       setFieldErrors(nextFieldErrors);
       setError("Please fix highlighted fields.");
       return;
@@ -210,7 +208,8 @@ export default function InventoryFormPage({ mode = "create" }) {
         await updateInventoryItem(itemId, {
           name: normalizedName,
           category: normalizedCategory,
-          unit: normalizedUnit,
+          packageSize: normalizedPackageSize,
+          unit: "",
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -222,7 +221,7 @@ export default function InventoryFormPage({ mode = "create" }) {
           (entry) =>
             String(entry.name || "").trim().toLowerCase() === normalizedName.toLowerCase() &&
             entry.category === normalizedCategory &&
-            String(entry.unit || "").trim().toLowerCase() === normalizedUnit.toLowerCase()
+            String(entry.packageSize || "").trim().toLowerCase() === normalizedPackageSize.toLowerCase()
         );
 
         if (duplicate) {
@@ -235,7 +234,8 @@ export default function InventoryFormPage({ mode = "create" }) {
           await createInventoryItem({
             name: normalizedName,
             category: normalizedCategory,
-            unit: normalizedUnit,
+            packageSize: normalizedPackageSize,
+            unit: "",
             stock,
             min,
             warehouse: normalizedWarehouse,
@@ -302,21 +302,15 @@ export default function InventoryFormPage({ mode = "create" }) {
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="form-group">
-                    <label>Unit / Pack Size</label>
+                    <label>Measure</label>
                     <input
-                      className={inlineInputClass(fieldErrors.unit)}
-                      list="inventory-unit-options"
+                      className={inlineInputClass(fieldErrors.packageSize)}
                       type="text"
-                      value={form.unit}
-                      onChange={(event) => setForm((prev) => ({ ...prev, unit: event.target.value }))}
-                      placeholder="e.g. 1 kg pack, 500 g pack"
+                      value={form.packageSize}
+                      onChange={(event) => setForm((prev) => ({ ...prev, packageSize: event.target.value }))}
+                      placeholder="e.g. 5 kg bottle, 1 L, 10 tablets"
                     />
-                    <datalist id="inventory-unit-options">
-                      {unitOptions.map((unit) => (
-                        <option key={unit} value={unit} />
-                      ))}
-                    </datalist>
-                    {fieldErrors.unit && <p className="mt-1 text-xs text-rose-600">{fieldErrors.unit}</p>}
+                    {fieldErrors.packageSize && <p className="mt-1 text-xs text-rose-600">{fieldErrors.packageSize}</p>}
                   </div>
                 </div>
 

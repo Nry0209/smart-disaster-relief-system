@@ -1,7 +1,9 @@
 const DisasterReport = require("../models/DisasterReport");
 const InventoryItem = require("../models/InventoryItem");
+const Allocation = require("../models/Allocation");
+const AuditLog = require("../models/AuditLog");
+const inventoryActivityService = require("../services/inventoryActivityService");
 const mongoose = require("mongoose");
-
 const ALLOWED_STATUSES = ["draft", "active", "pending_inventory", "allocated", "monitoring", "resolved"];
 const MIN_AFFECTED_POPULATION = 1;
 const MAX_AFFECTED_POPULATION = 10000000;
@@ -19,7 +21,7 @@ const UPDATABLE_FIELDS = [
   "reportedBy",
   "allocatedResources",
 ];
-
+ 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
 }
@@ -28,6 +30,15 @@ function toIsoDateOrNull(value) {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isPastDate(value) {
+  const parsed = toIsoDateOrNull(value);
+  if (!parsed) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parsed.getTime() < today.getTime();
 }
 
 function parseAffectedPopulation(value) {
@@ -90,6 +101,17 @@ function normalizeAllocatedResources(value) {
     throw new Error("allocatedResources allocatedDate is invalid.");
   }
 
+  const incidentDate = value.incidentDate ? toIsoDateOrNull(value.incidentDate) : null;
+  if (value.incidentDate && !incidentDate) {
+    throw new Error("allocatedResources incidentDate is invalid.");
+  }
+
+  const allocatedDaysRaw = value.allocatedDays === undefined ? null : Number(value.allocatedDays);
+  if (allocatedDaysRaw !== null && (!Number.isFinite(allocatedDaysRaw) || !Number.isInteger(allocatedDaysRaw) || allocatedDaysRaw < 1)) {
+    throw new Error("allocatedResources allocatedDays must be an integer >= 1.");
+  }
+  const allocatedDays = allocatedDaysRaw === null ? null : allocatedDaysRaw;
+
   const lastUpdated = value.lastUpdated ? toIsoDateOrNull(value.lastUpdated) : new Date();
   if (value.lastUpdated && !lastUpdated) {
     throw new Error("allocatedResources lastUpdated is invalid.");
@@ -100,9 +122,159 @@ function normalizeAllocatedResources(value) {
     lineItems,
     message: String(value.message || "").trim(),
     allocatedDate,
+    incidentDate,
+    allocatedDays,
     allocatedBy: String(value.allocatedBy || "Allocation Officer").trim(),
     lastUpdated,
   };
+}
+
+function buildAllocationLineItemMap(allocatedResources) {
+  const lineItems = Array.isArray(allocatedResources?.lineItems) ? allocatedResources.lineItems : [];
+  const quantityEntries = allocatedResources?.quantities
+    ? allocatedResources.quantities instanceof Map
+      ? Array.from(allocatedResources.quantities.entries())
+      : Object.entries(allocatedResources.quantities)
+    : [];
+
+  const entries = new Map();
+
+  lineItems.forEach((item) => {
+    const ref = String(item?.itemId || item?.inventoryItemId || item?.itemName || "").trim();
+    const itemName = String(item?.itemName || item?.inventoryItemId || item?.itemId || ref || "").trim();
+    const quantity = Number(item?.quantity || 0);
+
+    if (ref && Number.isFinite(quantity)) {
+      entries.set(ref, { ref, itemName, quantity });
+    }
+  });
+
+  quantityEntries.forEach(([ref, quantity]) => {
+    const normalizedRef = String(ref || "").trim();
+    const normalizedQuantity = Number(quantity || 0);
+    if (!normalizedRef || !Number.isFinite(normalizedQuantity)) {
+      return;
+    }
+
+    if (!entries.has(normalizedRef)) {
+      entries.set(normalizedRef, {
+        ref: normalizedRef,
+        itemName: normalizedRef,
+        quantity: normalizedQuantity,
+      });
+    }
+  });
+
+  return entries;
+}
+
+function calculateAllocationDeltas(previousResources, nextResources) {
+  const previousEntries = buildAllocationLineItemMap(previousResources);
+  const nextEntries = buildAllocationLineItemMap(nextResources);
+  const refs = new Set([...previousEntries.keys(), ...nextEntries.keys()]);
+
+  return Array.from(refs)
+    .map((ref) => {
+      const previousEntry = previousEntries.get(ref);
+      const nextEntry = nextEntries.get(ref);
+      const previousQuantity = Number(previousEntry?.quantity || 0);
+      const nextQuantity = Number(nextEntry?.quantity || 0);
+
+      return {
+        ref,
+        itemName: nextEntry?.itemName || previousEntry?.itemName || ref,
+        delta: nextQuantity - previousQuantity,
+      };
+    })
+    .filter((entry) => entry.delta !== 0);
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function resolveInventoryItemForAllocation(ref, itemName) {
+  if (ref && mongoose.Types.ObjectId.isValid(ref)) {
+    const byId = await InventoryItem.findById(ref);
+    if (byId) {
+      return byId;
+    }
+  }
+
+  const candidates = [itemName, ref].filter(Boolean);
+  for (const candidate of candidates) {
+    const normalized = String(candidate).trim();
+    if (!normalized) continue;
+
+    const byName = await InventoryItem.findOne({
+      name: { $regex: `^${escapeRegex(normalized)}$`, $options: "i" },
+    });
+    if (byName) {
+      return byName;
+    }
+  }
+
+  return null;
+}
+
+async function applyInventoryDeltas(deltas, reportId, performedBy) {
+  const stockChanges = [];
+
+  for (const entry of deltas) {
+    const inventoryItem = await resolveInventoryItemForAllocation(entry.ref, entry.itemName);
+
+    if (!inventoryItem) {
+      throw new Error(`Inventory item not found for allocation entry: ${entry.itemName || entry.ref}`);
+    }
+
+    const previousStock = Number(inventoryItem.stock || 0);
+    const nextStock = previousStock - entry.delta;
+
+    if (nextStock < 0) {
+      throw new Error(`Insufficient stock for ${inventoryItem.name}. Available: ${previousStock}, Required: ${entry.delta > 0 ? entry.delta : Math.abs(entry.delta)}`);
+    }
+
+    inventoryItem.stock = nextStock;
+    inventoryItem.lastUpdatedBy = performedBy?.id || performedBy || inventoryItem.lastUpdatedBy || null;
+    await inventoryItem.save();
+
+    await inventoryActivityService.createActivity({
+      itemId: inventoryItem._id,
+      itemName: inventoryItem.name,
+      category: inventoryItem.category,
+      action: entry.delta > 0 ? "allocation" : "deallocation",
+      type: entry.delta > 0 ? "allocation" : "deallocation",
+      quantity: Math.abs(entry.delta),
+      previousStock,
+      newStock: nextStock,
+      note: entry.delta > 0 ? `Allocated for report ${reportId}` : `Returned from report ${reportId}`,
+      referenceId: reportId,
+      referenceType: "disaster_report_allocation",
+      performedBy: performedBy?.id || performedBy || null,
+      performedByName: performedBy?.fullName || performedBy?.name || String(performedBy || "Allocation Officer"),
+    });
+
+    stockChanges.push({
+      inventoryItemId: inventoryItem._id.toString(),
+      itemName: inventoryItem.name,
+      previousStock,
+      newStock: nextStock,
+      delta: entry.delta,
+    });
+  }
+
+  return stockChanges;
+}
+
+async function syncInventoryForAllocation(report, nextResources, performedBy) {
+  const previousResources = report?.allocatedResources || null;
+  const deltas = calculateAllocationDeltas(previousResources, nextResources);
+
+  if (!deltas.length) {
+    return [];
+  }
+
+  return applyInventoryDeltas(deltas, report._id.toString(), performedBy);
 }
 
 function normalizeRequiredItems(value) {
@@ -168,6 +340,8 @@ function formatAllocatedResources(allocatedResources) {
       : [],
     message: allocatedResources.message || "",
     allocatedDate: allocatedResources.allocatedDate || null,
+    incidentDate: allocatedResources.incidentDate || null,
+    allocatedDays: allocatedResources.allocatedDays || null,
     allocatedBy: allocatedResources.allocatedBy || "",
     lastUpdated: allocatedResources.lastUpdated || null,
   };
@@ -484,6 +658,11 @@ async function allocateResources(req, res) {
       return res.status(400).json({ message: "allocatedResources is required." });
     }
 
+    const report = await DisasterReport.findById(id);
+    if (!report) {
+      return res.status(404).json({ message: "Disaster report not found." });
+    }
+
     // Normalize and validate allocation data
     let normalizedResources;
     try {
@@ -498,26 +677,148 @@ async function allocateResources(req, res) {
       return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
     }
 
-    // Update the disaster report with allocated resources
-    const report = await DisasterReport.findByIdAndUpdate(
-      id,
-      {
-        allocatedResources: normalizedResources,
-        status: "allocated",
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    // Prefer validated normalizedResources, but fall back to raw incoming values for
+    // incidentDate/allocatedDays to avoid accidental stripping by other layers.
+    const incidentDateToPersist = allocatedResources && allocatedResources.incidentDate
+      ? toIsoDateOrNull(allocatedResources.incidentDate)
+      : normalizedResources.incidentDate;
 
-    if (!report) {
+    if (!report.allocatedResources && incidentDateToPersist && isPastDate(incidentDateToPersist)) {
+      return res.status(400).json({ message: "Incident date cannot be in the past." });
+    }
+
+    const allocatedDaysToPersist = allocatedResources && Object.prototype.hasOwnProperty.call(allocatedResources, 'allocatedDays')
+      ? (allocatedResources.allocatedDays === null ? null : Number(allocatedResources.allocatedDays))
+      : normalizedResources.allocatedDays;
+
+    const nextResources = {
+      quantities: normalizedResources.quantities,
+      lineItems: normalizedResources.lineItems,
+      message: normalizedResources.message,
+      allocatedDate: normalizedResources.allocatedDate,
+      incidentDate: incidentDateToPersist,
+      allocatedDays: allocatedDaysToPersist,
+      allocatedBy: normalizedResources.allocatedBy,
+      lastUpdated: normalizedResources.lastUpdated,
+    };
+
+    let stockChanges = [];
+    try {
+      stockChanges = await syncInventoryForAllocation(report, nextResources, req.user);
+    } catch (inventoryError) {
+      return res.status(400).json({ message: inventoryError.message || "Unable to update inventory stock." });
+        // Create or update Allocation document with stock snapshots
+        let allocationDoc = null;
+        try {
+          const allocationItems = [];
+      
+          for (const lineItem of nextResources.lineItems) {
+            const inventoryItem = await InventoryItem.findById(lineItem.itemId);
+            if (inventoryItem) {
+              // Find current stock from stockChanges to get the state before allocation
+              const stockChange = stockChanges.find(sc => String(sc.inventoryId) === String(lineItem.itemId));
+              const stockAtAllocation = stockChange ? stockChange.previousStock : inventoryItem.stock;
+          
+              allocationItems.push({
+                inventoryItemId: inventoryItem._id,
+                itemName: inventoryItem.name,
+                quantityAllocated: lineItem.quantity,
+                stockAvailableAtAllocation: stockAtAllocation,
+                unit: inventoryItem.unit,
+                packageSize: inventoryItem.packageSize || ""
+              });
+            }
+          }
+      
+          // Find or create allocation
+          let allocation = await Allocation.findOne({
+            disasterId: new mongoose.Types.ObjectId(id),
+            status: { $in: ["draft", "confirmed"] }
+          });
+      
+          if (allocation) {
+            // Update existing allocation
+            allocation.items = allocationItems;
+            allocation.allocationDays = allocatedDaysToPersist || 1;
+            allocation.notes = normalizedResources.message || "";
+            allocation.allocatedDate = new Date();
+            allocation.allocatedBy = normalizedResources.allocatedBy;
+            allocation.status = "confirmed";
+          } else {
+            // Create new allocation
+            allocation = new Allocation({
+              disasterId: new mongoose.Types.ObjectId(id),
+              createdBy: req.user?.id || null,
+              items: allocationItems,
+              allocationDays: allocatedDaysToPersist || 1,
+              notes: normalizedResources.message || "",
+              allocatedDate: new Date(),
+              allocatedBy: normalizedResources.allocatedBy,
+              status: "confirmed"
+            });
+          }
+      
+          allocationDoc = await allocation.save();
+        } catch (allocationError) {
+          console.error("Failed to create/update Allocation document:", allocationError);
+          // Log but don't fail the entire allocation if Allocation doc fails
+        }
+
+    }
+
+    let updateResult;
+    try {
+      updateResult = await DisasterReport.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        {
+          $set: {
+            allocatedResources: nextResources,
+            status: 'allocated',
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } catch (reportError) {
+      if (stockChanges.length) {
+        try {
+          await applyInventoryDeltas(
+            stockChanges.map((entry) => ({ ...entry, delta: -entry.delta })),
+            id,
+            req.user
+          );
+        } catch (rollbackError) {
+          console.error("Failed to roll back inventory after allocation write error:", rollbackError);
+        }
+      }
+
+      return res.status(500).json({ message: "Failed to save allocation.", error: reportError.message });
+    }
+
+    const freshReport = await DisasterReport.findById(id);
+
+    if (!freshReport) {
       return res.status(404).json({ message: "Disaster report not found." });
+    }
+
+    // Notify tracking workflow that a new allocation is ready for dispatch planning.
+    try {
+      if (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) {
+        await AuditLog.create({
+          userId: req.user.id,
+          module: "tracking",
+          action: "allocation_confirmed",
+          referenceId: freshReport._id,
+          description: `Allocation confirmed for ${freshReport.disasterType} at ${freshReport.location}. Dispatch planning required.`,
+        });
+      }
+    } catch (notificationError) {
+      console.error("Failed to write allocation notification audit log:", notificationError);
+      // Do not fail allocation confirmation if notification logging fails.
     }
 
     return res.json({
       message: "Resources allocated successfully.",
-      report: formatReport(report),
+      report: formatReport(freshReport),
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to allocate resources.", error: error.message });
@@ -563,17 +864,52 @@ async function updateAllocation(req, res) {
       return res.status(400).json({ message: error.message || "Invalid allocatedResources value." });
     }
 
-    // Update the allocated resources
-    const updatedReport = await DisasterReport.findByIdAndUpdate(
-      id,
-      {
-        allocatedResources: normalizedResources,
-      },
-      {
-        new: true,
-        runValidators: true,
+    const nextResources = {
+      quantities: normalizedResources.quantities,
+      lineItems: normalizedResources.lineItems,
+      message: normalizedResources.message,
+      allocatedDate: normalizedResources.allocatedDate,
+      incidentDate: normalizedResources.incidentDate,
+      allocatedDays: normalizedResources.allocatedDays,
+      allocatedBy: normalizedResources.allocatedBy,
+      lastUpdated: normalizedResources.lastUpdated,
+    };
+
+    let stockChanges = [];
+    try {
+      stockChanges = await syncInventoryForAllocation(report, nextResources, req.user);
+    } catch (inventoryError) {
+      return res.status(400).json({ message: inventoryError.message || "Unable to update inventory stock." });
+    }
+
+    let updatedReport;
+    try {
+      updatedReport = await DisasterReport.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        {
+          $set: {
+            allocatedResources: nextResources,
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } catch (reportError) {
+      if (stockChanges.length) {
+        try {
+          await applyInventoryDeltas(
+            stockChanges.map((entry) => ({ ...entry, delta: -entry.delta })),
+            id,
+            req.user
+          );
+        } catch (rollbackError) {
+          console.error("Failed to roll back inventory after allocation update error:", rollbackError);
+        }
       }
-    );
+
+      return res.status(500).json({ message: "Failed to update allocation.", error: reportError.message });
+    }
+
+    updatedReport = await DisasterReport.findById(id);
 
     return res.json({
       message: "Allocation updated successfully.",
@@ -598,25 +934,56 @@ async function deallocateResources(req, res) {
       return res.status(400).json({ message: "Invalid report ID." });
     }
 
-    const report = await DisasterReport.findByIdAndUpdate(
-      id,
-      {
-        allocatedResources: null,
-        status: "pending_inventory",
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const report = await DisasterReport.findById(id);
 
     if (!report) {
       return res.status(404).json({ message: "Disaster report not found." });
     }
 
+    if (!report.allocatedResources) {
+      return res.status(400).json({ message: "No allocated resources found to deallocate." });
+    }
+
+    let stockChanges = [];
+    try {
+      stockChanges = await syncInventoryForAllocation(report, null, req.user);
+    } catch (inventoryError) {
+      return res.status(400).json({ message: inventoryError.message || "Unable to restore inventory stock." });
+    }
+
+    let updatedReport;
+    try {
+      await DisasterReport.collection.updateOne(
+        { _id: new mongoose.Types.ObjectId(id) },
+        {
+          $set: {
+            allocatedResources: null,
+            status: "pending_inventory",
+            updatedAt: new Date(),
+          },
+        }
+      );
+    } catch (reportError) {
+      if (stockChanges.length) {
+        try {
+          await applyInventoryDeltas(
+            stockChanges.map((entry) => ({ ...entry, delta: -entry.delta })),
+            id,
+            req.user
+          );
+        } catch (rollbackError) {
+          console.error("Failed to roll back inventory after deallocation write error:", rollbackError);
+        }
+      }
+
+      return res.status(500).json({ message: "Failed to deallocate resources.", error: reportError.message });
+    }
+
+    updatedReport = await DisasterReport.findById(id);
+
     return res.json({
       message: "Resources deallocated successfully.",
-      report: formatReport(report),
+      report: formatReport(updatedReport),
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to deallocate resources.", error: error.message });

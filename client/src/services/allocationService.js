@@ -79,6 +79,8 @@ export async function upsertAllocationForReport(reportId, payload) {
       quantities: payload?.quantities || {},
 
       lineItems: Array.isArray(payload?.lineItems) ? payload.lineItems : [],
+      incidentDate: payload?.incidentDate || null,
+      allocatedDays: payload?.allocatedDays || null,
 
     },
 

@@ -22,11 +22,11 @@ const WAREHOUSE_OPTIONS = [
   "Kandy Regional Warehouse"
 ];
 
-const DEFAULT_ITEM_FORM = {
+  const DEFAULT_ITEM_FORM = {
   id: "",
   name: "",
   category: ITEM_CATEGORIES.DRINKING_WATER,
-  unit: "",
+    packageSize: "",
   stock: "",
   min: "",
   warehouse: "Kandy Regional Warehouse",
@@ -93,8 +93,10 @@ function formatActivityEntry(activity) {
 }
 
 function formatInventoryLabel(item) {
+  const packageSize = String(item?.packageSize || "").trim();
   const unit = String(item?.unit || "").trim();
-  return unit ? `${item.name} (${unit})` : item.name;
+  const labelParts = [packageSize, unit].filter(Boolean);
+  return labelParts.length ? `${item.name} (${labelParts.join(" ")})` : item.name;
 }
 
 function getModalTitle(modal) {
@@ -176,14 +178,18 @@ export default function InventoryPage() {
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const activeCategory = String(activeCat || "").trim().toLowerCase();
 
     return items.filter((item) => {
-      const matchesCategory = activeCat === "All" || item.category === activeCat;
+      const itemCategory = String(item.category || "").trim();
+      const itemName = String(item.name || "");
+      const itemWarehouse = String(item.warehouse || "");
+      const matchesCategory = activeCategory === "all" || itemCategory.toLowerCase() === activeCategory;
       const matchesSearch =
         !query ||
-        item.name.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        item.warehouse.toLowerCase().includes(query);
+        itemName.toLowerCase().includes(query) ||
+        itemCategory.toLowerCase().includes(query) ||
+        itemWarehouse.toLowerCase().includes(query);
 
       return matchesCategory && matchesSearch;
     });
@@ -229,6 +235,7 @@ export default function InventoryPage() {
     }
 
     const normalizedName = itemForm.name.trim();
+    const normalizedPackageSize = String(itemForm.packageSize || "").trim();
     const normalizedUnit = String(itemForm.unit || "").trim();
     const stock = Number(itemForm.stock);
     const min = Number(itemForm.min);
@@ -254,17 +261,17 @@ export default function InventoryPage() {
       return;
     }
 
-    if (!normalizedUnit) {
-      setError("Unit or pack size is required.");
+    if (!normalizedPackageSize) {
+      setError("Measure is required.");
       return;
     }
 
-    // Find existing item with same name and category
+    // Find existing item with same name, package size, unit, and category
     const existingItem = items.find(
       (item) =>
         item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
         item.category === itemForm.category &&
-        String(item.unit || "").trim().toLowerCase() === normalizedUnit.toLowerCase()
+        String(item.packageSize || "").trim().toLowerCase() === normalizedPackageSize.toLowerCase()
     );
 
     if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
@@ -288,7 +295,8 @@ export default function InventoryPage() {
         const payload = {
           name: normalizedName,
           category: itemForm.category,
-          unit: normalizedUnit,
+          packageSize: normalizedPackageSize,
+          unit: normalizedUnit || "",
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -304,6 +312,7 @@ export default function InventoryPage() {
         await createInventoryItem({
           name: normalizedName,
           category: itemForm.category,
+          packageSize: normalizedPackageSize,
           unit: normalizedUnit,
           stock,
           min,
@@ -501,13 +510,13 @@ export default function InventoryPage() {
         <table className="inventory-table">
           <thead>
             <tr>
-              <th>Item Name</th>
+              <th>Item</th>
               <th>Category</th>
-              <th>Unit</th>
-              <th>Current Stock</th>
-              <th>Minimum Required</th>
+              <th>Measure</th>
+              <th>Stock</th>
+              <th>Minimum</th>
               <th>Warehouse</th>
-              <th>Stock Level</th>
+              <th>Progress</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -537,9 +546,9 @@ export default function InventoryPage() {
 
                 return (
                   <tr key={item.id}>
-                    <td><span className="item-name">{formatInventoryLabel(item)}</span></td>
+                    <td><span className="item-name">{item.name}</span></td>
                     <td><span className="category-badge">{item.category}</span></td>
-                    <td><span className="min-quantity">{item.unit || "units"}</span></td>
+                    <td><span className="min-quantity">{[item.packageSize, item.unit].filter(Boolean).join(" ") || "-"}</span></td>
                     <td><span className="stock-quantity">{item.stock.toLocaleString()}</span></td>
                     <td><span className="min-quantity">{item.min.toLocaleString()}</span></td>
                     <td><span className="min-quantity">{item.warehouse}</span></td>
@@ -666,12 +675,12 @@ export default function InventoryPage() {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Unit / Pack Size</label>
+                    <label>Measure</label>
                     <input
                       type="text"
-                      value={itemForm.unit || ""}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, unit: event.target.value }))}
-                      placeholder="e.g. 1 kg pack"
+                      value={itemForm.packageSize || ""}
+                      onChange={(event) => setItemForm((prev) => ({ ...prev, packageSize: event.target.value }))}
+                      placeholder="e.g. 5 kg bottle, 1 L, 10 tablets"
                     />
                   </div>
                   <div className="form-group">

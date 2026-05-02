@@ -1,0 +1,234 @@
+[
+  {
+    "_id": "69f100fe337488a364cf5230",
+    "name": "bottled water",
+    "category": "Drinking Water",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5235",
+    "name": "antibiotics",
+    "category": "Basic Medicine",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523c",
+    "name": "tarpaulin",
+    "category": "Shelter Materials",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523e",
+    "name": "clothes",
+    "category": "Clothing",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522c",
+    "name": "infant formula",
+    "category": "Baby Food",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522b",
+    "name": "ration packs",
+    "category": "Ready-to-Eat Meals",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5238",
+    "name": "medical kits",
+    "category": "Emergency Medical Kits",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523b",
+    "name": "blankets",
+    "category": "Shelter Materials",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522e",
+    "name": "protein bars",
+    "category": "Nutritional Supplements",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5237",
+    "name": "antiseptic",
+    "category": "First Aid Supplies",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5236",
+    "name": "bandages",
+    "category": "First Aid Supplies",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523d",
+    "name": "jackets",
+    "category": "Clothing",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5233",
+    "name": "purification tablets",
+    "category": "Water Purification",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5227",
+    "name": "flour",
+    "category": "Dry Food",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5231",
+    "name": "water cans",
+    "category": "Drinking Water",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5234",
+    "name": "paracetamol",
+    "category": "Basic Medicine",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5239",
+    "name": "trauma kits",
+    "category": "Emergency Medical Kits",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523a",
+    "name": "tents",
+    "category": "Shelter Materials",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522a",
+    "name": "instant noodles",
+    "category": "Ready-to-Eat Meals",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf523f",
+    "name": "soap",
+    "category": "Hygiene Kits",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5229",
+    "name": "biscuits",
+    "category": "Ready-to-Eat Meals",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522d",
+    "name": "baby cereal",
+    "category": "Baby Food",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5228",
+    "name": "canned food",
+    "category": "Dry Food",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf522f",
+    "name": "energy drinks",
+    "category": "Nutritional Supplements",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5232",
+    "name": "water filters",
+    "category": "Water Purification",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5240",
+    "name": "sanitary kits",
+    "category": "Hygiene Kits",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f100fe337488a364cf5226",
+    "name": "rice",
+    "category": "Dry Food",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f1aeb44edaedd3521a13c7",
+    "name": "API Allocation Water",
+    "category": "Drinking Water",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  },
+  {
+    "_id": "69f1b11ef88b04a7bcaf454e",
+    "name": "Standalone Allocation Water",
+    "category": "Drinking Water",
+    "fromUnit": "units",
+    "toPackageSize": "1",
+    "toUnit": "units"
+  }
+]

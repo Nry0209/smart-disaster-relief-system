@@ -99,6 +99,11 @@ const donationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    sourceResourceRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ResourceRequest",
+      default: null,
+    },
     status: {
       type: String,
       enum: ["pending_verification", "verified", "rejected"],

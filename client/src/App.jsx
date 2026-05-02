@@ -14,6 +14,7 @@ import InventoryFormPage from "./pages/InventoryFormPage";
 import DonationVerificationPage from "./pages/DonationVerificationPage";
 import ResourceRequestPage from "./pages/ResourceRequestPage";
 import NGODonationPage from "./pages/NGODonationPage";
+import NGOInboxPage from "./pages/NGOInboxPage";
 import AllocationPage from "./pages/AllocationPage";
 import AllocationFormPage from "./pages/AllocationFormPage";
 import DisasterEventPage from "./pages/DisasterEventPage";
@@ -112,6 +113,20 @@ function App() {
         <DashboardLayout>
           <NGODonationPage />
         </DashboardLayout>
+      } />
+      <Route path="/ngo-inbox" element={
+        <RoleRoute allowedRoles={["ngo_partner"]} fallback="/inventory">
+          <DashboardLayout>
+            <NGOInboxPage />
+          </DashboardLayout>
+        </RoleRoute>
+      } />
+      <Route path="/ngo-inbox/:requestId" element={
+        <RoleRoute allowedRoles={["ngo_partner"]} fallback="/inventory">
+          <DashboardLayout>
+            <NGOInboxPage />
+          </DashboardLayout>
+        </RoleRoute>
       } />
       <Route path="/donations/verify" element={
         <DashboardLayout>

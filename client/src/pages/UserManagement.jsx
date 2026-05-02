@@ -1143,7 +1143,10 @@ eligibility for partnership in relief operations.
                     type="text"
                     required
                     value={formData.fullName}
-                    onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, fullName: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, fullName: '' }));
+                    }}
                     className={getInputClass('fullName')}
                     placeholder="Enter full name"
                     minLength={MIN_NAME_LENGTH}
@@ -1158,7 +1161,10 @@ eligibility for partnership in relief operations.
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, email: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, email: '' }));
+                    }}
                     className={getInputClass('email')}
                     placeholder="Enter email address"
                     autoComplete="email"
@@ -1174,7 +1180,10 @@ eligibility for partnership in relief operations.
                     type="tel"
                     required
                     value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, phone: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                    }}
                     className={getInputClass('phone')}
                     placeholder="Enter phone number"
                     inputMode="tel"
@@ -1189,7 +1198,10 @@ eligibility for partnership in relief operations.
                     type="text"
                     required
                     value={formData.department}
-                    onChange={(e) => setFormData({...formData, department: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, department: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, department: '' }));
+                    }}
                     className={getInputClass('department')}
                     placeholder="Enter department"
                     minLength={MIN_DEPARTMENT_LENGTH}
@@ -1204,7 +1216,10 @@ eligibility for partnership in relief operations.
                   <label className="block text-sm font-medium text-slate-700 mb-2">Role *</label>
                   <select
                     value={formData.role}
-                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, role: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, role: '' }));
+                    }}
                     className={getInputClass('role')}
                   >
                     <option value="dmc_officer">DMC Officer</option>
@@ -1221,7 +1236,10 @@ eligibility for partnership in relief operations.
                   <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
                   <select
                     value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    onChange={(e) => {
+                      setFormData({...formData, status: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, status: '' }));
+                    }}
                     className={getInputClass('status')}
                   >
                     <option value="active">Active</option>
@@ -1295,6 +1313,14 @@ eligibility for partnership in relief operations.
     });
 
     const [formError, setFormError] = useState('');
+    const [fieldErrors, setFieldErrors] = useState({});
+
+    const getInputClass = (field) =>
+      `w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent ${
+        fieldErrors[field]
+          ? 'border-rose-300 bg-rose-50 focus:ring-rose-200'
+          : 'border-slate-200 focus:ring-emerald-500'
+      }`;
 
 
 
@@ -1428,38 +1454,54 @@ eligibility for partnership in relief operations.
 
       e.preventDefault();
 
+      const nextFieldErrors = {};
+
       const name = String(formData.name || '').trim();
       const contactPerson = String(formData.contactPerson || '').trim();
       const email = String(formData.email || '').trim();
       const phone = String(formData.phone || '').trim();
       const address = String(formData.address || '').trim();
+      const specialization = String(formData.specialization || '').trim();
+      const partnershipDate = String(formData.partnershipDate || '').trim();
 
       if (!name || name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
-        setFormError(`Organization name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
-        return;
+        nextFieldErrors.name = `Organization name must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`;
       }
 
       if (!contactPerson || contactPerson.length < MIN_NAME_LENGTH || contactPerson.length > MAX_NAME_LENGTH) {
-        setFormError(`Contact person must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`);
-        return;
+        nextFieldErrors.contactPerson = `Contact person must be between ${MIN_NAME_LENGTH} and ${MAX_NAME_LENGTH} characters.`;
       }
 
       if (!email || !EMAIL_PATTERN.test(email)) {
-        setFormError('Enter a valid email address.');
-        return;
+        nextFieldErrors.email = 'Enter a valid email address.';
       }
 
       const phoneError = validatePhoneNumber(phone);
       if (phoneError) {
-        setFormError(phoneError);
-        return;
+        nextFieldErrors.phone = phoneError;
       }
 
       if (!address || address.length < MIN_ADDRESS_LENGTH || address.length > MAX_ADDRESS_LENGTH) {
-        setFormError(`Address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`);
+        nextFieldErrors.address = `Address must be between ${MIN_ADDRESS_LENGTH} and ${MAX_ADDRESS_LENGTH} characters.`;
+      }
+
+      if (!specialization) {
+        nextFieldErrors.specialization = 'Specialization is required.';
+      }
+
+      if (!partnershipDate) {
+        nextFieldErrors.partnershipDate = 'Partnership date is required.';
+      } else if (Number.isNaN(new Date(partnershipDate).getTime())) {
+        nextFieldErrors.partnershipDate = 'Enter a valid partnership date.';
+      }
+
+      if (Object.keys(nextFieldErrors).length > 0) {
+        setFieldErrors(nextFieldErrors);
+        setFormError('Please fix highlighted fields.');
         return;
       }
 
+      setFieldErrors({});
       setFormError('');
 
       if (partner) {
@@ -1554,12 +1596,16 @@ eligibility for partnership in relief operations.
                     type="text"
                     required
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, name: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, name: '' }));
+                    }}
+                    className={getInputClass('name')}
                     placeholder="Enter organization name"
                     minLength={MIN_NAME_LENGTH}
                     maxLength={MAX_NAME_LENGTH}
                   />
+                  {fieldErrors.name && <p className="mt-1 text-xs text-rose-600">{fieldErrors.name}</p>}
                 </div>
 
                 <div>
@@ -1568,12 +1614,16 @@ eligibility for partnership in relief operations.
                     type="text"
                     required
                     value={formData.contactPerson}
-                    onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, contactPerson: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, contactPerson: '' }));
+                    }}
+                    className={getInputClass('contactPerson')}
                     placeholder="Enter contact person name"
                     minLength={MIN_NAME_LENGTH}
                     maxLength={MAX_NAME_LENGTH}
                   />
+                  {fieldErrors.contactPerson && <p className="mt-1 text-xs text-rose-600">{fieldErrors.contactPerson}</p>}
                 </div>
               </div>
 
@@ -1584,11 +1634,15 @@ eligibility for partnership in relief operations.
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, email: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, email: '' }));
+                    }}
+                    className={getInputClass('email')}
                     placeholder="Enter email address"
                     autoComplete="email"
                   />
+                  {fieldErrors.email && <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>}
                 </div>
 
                 <div>
@@ -1597,11 +1651,15 @@ eligibility for partnership in relief operations.
                     type="tel"
                     required
                     value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, phone: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, phone: '' }));
+                    }}
+                    className={getInputClass('phone')}
                     placeholder="Enter phone number"
                     inputMode="tel"
                   />
+                  {fieldErrors.phone && <p className="mt-1 text-xs text-rose-600">{fieldErrors.phone}</p>}
                 </div>
               </div>
 
@@ -1611,12 +1669,16 @@ eligibility for partnership in relief operations.
                   type="text"
                   required
                   value={formData.address}
-                  onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  onChange={(e) => {
+                    setFormData({...formData, address: e.target.value});
+                    setFieldErrors((prev) => ({ ...prev, address: '' }));
+                  }}
+                  className={getInputClass('address')}
                   placeholder="Enter complete address"
                     minLength={MIN_ADDRESS_LENGTH}
                     maxLength={MAX_ADDRESS_LENGTH}
                 />
+                {fieldErrors.address && <p className="mt-1 text-xs text-rose-600">{fieldErrors.address}</p>}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1624,8 +1686,11 @@ eligibility for partnership in relief operations.
                   <label className="block text-sm font-medium text-slate-700 mb-2">Specialization *</label>
                   <select
                     value={formData.specialization}
-                    onChange={(e) => setFormData({...formData, specialization: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, specialization: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, specialization: '' }));
+                    }}
+                    className={getInputClass('specialization')}
                   >
                     <option value="Emergency Relief">Emergency Relief</option>
                     <option value="Food Distribution">Food Distribution</option>
@@ -1635,6 +1700,7 @@ eligibility for partnership in relief operations.
                     <option value="Logistics">Logistics</option>
                     <option value="General Relief">General Relief</option>
                   </select>
+                  {fieldErrors.specialization && <p className="mt-1 text-xs text-rose-600">{fieldErrors.specialization}</p>}
                 </div>
 
                 <div>
@@ -1643,9 +1709,13 @@ eligibility for partnership in relief operations.
                     type="date"
                     required
                     value={formData.partnershipDate}
-                    onChange={(e) => setFormData({...formData, partnershipDate: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    onChange={(e) => {
+                      setFormData({...formData, partnershipDate: e.target.value});
+                      setFieldErrors((prev) => ({ ...prev, partnershipDate: '' }));
+                    }}
+                    className={getInputClass('partnershipDate')}
                   />
+                  {fieldErrors.partnershipDate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.partnershipDate}</p>}
                 </div>
               </div>
 

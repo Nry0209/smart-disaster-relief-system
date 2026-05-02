@@ -13,8 +13,8 @@ const {
   adminOnly
 } = require('../config/auth');
 
-// Get all resource requests (Inventory Officer and Admin only)
-router.get('/', authenticateToken, inventoryOfficerOnly, listResourceRequests);
+// Get resource requests (staff see all, NGO partners see their own)
+router.get('/', authenticateToken, listResourceRequests);
 
 // Check stock availability (Inventory Officer and Admin only)
 router.post('/check-stock', authenticateToken, inventoryOfficerOnly, checkStockAvailability);
@@ -22,8 +22,8 @@ router.post('/check-stock', authenticateToken, inventoryOfficerOnly, checkStockA
 // Create resource request (Inventory Officer and Admin only)
 router.post('/', authenticateToken, inventoryOfficerOnly, createResourceRequest);
 
-// Get resource request by ID (Inventory Officer and Admin only)
-router.get('/:id', authenticateToken, inventoryOfficerOnly, getResourceRequestById);
+// Get resource request by ID (Inventory Officer, Admin, and linked NGO only)
+router.get('/:id', authenticateToken, getResourceRequestById);
 
 // Update resource request status (Inventory Officer and Admin only)
 router.patch('/:id/status', authenticateToken, inventoryOfficerOnly, updateResourceRequestStatus);

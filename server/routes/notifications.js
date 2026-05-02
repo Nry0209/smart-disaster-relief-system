@@ -1,6 +1,6 @@
 const express = require("express");
 const AuditLog = require("../models/AuditLog");
-const { authenticateToken } = require("../middleware/auth");
+const { authenticateToken } = require("../config/auth");
 
 const router = express.Router();
 

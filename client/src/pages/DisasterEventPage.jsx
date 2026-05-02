@@ -757,7 +757,7 @@ const DisasterEventPage = () => {
     {/* MODAL (ONLY ONE — FIXED) */}
     {isModalOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="professional-form-shell w-full max-w-2xl rounded-2xl p-5 shadow-2xl">
+        <div className="professional-form-shell w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 shadow-2xl">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">Edit Disaster Report</h2>
             <button
@@ -775,8 +775,174 @@ const DisasterEventPage = () => {
             <div className="step-chip active"><span>3</span><p>Update Record</p></div>
           </div>
 
-          <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
-            {/* Form content will continue here */}
+          {errorMessage && (
+            <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {errorMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+            {/* Disaster Type */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Disaster Type <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., Earthquake, Flood, Hurricane"
+                value={formData.disasterType}
+                onChange={(e) => handleFormInput("disasterType", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            {/* Location */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Location <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g., District, City, Region"
+                value={formData.location}
+                onChange={(e) => handleFormInput("location", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            {/* Severity */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Severity <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.severity}
+                onChange={(e) => handleFormInput("severity", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Priority <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => handleFormInput("priority", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            {/* Affected Population */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Affected Population <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                placeholder="Number of people affected"
+                value={formData.affectedPopulation}
+                onChange={(e) => handleFormInput("affectedPopulation", e.target.value)}
+                onKeyDown={preventInvalidPopulationKey}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            {/* Event Date & Time */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Event Date & Time <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.eventDate}
+                onChange={(e) => handleFormInput("eventDate", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Status <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => handleFormInput("status", e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="pending_inventory">Pending Inventory</option>
+                <option value="allocated">Allocated</option>
+                <option value="monitoring">Monitoring</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
+
+            {/* Description */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Description
+              </label>
+              <textarea
+                placeholder="Detailed description of the disaster event..."
+                value={formData.description}
+                onChange={(e) => handleFormInput("description", e.target.value)}
+                rows="4"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <div className="text-xs text-slate-500 mt-1">
+                {formData.description.length} / {MAX_DESCRIPTION_LENGTH} characters
+              </div>
+            </div>
+
+            {/* Immediate Needs */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Immediate Needs (comma-separated)
+              </label>
+              <textarea
+                placeholder="e.g., Medical supplies, Drinking water, Shelter, Food"
+                value={formData.immediateNeedsText}
+                onChange={(e) => handleFormInput("immediateNeedsText", e.target.value)}
+                rows="3"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <div className="text-xs text-slate-500 mt-1">
+                {parseImmediateNeedsFromText(formData.immediateNeedsText).length} / {MAX_IMMEDIATE_NEEDS} items
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="md:col-span-2 flex gap-3 pt-2">
+              <button
+                type="button"
+                className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium text-sm"
+                onClick={closeModal}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Updating..." : "Update Report"}
+              </button>
+            </div>
           </form>
         </div>
       </div>

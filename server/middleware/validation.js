@@ -328,6 +328,11 @@ const validateDonation = [
     .isInt({ min: 1 })
     .withMessage('Each selected donation item must include a quantity greater than zero'),
 
+  body('sourceResourceRequestId')
+    .optional()
+    .isMongoId()
+    .withMessage('sourceResourceRequestId must be a valid MongoDB ID'),
+
   body('quantity')
     .optional()
     .isInt({ min: 1 })

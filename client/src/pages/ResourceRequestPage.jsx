@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CheckCircle, Plus, Send, Trash2, Building2, Package, HandCoins } from "lucide-react";
 import PageHeader from "../components/PageHeader";
+import { useAuth } from "../context/AuthContext";
 import { fetchDisasterReports } from "../services/disasterReportService";
 import {
   checkStockAvailability,
@@ -26,6 +28,7 @@ const DEFAULT_REQUEST_ITEM = {
   inventoryItemId: "",
   category: "",
   itemName: "",
+  packageSize: "",
   unit: "",
   quantity: "",
 };
@@ -68,11 +71,15 @@ function validateEmail(value) {
 }
 
 function formatInventoryLabel(item) {
+  const packageSize = String(item?.packageSize || "").trim();
   const unit = String(item?.unit || "").trim();
-  return unit ? `${item.name} (${unit})` : item.name;
+  const labelParts = [packageSize, unit].filter(Boolean);
+  return labelParts.length ? `${item.name} (${labelParts.join(" ")})` : item.name;
 }
 
 export default function ResourceRequestPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [disasters, setDisasters] = useState([]);
   const [partners, setPartners] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -81,6 +88,7 @@ export default function ResourceRequestPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [requestLink, setRequestLink] = useState("");
   const [fieldErrors, setFieldErrors] = useState({
     ngoPartner: "",
     deliveryWarehouse: "",
@@ -125,6 +133,7 @@ export default function ResourceRequestPage() {
                 id: String(item.id),
                 name: String(item.name),
                 category: String(item.category),
+                packageSize: String(item.packageSize || ""),
                 unit: String(item.unit || "units"),
                 isSelectable: item?.isSelectable !== false,
               }))
@@ -303,7 +312,7 @@ export default function ResourceRequestPage() {
           }));
       }
 
-      await createResourceRequest(payload);
+      const resourceRequest = await createResourceRequest(payload);
       setSuccess("Resource request submitted successfully! We will review and process your request.");
 
       // Reset form
@@ -316,6 +325,18 @@ export default function ResourceRequestPage() {
         problemNote: "",
         expectedDeliveryDate: "",
       });
+
+      const requestId = resourceRequest?._id || resourceRequest?.id;
+      if (requestId) {
+        const inboxPath = `/ngo-inbox?requestId=${requestId}`;
+        setRequestLink(inboxPath);
+
+        if (user?.role === "ngo_partner") {
+          setTimeout(() => {
+            navigate(inboxPath);
+          }, 1200);
+        }
+      }
 
     } catch (err) {
       setError(err.message || "Failed to submit resource request. Please try again.");
@@ -341,6 +362,14 @@ export default function ResourceRequestPage() {
               <CheckCircle size={18} /> Request submitted successfully
             </div>
             <p className="mt-1">We will review and process your request shortly.</p>
+            {requestLink && (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-white p-3 text-slate-700">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Linked NGO inbox page</p>
+                <a className="mt-1 block break-all text-blue-700 hover:underline" href={requestLink}>
+                  {requestLink}
+                </a>
+              </div>
+            )}
           </div>
         )}
 
@@ -511,6 +540,7 @@ export default function ResourceRequestPage() {
                                 ...nextItems[index],
                                 inventoryItemId: selectedId,
                                 itemName: selectedItem?.name || "",
+                                packageSize: selectedItem?.packageSize || "",
                                 unit: selectedItem?.unit || "units",
                               };
                               return { ...prev, items: nextItems };

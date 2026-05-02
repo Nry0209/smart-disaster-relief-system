@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const ResourceRequest = require("../models/ResourceRequest");
+const Donation = require("../models/Donation");
 const InventoryItem = require("../models/InventoryItem");
 const Partner = require("../models/Partner");
 const DisasterReport = require("../models/DisasterReport");
@@ -8,6 +9,91 @@ const { sendResourceRequestEmail } = require("../services/emailService");
 const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
 };
+
+async function resolvePartnerForUser(req) {
+  const userId = String(req.user?.id || "").trim();
+  const normalizedEmail = String(req.user?.email || "").trim().toLowerCase();
+
+  if (!userId && !normalizedEmail) {
+    return null;
+  }
+
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    const partnerByUserId = await Partner.findOne({ userId });
+    if (partnerByUserId) {
+      return partnerByUserId;
+    }
+  }
+
+  if (normalizedEmail) {
+    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const partnerByEmail = await Partner.findOne({
+      email: { $regex: `^${escapedEmail}$`, $options: "i" },
+    });
+    if (partnerByEmail) {
+      return partnerByEmail;
+    }
+  }
+
+  if (req.user?.fullName) {
+    const escapedName = String(req.user.fullName).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const partnerByContact = await Partner.findOne({
+      contactPerson: { $regex: `^${escapedName}$`, $options: "i" },
+    });
+    if (partnerByContact) {
+      return partnerByContact;
+    }
+  }
+
+  return null;
+}
+
+async function attachDonationSummary(resourceRequests) {
+  const requestIds = resourceRequests
+    .map((request) => String(request._id || request.id || ""))
+    .filter(Boolean);
+
+  if (!requestIds.length) {
+    return resourceRequests.map((request) => ({
+      ...request.toObject(),
+      donationSummary: null,
+    }));
+  }
+
+  const donations = await Donation.find({
+    sourceResourceRequestId: { $in: requestIds },
+  })
+    .select("_id sourceResourceRequestId status donationType createdAt verifiedBy verificationNotes")
+    .sort({ createdAt: -1 });
+
+  const donationMap = new Map();
+  donations.forEach((donation) => {
+    const requestId = String(donation.sourceResourceRequestId);
+    if (!donationMap.has(requestId)) {
+      donationMap.set(requestId, donation);
+    }
+  });
+
+  return resourceRequests.map((request) => {
+    const requestId = String(request._id || request.id || "");
+    const donation = donationMap.get(requestId) || null;
+
+    return {
+      id: requestId,
+      ...request.toObject(),
+      donationSummary: donation
+        ? {
+            id: donation._id.toString(),
+            status: donation.status,
+            donationType: donation.donationType,
+            createdAt: donation.createdAt,
+            verifiedBy: donation.verifiedBy || null,
+            verificationNotes: donation.verificationNotes || "",
+          }
+        : null,
+    };
+  });
+}
 
 // Create resource request (NGO/Partner)
 async function createResourceRequest(req, res) {
@@ -78,10 +164,13 @@ async function createResourceRequest(req, res) {
     const resourceRequestData = {
       ngoPartner: partner._id,
       requestType,
+      status: "approved",
       deliveryWarehouse,
       expectedDeliveryDate: deliveryDate,
       problemNote,
       disasterId: disasterId || null,
+      reviewedBy: req.user?.id || null,
+      reviewedAt: new Date(),
     };
 
     // Add request-specific data
@@ -122,6 +211,7 @@ async function createResourceRequest(req, res) {
 
     res.status(201).json({
       message: "Resource request submitted successfully",
+      resourceRequest,
       data: resourceRequest,
       emailSent: !!resourceRequest.emailSentAt
     });
@@ -147,23 +237,35 @@ async function listResourceRequests(req, res) {
     const { page = 1, limit = 10, status, urgency, ngoId, disasterId } = req.query;
     const filter = {};
 
+    if (req.user?.role === "ngo_partner") {
+      const partner = await resolvePartnerForUser(req);
+
+      if (!partner) {
+        return res.status(404).json({ message: "Linked NGO partner profile not found." });
+      }
+
+      filter.ngoPartner = partner._id;
+    }
+
     if (status) filter.status = status;
     if (urgency) filter.urgency = urgency;
-    if (ngoId) filter.ngoId = ngoId;
+    if (ngoId) filter.ngoPartner = ngoId;
     if (disasterId) filter.disasterId = disasterId;
 
     const resourceRequests = await ResourceRequest.find(filter)
-      .populate('ngoId', 'name email')
+      .populate('ngoPartner', 'organizationName contactPerson email phone userId')
       .populate('disasterId', 'disasterType location severityLevel')
       .populate('requestedBy', 'fullName email')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
+    const enrichedRequests = await attachDonationSummary(resourceRequests);
+
     const total = await ResourceRequest.countDocuments(filter);
 
     return res.json({
-      resourceRequests,
+      resourceRequests: enrichedRequests,
       pagination: {
         current: parseInt(page),
         pageSize: parseInt(limit),
@@ -197,7 +299,7 @@ async function getResourceRequestById(req, res) {
     }
 
     const resourceRequest = await ResourceRequest.findById(id)
-      .populate('ngoId', 'name email phone')
+      .populate('ngoPartner', 'organizationName contactPerson email phone userId')
       .populate('disasterId', 'disasterType location severityLevel affectedPopulation')
       .populate('requestedBy', 'fullName email');
 
@@ -205,7 +307,18 @@ async function getResourceRequestById(req, res) {
       return res.status(404).json({ message: "Resource request not found." });
     }
 
-    return res.json({ resourceRequest });
+    if (req.user?.role === "ngo_partner") {
+      const partner = await resolvePartnerForUser(req);
+      const requestPartnerId = String(resourceRequest.ngoPartner?._id || resourceRequest.ngoPartner || "");
+
+      if (!partner || requestPartnerId !== String(partner._id)) {
+        return res.status(403).json({ message: "You do not have access to this resource request." });
+      }
+    }
+
+    const [enrichedRequest] = await attachDonationSummary([resourceRequest]);
+
+    return res.json({ resourceRequest: enrichedRequest });
 
   } catch (error) {
     console.error("Get resource request error:", error);
@@ -243,7 +356,7 @@ async function updateResourceRequestStatus(req, res) {
         notes: notes || "" 
       },
       { new: true, runValidators: true }
-    ).populate('ngoId', 'name email');
+    ).populate('ngoPartner', 'organizationName contactPerson email phone userId');
 
     if (!resourceRequest) {
       return res.status(404).json({ message: "Resource request not found." });

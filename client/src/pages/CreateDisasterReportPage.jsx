@@ -100,6 +100,14 @@ function CreateDisasterReportPage() {
   const [lastEditedAt, setLastEditedAt] = useState(new Date());
   const [inventoryItems, setInventoryItems] = useState([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [touched, setTouched] = useState({
+    disasterType: false,
+    location: false,
+    eventDate: false,
+    affectedPopulation: false,
+    description: false,
+    requiredItems: {},
+  });
 
   useEffect(() => {
     let active = true;
@@ -139,6 +147,19 @@ function CreateDisasterReportPage() {
     const normalizedValue = field === "location" ? String(value || "").replace(/\d/g, "") : value;
     setLastEditedAt(new Date());
     setFormData((prev) => ({ ...prev, [field]: normalizedValue }));
+    // Mark field as touched on change
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const handleFieldBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const handleRequiredItemTouched = (index) => {
+    setTouched((prev) => ({
+      ...prev,
+      requiredItems: { ...prev.requiredItems, [index]: true },
+    }));
   };
 
   const handleAffectedPopulationChange = (value) => {
@@ -166,7 +187,13 @@ function CreateDisasterReportPage() {
         current.itemName = "";
       } else if (field === "itemName") {
         current.itemName = value;
-        current.inventoryItemId = value; // Use item name as ID for new structure
+        // Find the actual inventory item by name and category to get its ID
+        const matchedItem = inventoryItems.find(
+          (inv) =>
+            String(inv.name).toLowerCase() === String(value).toLowerCase() &&
+            String(inv.category) === String(current.category)
+        );
+        current.inventoryItemId = matchedItem ? String(matchedItem.id) : String(value);
       } else {
         current[field] = value;
       }
@@ -477,13 +504,14 @@ function CreateDisasterReportPage() {
 
     const normalizedRequiredItems = (Array.isArray(formData.requiredItems) ? formData.requiredItems : [])
       .map((item) => ({
-        inventoryItemId: String(item.itemName || "").trim(), // Use item name as ID
+        inventoryItemId: String(item.inventoryItemId || item.itemName || "").trim(),
         itemName: String(item.itemName || "").trim(),
         category: String(item.category || "").trim(),
         requiredQuantity: Number(item.requiredQuantity),
       }))
       .filter(
         (item) =>
+          item.inventoryItemId &&
           item.itemName &&
           item.category &&
           Number.isInteger(item.requiredQuantity) &&
@@ -586,13 +614,14 @@ function CreateDisasterReportPage() {
                     className={getFieldClass(fieldErrors.disasterType)}
                     value={formData.disasterType}
                     onChange={(e) => handleInputChange("disasterType", e.target.value)}
+                    onBlur={() => handleFieldBlur("disasterType")}
                   >
                     <option value="">Select disaster type</option>
                     {DISASTER_TYPES.map((type) => (
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
-                  {fieldErrors.disasterType && (
+                  {touched.disasterType && fieldErrors.disasterType && (
                     <p className="text-[11px] font-medium text-rose-600">
                       Disaster type is required.
                     </p>
@@ -611,9 +640,10 @@ function CreateDisasterReportPage() {
                     value={formData.location}
                     onKeyDown={preventNumericKey}
                     onChange={(e) => handleInputChange("location", e.target.value)}
+                    onBlur={() => handleFieldBlur("location")}
                     maxLength={MAX_LOCATION_LENGTH}
                   />
-                  {fieldErrors.location && (
+                  {touched.location && fieldErrors.location && (
                     <p className="text-[11px] font-medium text-rose-600">
                       Location must be 3-120 characters and cannot include numbers.
                     </p>
@@ -646,8 +676,9 @@ function CreateDisasterReportPage() {
                     value={formData.affectedPopulation}
                     onKeyDown={preventInvalidPopulationKey}
                     onChange={(e) => handleAffectedPopulationChange(e.target.value)}
+                    onBlur={() => handleFieldBlur("affectedPopulation")}
                   />
-                  {fieldErrors.affectedPopulation && (
+                  {touched.affectedPopulation && fieldErrors.affectedPopulation && (
                     <p className="text-[11px] font-medium text-rose-600">
                       Must be a whole number between {MIN_AFFECTED_POPULATION} and {MAX_AFFECTED_POPULATION}.
                     </p>
@@ -675,8 +706,9 @@ function CreateDisasterReportPage() {
                     max={getCurrentDateTimeLocal()}
                     step={60}
                     onChange={(e) => handleInputChange("eventDate", e.target.value)}
+                    onBlur={() => handleFieldBlur("eventDate")}
                   />
-                  {fieldErrors.eventDate && (
+                  {touched.eventDate && fieldErrors.eventDate && (
                     <p className="text-[11px] font-medium text-rose-600">
                       Date and time is required and cannot be in the future.
                     </p>
@@ -716,9 +748,10 @@ function CreateDisasterReportPage() {
                     placeholder="Floodwater has entered low-lying residential zones..."
                     value={formData.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
+                    onBlur={() => handleFieldBlur("description")}
                     maxLength={MAX_DESCRIPTION_LENGTH}
                   />
-                  {fieldErrors.description && (
+                  {touched.description && fieldErrors.description && (
                     <p className="text-[11px] font-medium text-rose-600">
                       Summary is required and must not exceed {MAX_DESCRIPTION_LENGTH} characters.
                     </p>
@@ -740,22 +773,27 @@ function CreateDisasterReportPage() {
                   {(Array.isArray(formData.requiredItems) ? formData.requiredItems : []).map((resource, index) => {
                     const itemOptions = getItemsByCategory(resource.category);
                     const itemError = fieldErrors.requiredItems[index];
+                    const showItemError = touched.requiredItems[index] && itemError?.hasError;
 
                     return (
-                      <div key={`required-item-${index}`} className={`grid gap-2 rounded-xl border p-3 md:grid-cols-12 ${itemError?.hasError ? 'border-rose-300 bg-rose-50/60' : 'border-slate-200 bg-slate-50'}`}>
+                      <div key={`required-item-${index}`} className={`grid gap-2 rounded-xl border p-3 md:grid-cols-12 ${showItemError ? 'border-rose-300 bg-rose-50/60' : 'border-slate-200 bg-slate-50'}`}>
                         <label className="space-y-1 md:col-span-4">
                           <span className="text-[11px]">Category</span>
                           <select
-                            className={itemError?.categoryError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
+                            className={touched.requiredItems[index] && itemError?.categoryError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
                             value={resource.category}
-                            onChange={(e) => updateRequiredItem(index, "category", e.target.value)}
+                            onChange={(e) => {
+                              updateRequiredItem(index, "category", e.target.value);
+                              handleRequiredItemTouched(index);
+                            }}
+                            onBlur={() => handleRequiredItemTouched(index)}
                           >
                             <option value="">Select category</option>
                             {categoryOptions.map((category) => (
                               <option key={category} value={category}>{category}</option>
                             ))}
                           </select>
-                          {itemError?.categoryError && (
+                          {touched.requiredItems[index] && itemError?.categoryError && (
                             <p className="text-[11px] font-medium text-rose-600">{itemError.categoryError}</p>
                           )}
                         </label>
@@ -763,9 +801,13 @@ function CreateDisasterReportPage() {
                         <label className="space-y-1 md:col-span-5">
                           <span className="text-[11px]">Item name</span>
                           <select
-                            className={itemError?.itemNameError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
+                            className={touched.requiredItems[index] && itemError?.itemNameError ? "border border-rose-300 bg-rose-50/60 w-full rounded-xl px-3 py-2 text-sm outline-none" : inputBaseClass}
                             value={resource.itemName}
-                            onChange={(e) => updateRequiredItem(index, "itemName", e.target.value)}
+                            onChange={(e) => {
+                              updateRequiredItem(index, "itemName", e.target.value);
+                              handleRequiredItemTouched(index);
+                            }}
+                            onBlur={() => handleRequiredItemTouched(index)}
                             disabled={!resource.category}
                           >
                             <option value="">Select item</option>
@@ -773,7 +815,7 @@ function CreateDisasterReportPage() {
                               <option key={itemName} value={itemName}>{itemName}</option>
                             ))}
                           </select>
-                          {itemError?.itemNameError && (
+                          {touched.requiredItems[index] && itemError?.itemNameError && (
                             <p className="text-[11px] font-medium text-rose-600">{itemError.itemNameError}</p>
                           )}
                         </label>
@@ -788,7 +830,7 @@ function CreateDisasterReportPage() {
                             value={resource.requiredQuantity}
                             onChange={(e) => updateRequiredItem(index, "requiredQuantity", e.target.value)}
                           />
-                          {itemError?.quantityError && (
+                          {touched.requiredItems[index] && itemError?.quantityError && (
                             <p className="text-[11px] font-medium text-rose-600">{itemError.quantityError}</p>
                           )}
                         </label>

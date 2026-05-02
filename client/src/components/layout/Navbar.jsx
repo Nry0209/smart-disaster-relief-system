@@ -21,6 +21,7 @@ function getPageTitle(pathname) {
     "/inventory": "Inventory",
     "/resource-requests": "Resource Requests",
     "/donations/verify": "Donation Verification",
+    "/ngo-inbox": "NGO Inbox",
     "/allocations": "Allocation Plans",
     "/distribution-tracking": "Distribution Tracking",
     "/users": "User Management",

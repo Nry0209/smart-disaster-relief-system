@@ -16,18 +16,31 @@ function getAuthHeaders(includeContentType = false) {
 }
 
 export async function createDisasterReport(payload) {
-  const response = await fetch(`${API_BASE_URL}/api/disaster-reports`, {
-    method: "POST",
-    headers: getAuthHeaders(true),
-    body: JSON.stringify(payload),
-  });
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/disaster-reports`, {
+      method: "POST",
+      headers: getAuthHeaders(true),
+      body: JSON.stringify(payload),
+    });
 
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to create disaster report.");
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      throw new Error(`Server responded with invalid JSON: ${response.status} ${response.statusText}`);
+    }
+
+    if (!response.ok) {
+      throw new Error(data.message || `Request failed with status ${response.status}`);
+    }
+
+    return data;
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      throw new Error(`Network error: Unable to reach server at ${API_BASE_URL}. Make sure the server is running.`);
+    }
+    throw error;
   }
-
-  return data;
 }
 
 export async function fetchDisasterReports(params = {}) {

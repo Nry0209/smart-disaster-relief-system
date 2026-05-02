@@ -17,9 +17,20 @@ const allocationItemSchema = new mongoose.Schema(
       required: true,
       min: 1,
     },
+    stockAvailableAtAllocation: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
     unit: {
       type: String,
       default: "units",
+      trim: true,
+    },
+    packageSize: {
+      type: String,
+      default: "",
       trim: true,
     },
   },
@@ -48,6 +59,12 @@ const allocationSchema = new mongoose.Schema(
         message: "At least one allocated item is required.",
       },
     },
+    allocationDays: {
+      type: Number,
+      required: false,
+      min: 1,
+      default: 1,
+    },
     status: {
       type: String,
       enum: ["draft", "confirmed", "cancelled"],
@@ -57,6 +74,15 @@ const allocationSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    allocatedBy: {
+      type: String,
+      trim: true,
+      default: "Allocation Officer",
+    },
+    allocatedDate: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

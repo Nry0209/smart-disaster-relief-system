@@ -10,7 +10,8 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 4500,
     min: 6000,
     warehouse: "Warehouse 1",
-    unit: "500 ml bottle",
+    packageSize: "500 ml",
+    unit: "bottle",
   },
   {
     name: "Dry Ration",
@@ -18,7 +19,8 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 3900,
     min: 3500,
     warehouse: "Warehouse 1",
-    unit: "1 kg pack",
+    packageSize: "1 kg",
+    unit: "pack",
   },
   {
     name: "Blankets",
@@ -26,7 +28,8 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 2600,
     min: 2000,
     warehouse: "Warehouse 2",
-    unit: "1 pc",
+    packageSize: "1 piece",
+    unit: "piece",
   },
   {
     name: "Tents",
@@ -34,7 +37,8 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 240,
     min: 400,
     warehouse: "Warehouse 3",
-    unit: "1 unit",
+    packageSize: "1 tent",
+    unit: "unit",
   },
   {
     name: "Medicine Kits",
@@ -42,12 +46,13 @@ const DEFAULT_INVENTORY_ITEMS = [
     stock: 310,
     min: 500,
     warehouse: "Warehouse 2",
-    unit: "1 kit",
+    packageSize: "1 kit",
+    unit: "kit",
   },
 ];
 
 const ALLOWED_ACTION_TYPES = ["adjust", "consume", "restock"];
-const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse", "unit"];
+const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse", "packageSize", "unit"];
 
 function isDbConnected() {
   return mongoose.connection.readyState === 1;
@@ -100,6 +105,7 @@ function formatInventoryItem(item) {
     stock: item.stock,
     min: item.min,
     warehouse: item.warehouse,
+    packageSize: item.packageSize || "",
     unit: item.unit || "units",
     status: item.status,
     isSelectable,
@@ -131,10 +137,18 @@ async function createActivityLog(data) {
 
 async function createInventoryItem(req, res) {
   try {
-    const { name, category, stock, min, warehouse, unit, performedBy } = req.body;
+    const { name, category, stock, min, warehouse, packageSize, unit, performedBy } = req.body;
 
     if (!name || category === undefined || stock === undefined || min === undefined) {
       return res.status(400).json({ message: "name, category, stock, and min are required." });
+    }
+
+    if (!String(packageSize || "").trim()) {
+      return res.status(400).json({ message: "packageSize is required." });
+    }
+
+    if (!String(unit || "").trim()) {
+      return res.status(400).json({ message: "unit is required." });
     }
 
     const normalizedCategory = normalizeCategory(category);
@@ -161,6 +175,7 @@ async function createInventoryItem(req, res) {
       stock: stockValue,
       min: minValue,
       warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
+      packageSize: String(packageSize || "").trim(),
       unit: String(unit || "units").trim() || "units",
     });
 
@@ -184,6 +199,10 @@ async function createInventoryItem(req, res) {
 async function listInventoryItems(req, res) {
   try {
     const { category, search, warehouse, status } = req.query;
+    const normalizedCategoryQuery = String(category || "").trim();
+    const normalizedSearchQuery = String(search || "").trim();
+    const normalizedWarehouseQuery = String(warehouse || "").trim();
+    const normalizedStatusQuery = String(status || "").trim();
 
     if (!isDbConnected()) {
       return res.status(503).json({
@@ -193,30 +212,34 @@ async function listInventoryItems(req, res) {
 
     const filter = {};
 
-    if (category && String(category).toLowerCase() !== "all") {
-      const normalizedCategory = normalizeCategory(category);
+    if (normalizedCategoryQuery && normalizedCategoryQuery.toLowerCase() !== "all") {
+      const normalizedCategory = normalizeCategory(normalizedCategoryQuery);
       if (!normalizedCategory) {
         return res.status(400).json({ message: "Invalid category filter value." });
       }
       filter.category = normalizedCategory;
     }
 
-    if (warehouse) {
-      filter.warehouse = { $regex: String(warehouse).trim(), $options: "i" };
+    if (normalizedWarehouseQuery) {
+      filter.warehouse = { $regex: normalizedWarehouseQuery, $options: "i" };
     }
 
-    if (search) {
-      const searchQuery = String(search).trim();
+    if (normalizedSearchQuery) {
       filter.$or = [
-        { name: { $regex: searchQuery, $options: "i" } },
-        { category: { $regex: searchQuery, $options: "i" } },
-        { warehouse: { $regex: searchQuery, $options: "i" } },
+        { name: { $regex: normalizedSearchQuery, $options: "i" } },
+        { category: { $regex: normalizedSearchQuery, $options: "i" } },
+        { warehouse: { $regex: normalizedSearchQuery, $options: "i" } },
       ];
     }
 
     let items = await InventoryItem.find(filter).sort({ updatedAt: -1 });
 
-    const hasFilters = Boolean(category || search || warehouse || status);
+    const hasFilters = Boolean(
+      (normalizedCategoryQuery && normalizedCategoryQuery.toLowerCase() !== "all") ||
+      normalizedSearchQuery ||
+      normalizedWarehouseQuery ||
+      normalizedStatusQuery
+    );
 
     if (!items.length && !hasFilters) {
       // Count activities by aggregating across items
@@ -253,8 +276,8 @@ async function listInventoryItems(req, res) {
 
     let formatted = items.map(formatInventoryItem);
 
-    if (status) {
-      const normalizedStatus = String(status).trim().toLowerCase();
+    if (normalizedStatusQuery) {
+      const normalizedStatus = normalizedStatusQuery.toLowerCase();
       formatted = formatted.filter((item) => item.stockStatus === normalizedStatus);
     }
 
@@ -386,6 +409,14 @@ async function updateInventoryItem(req, res) {
         return res.status(400).json({ message: "warehouse cannot be empty." });
       }
       updates.warehouse = normalizedWarehouse;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updates, "packageSize")) {
+      const normalizedPackageSize = String(updates.packageSize || "").trim();
+      if (!normalizedPackageSize) {
+        return res.status(400).json({ message: "packageSize cannot be empty." });
+      }
+      updates.packageSize = normalizedPackageSize;
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "unit")) {

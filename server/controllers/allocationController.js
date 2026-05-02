@@ -2,8 +2,20 @@ const mongoose = require("mongoose");
 const Allocation = require("../models/Allocation");
 const DisasterReport = require("../models/DisasterReport");
 const InventoryItem = require("../models/InventoryItem");
-const inventoryActivityService = require("../services/inventoryActivityService");
 const TrackingRecord = require("../models/TrackingRecord");
+
+// Safely import inventoryActivityService with fallback
+let inventoryActivityService;
+try {
+  inventoryActivityService = require("../services/inventoryActivityService");
+} catch (error) {
+  console.error('Failed to load inventoryActivityService:', error);
+  // Create a no-op fallback to prevent errors
+  inventoryActivityService = {
+    createActivity: async () => null,
+    listActivities: async () => []
+  };
+}
 
 const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -12,7 +24,7 @@ const isDbConnected = () => {
 // Create allocation plan (Allocation Officer)
 async function createAllocation(req, res) {
   try {
-    const { disasterId, items, notes } = req.body;
+    const { disasterId, items, notes, allocationDays } = req.body;
 
     if (!isDbConnected()) {
       return res.status(503).json({
@@ -20,77 +32,85 @@ async function createAllocation(req, res) {
       });
     }
 
-    // Validate required fields
-    if (!disasterId || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ 
-        message: "Disaster ID and items array are required." 
+    if (!disasterId || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: "disasterId and at least one allocation item are required.",
       });
     }
 
-    // Validate disaster exists
+    const days = Number(allocationDays) || 1;
+    if (!Number.isInteger(days) || days < 1) {
+      return res.status(400).json({
+        message: "Allocation days must be an integer >= 1.",
+      });
+    }
+
     const disaster = await DisasterReport.findById(disasterId);
     if (!disaster) {
       return res.status(404).json({ message: "Disaster report not found." });
     }
 
-    // Check if allocation already exists for this disaster
-    const existingAllocation = await Allocation.findOne({ 
-      disasterId, 
-      status: { $in: ["draft", "confirmed"] } 
+    const existingAllocation = await Allocation.findOne({
+      disasterId,
+      status: { $in: ["draft", "confirmed"] },
     });
-    
+
     if (existingAllocation) {
-      return res.status(400).json({ 
-        message: "Allocation already exists for this disaster." 
+      return res.status(400).json({
+        message: "Allocation already exists for this disaster.",
       });
     }
 
-    // Validate and check stock for each item
     const allocationItems = [];
     const stockChecks = [];
 
     for (const item of items) {
-      if (!item.inventoryItemId || !item.quantityAllocated || item.quantityAllocated <= 0) {
-        return res.status(400).json({ 
-          message: "Each item must have valid inventoryItemId and quantityAllocated." 
+      const quantityAllocated = Number(item.quantityAllocated);
+
+      if (!item.inventoryItemId || !Number.isFinite(quantityAllocated) || quantityAllocated <= 0) {
+        return res.status(400).json({
+          message: "Each item must have valid inventoryItemId and quantityAllocated.",
         });
       }
 
       const inventoryItem = await InventoryItem.findById(item.inventoryItemId);
       if (!inventoryItem) {
-        return res.status(404).json({ 
-          message: `Inventory item not found: ${item.inventoryItemId}` 
+        return res.status(404).json({
+          message: `Inventory item not found: ${item.inventoryItemId}`,
         });
       }
 
-      if (inventoryItem.stock < item.quantityAllocated) {
-        return res.status(400).json({ 
-          message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.stock}, Requested: ${item.quantityAllocated}` 
+      if (inventoryItem.stock < quantityAllocated) {
+        return res.status(400).json({
+          message: `Insufficient stock for ${inventoryItem.name}. Available: ${inventoryItem.stock}, Requested: ${quantityAllocated}`,
         });
       }
 
       allocationItems.push({
         inventoryItemId: item.inventoryItemId,
         itemName: inventoryItem.name,
-        quantityAllocated: item.quantityAllocated,
-        unit: inventoryItem.unit
+        quantityAllocated,
+        stockAvailableAtAllocation: inventoryItem.stock,
+        unit: inventoryItem.unit,
+        packageSize: inventoryItem.packageSize || "",
       });
 
       stockChecks.push({
         itemName: inventoryItem.name,
-        allocatedQuantity: item.quantityAllocated,
+        allocatedQuantity: quantityAllocated,
         availableStock: inventoryItem.stock,
-        remainingStock: inventoryItem.stock - item.quantityAllocated
       });
     }
 
-    // Create allocation
     const allocation = new Allocation({
       disasterId,
       createdBy: req.user.id,
       items: allocationItems,
+      allocationDays: days,
       notes: notes || "",
-      status: "draft"
+      allocatedDate: new Date(),
+      allocatedBy: req.user.fullName || "Allocation Officer",
+      status: "draft",
     });
 
     await allocation.save();
@@ -98,7 +118,7 @@ async function createAllocation(req, res) {
     return res.status(201).json({
       message: "Allocation plan created successfully.",
       allocation,
-      stockChecks
+      stockChecks,
     });
 
   } catch (error) {
@@ -173,20 +193,25 @@ async function confirmAllocation(req, res) {
       await inventoryItem.save();
 
       // Create inventory activity record
-      await inventoryActivityService.createActivity({
-        itemId: update.inventoryItemId,
-        itemName: update.itemName,
-        category: inventoryItem.category,
-        type: "allocation",
-        quantity: update.allocatedQuantity,
-        previousStock: update.previousStock,
-        newStock: update.newStock,
-        referenceId: allocation._id,
-        referenceType: "allocation",
-        performedBy: req.user.id,
-        performedByName: req.user.fullName || req.user.name,
-        notes: `Allocated for disaster: ${allocation.disasterId.disasterType} at ${allocation.disasterId.location}`
-      });
+      try {
+        await inventoryActivityService.createActivity({
+          itemId: update.inventoryItemId,
+          itemName: update.itemName,
+          category: inventoryItem.category,
+          type: "allocation",
+          quantity: update.allocatedQuantity,
+          previousStock: update.previousStock,
+          newStock: update.newStock,
+          referenceId: allocation._id,
+          referenceType: "allocation",
+          performedBy: req.user.id,
+          performedByName: req.user.fullName || req.user.name,
+          notes: `Allocated for disaster: ${allocation.disasterId.disasterType} at ${allocation.disasterId.location}`
+        });
+      } catch (activityError) {
+        console.error('Failed to create inventory activity record:', activityError);
+        // Don't fail the allocation if activity logging fails
+      }
     }
 
     // Update allocation status
@@ -210,6 +235,27 @@ async function confirmAllocation(req, res) {
         lastUpdated: new Date()
       }
     });
+
+    // Create tracking record for the allocation
+    try {
+      const trackingRecord = new TrackingRecord({
+        disasterId: allocation.disasterId._id,
+        allocationId: allocation._id,
+        status: "pending_dispatch",
+        transportAssetId: null,
+        currentLocation: "Warehouse",
+        dispatchDate: new Date(),
+        estimatedDeliveryDate: new Date(Date.now() + (allocationDays || 3) * 24 * 60 * 60 * 1000), // Default 3 days
+        notes: `Allocation created for ${allocation.disasterId.disasterType} at ${allocation.disasterId.location}`,
+        createdBy: req.user.id
+      });
+      
+      await trackingRecord.save();
+      console.log('Tracking record created for allocation:', allocation._id);
+    } catch (trackingError) {
+      console.error('Failed to create tracking record:', trackingError);
+      // Don't fail the allocation if tracking record creation fails
+    }
 
     return res.json({
       message: "Allocation confirmed successfully. Inventory updated.",

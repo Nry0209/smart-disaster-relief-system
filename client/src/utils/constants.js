@@ -117,6 +117,11 @@ export const SIDEBAR_ITEMS = [
     roles: [ROLES.NGO],
   },
   {
+    label: "NGO Inbox",
+    path: "/ngo-inbox",
+    roles: [ROLES.NGO],
+  },
+  {
     label: "Resource Requests",
     path: "/resource-requests",
     roles: [ROLES.ADMIN, ROLES.INVENTORY],

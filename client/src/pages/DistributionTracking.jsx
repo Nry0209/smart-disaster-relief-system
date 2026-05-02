@@ -292,6 +292,11 @@ export default function DistributionTracking() {
 
         <section className="professional-form-shell mt-6 rounded-3xl p-6">
           <h2 className="mb-4 text-lg font-semibold">Allocation Plans Ready for Tracking</h2>
+          {readyTrackingPlans.length > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {readyTrackingPlans.length} allocation plan{readyTrackingPlans.length > 1 ? "s are" : " is"} awaiting dispatch record creation by the tracking officer.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="requests-table">
               <thead>

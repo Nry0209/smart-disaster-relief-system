@@ -51,6 +51,15 @@ const allocatedResourcesSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    incidentDate: {
+      type: Date,
+      default: null,
+    },
+    allocatedDays: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     allocatedBy: {
       type: String,
       default: "",

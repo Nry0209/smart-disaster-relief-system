@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Package, CheckCircle, Heart, Loader, Warehouse } from "lucide-react";
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import { fetchInventoryItems } from "../services/inventoryService";
-import { createNGODonation } from "../services/workflowService";
+import { createNGODonation, fetchResourceRequestById } from "../services/workflowService";
 import { ITEM_CATEGORY_LIST } from "../utils/constants";
 import "./Pages.css";
 
@@ -19,6 +19,7 @@ const DEFAULT_DONATION_ITEM = {
   inventoryItemId: "",
   category: "",
   itemName: "",
+  packageSize: "",
   unit: "",
   quantity: "",
 };
@@ -44,19 +45,25 @@ function validatePhone(value) {
 }
 
 function formatInventoryLabel(item) {
+  const packageSize = String(item?.packageSize || "").trim();
   const unit = String(item?.unit || "").trim();
-  return unit ? `${item.name} (${unit})` : item.name;
+  const labelParts = [packageSize, unit].filter(Boolean);
+  return labelParts.length ? `${item.name} (${labelParts.join(" ")})` : item.name;
 }
 
 export default function NGODonationPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
+  const requestId = searchParams.get("requestId");
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [linkedRequest, setLinkedRequest] = useState(null);
+  const [requestLoading, setRequestLoading] = useState(false);
   
   const [form, setForm] = useState({
     donationType: "inventory",
@@ -92,13 +99,19 @@ export default function NGODonationPage() {
         const normalized = Array.isArray(items)
           ? items
               .filter((item) => item?.id && item?.name && item?.category && item?.isSelectable !== false)
-              .map((item) => ({
-                id: String(item.id),
-                name: String(item.name),
-                category: String(item.category),
-                unit: String(item.unit || "units"),
-                isSelectable: item?.isSelectable !== false,
-              }))
+              .map((item) => {
+                const rawStock = item?.stock ?? item?.quantityAvailable ?? item?.quantity ?? 0;
+                const parsedStock = Number(rawStock) || 0;
+                return {
+                  id: String(item.id),
+                  name: String(item.name),
+                  category: String(item.category),
+                  packageSize: String(item.packageSize || ""),
+                  unit: String(item.unit || "units"),
+                  isSelectable: item?.isSelectable !== false,
+                  stock: parsedStock,
+                };
+              })
           : [];
 
         setInventoryItems(normalized);
@@ -115,6 +128,63 @@ export default function NGODonationPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadRequest() {
+      if (!requestId) {
+        setLinkedRequest(null);
+        return;
+      }
+
+      try {
+        setRequestLoading(true);
+        const request = await fetchResourceRequestById(requestId);
+
+        if (!active) return;
+
+        setLinkedRequest(request || null);
+
+        if (request?.ngoPartner) {
+          setForm((prev) => ({
+            ...prev,
+            organizationName: request.ngoPartner.organizationName || prev.organizationName,
+            email: request.ngoPartner.email || prev.email,
+            phone: request.ngoPartner.phone || prev.phone,
+            donationType: request.requestType === "monetary" ? "monetary" : "inventory",
+            amount:
+              request.requestType === "monetary" ? String(Number(request.amount || 0)) : prev.amount,
+            items:
+              request.requestType === "inventory" && Array.isArray(request.items) && request.items.length
+                ? request.items.map((item) => ({
+                    inventoryItemId: item.resourceId || item.inventoryItemId || "",
+                    category: item.category || "",
+                    itemName: item.itemName || "",
+                    unit: item.unit || "units",
+                    quantity: String(item.quantity || ""),
+                  }))
+                : prev.items,
+            notes: request.problemNote
+              ? `Responding to resource request: ${request.problemNote}`
+              : prev.notes,
+          }));
+        }
+      } catch (requestError) {
+        if (active) {
+          setLinkedRequest(null);
+          setError(requestError.message || "Failed to load linked resource request.");
+        }
+      } finally {
+        if (active) setRequestLoading(false);
+      }
+    }
+
+    loadRequest();
+    return () => {
+      active = false;
+    };
+  }, [requestId]);
 
   const categoryOptions = useMemo(() => {
     return [...new Set(inventoryItems.filter((item) => item.isSelectable !== false).map((item) => item.category))].sort((a, b) =>
@@ -243,6 +313,7 @@ export default function NGODonationPage() {
         organizationName: form.organizationName,
         email: form.email,
         phone: form.phone,
+        ...(requestId && { sourceResourceRequestId: requestId }),
         ...(form.donationType === "monetary" && { amount: Number(form.amount) }),
         ...(form.donationType === "inventory" && {
           items: form.items.map((item) => ({
@@ -322,13 +393,27 @@ export default function NGODonationPage() {
                 <p>No inventory items available</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {inventoryItems.map((item) => (
-                  <div key={item.id} className="p-3 bg-slate-50 rounded border border-slate-200 hover:bg-slate-100 transition">
-                    <p className="font-medium text-sm text-slate-900">{formatInventoryLabel(item)}</p>
-                    <p className="text-xs text-slate-500">{item.category}</p>
-                  </div>
-                ))}
+              <div className="max-h-96 overflow-y-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="text-left text-xs text-slate-500">
+                      <th className="pb-2">Category</th>
+                      <th className="pb-2">Item</th>
+                      <th className="pb-2">Size</th>
+                      <th className="pb-2">Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryItems.map((item) => (
+                      <tr key={item.id} className="border-t hover:bg-slate-50">
+                        <td className="py-3 text-slate-700">{item.category}</td>
+                        <td className="py-3 font-medium text-slate-900">{formatInventoryLabel(item)}</td>
+                        <td className="py-3 text-slate-700">{item.packageSize || item.unit || "units"}</td>
+                        <td className="py-3 text-slate-700">{Number(item.stock || 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -337,6 +422,31 @@ export default function NGODonationPage() {
         {/* Donation Form */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-lg border border-slate-200 p-8">
+            {requestId && (
+              <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex items-center gap-2 text-blue-900 font-semibold">
+                  <Package className="w-4 h-4" /> Linked Resource Request
+                </div>
+                {requestLoading ? (
+                  <p className="mt-2 text-sm text-blue-800">Loading request details...</p>
+                ) : linkedRequest ? (
+                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                    <p><span className="font-medium">Warehouse:</span> {linkedRequest.deliveryWarehouse || "-"}</p>
+                    <p><span className="font-medium">Status:</span> {linkedRequest.status || "-"}</p>
+                    <p><span className="font-medium">Problem:</span> {linkedRequest.problemNote || "-"}</p>
+                    {Array.isArray(linkedRequest.items) && linkedRequest.items.length > 0 && (
+                      <p><span className="font-medium">Requested Items:</span> {linkedRequest.items.map((item) => `${item.itemName} x ${item.quantity}`).join(", ")}</p>
+                    )}
+                    {linkedRequest.amount ? (
+                      <p><span className="font-medium">Requested Amount:</span> LKR {Number(linkedRequest.amount).toLocaleString()}</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-rose-700">Unable to load the linked request.</p>
+                )}
+              </div>
+            )}
+
             {success ? (
               <div className="text-center py-12">
                 <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
@@ -482,6 +592,7 @@ export default function NGODonationPage() {
                                   updateItemField(index, "inventoryItemId", selectedId);
                                   if (selectedItem) {
                                     updateItemField(index, "itemName", selectedItem.name);
+                                    updateItemField(index, "packageSize", selectedItem.packageSize || "");
                                     updateItemField(index, "unit", selectedItem.unit || "units");
                                   }
                                 }}
