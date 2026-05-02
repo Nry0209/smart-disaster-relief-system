@@ -126,6 +126,7 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [notice, setNotice] = useState("");
   const canManageInventory = user?.role === "admin" || user?.role === "inventory_officer";
   const pageRoleLabel = canManageInventory
@@ -208,6 +209,7 @@ export default function InventoryPage() {
     setModal(null);
     setItemForm(DEFAULT_ITEM_FORM);
     setActionForm(DEFAULT_ACTION_FORM);
+    setFieldErrors({});
   }
 
   function openActionModal(type) {
@@ -234,36 +236,33 @@ export default function InventoryPage() {
       return;
     }
 
+    setFieldErrors({});
+
     const normalizedName = itemForm.name.trim();
     const normalizedPackageSize = String(itemForm.packageSize || "").trim();
-    const normalizedUnit = String(itemForm.unit || "").trim();
     const stock = Number(itemForm.stock);
     const min = Number(itemForm.min);
     const normalizedWarehouse = itemForm.warehouse.trim();
+    const nextFieldErrors = {};
 
     if (!normalizedName) {
-      setError("Item name is required.");
-      return;
+      nextFieldErrors.name = "Item name is required.";
     }
 
     if (!itemForm.category) {
-      setError("Category is required.");
-      return;
+      nextFieldErrors.category = "Category is required.";
     }
 
     if (normalizedName.length < 2) {
-      setError("Item name must be at least 2 characters.");
-      return;
+      nextFieldErrors.name = "Item name must be at least 2 characters.";
     }
 
     if (normalizedName.length > MAX_ITEM_NAME_LENGTH) {
-      setError(`Item name cannot exceed ${MAX_ITEM_NAME_LENGTH} characters.`);
-      return;
+      nextFieldErrors.name = `Item name cannot exceed ${MAX_ITEM_NAME_LENGTH} characters.`;
     }
 
     if (!normalizedPackageSize) {
-      setError("Measure is required.");
-      return;
+      nextFieldErrors.packageSize = "Measure is required.";
     }
 
     // Find existing item with same name, package size, unit, and category
@@ -275,7 +274,29 @@ export default function InventoryPage() {
     );
 
     if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
-      setError("Stock and minimum values must be whole numbers (0 or greater).");
+      nextFieldErrors.stock = "Stock must be a whole number (0 or greater).";
+      nextFieldErrors.min = "Minimum must be a whole number (0 or greater).";
+    }
+
+    if (!Number.isInteger(stock) || stock < 0) {
+      nextFieldErrors.stock = "Stock must be a whole number (0 or greater).";
+    }
+
+    if (!Number.isInteger(min) || min < 0) {
+      nextFieldErrors.min = "Minimum must be a whole number (0 or greater).";
+    }
+
+    if (normalizedWarehouse.length < MIN_WAREHOUSE_LENGTH) {
+      nextFieldErrors.warehouse = `Warehouse must be at least ${MIN_WAREHOUSE_LENGTH} characters.`;
+    }
+
+    if (normalizedWarehouse.length > MAX_WAREHOUSE_LENGTH) {
+      nextFieldErrors.warehouse = `Warehouse cannot exceed ${MAX_WAREHOUSE_LENGTH} characters.`;
+    }
+
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setError("Please fix highlighted fields.");
       return;
     }
 
@@ -296,7 +317,6 @@ export default function InventoryPage() {
           name: normalizedName,
           category: itemForm.category,
           packageSize: normalizedPackageSize,
-          unit: normalizedUnit || "",
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -313,7 +333,6 @@ export default function InventoryPage() {
           name: normalizedName,
           category: itemForm.category,
           packageSize: normalizedPackageSize,
-          unit: normalizedUnit,
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -632,6 +651,7 @@ export default function InventoryPage() {
             </div>
 
             <div className="inventory-modal-body">
+              {error && <div className="inventory-inline-alert error">{error}</div>}
               {(modal === "add" || modal === "edit") && (
                 <>
                   <div className="form-group">
@@ -640,18 +660,21 @@ export default function InventoryPage() {
                       value={itemForm.category}
                       onChange={(event) => {
                         const newCategory = event.target.value;
-                        setItemForm((prev) => ({ 
-                          ...prev, 
+                        setFieldErrors((prev) => ({ ...prev, category: "" }));
+                        setItemForm((prev) => ({
+                          ...prev,
                           category: newCategory,
-                          name: "" // Reset item name when category changes
+                          name: ""
                         }));
                       }}
+                      className={fieldErrors.category ? "border border-rose-300 bg-rose-50/60" : ""}
                     >
                       <option value="">Select category</option>
                       {Object.values(ITEM_CATEGORIES).map((category) => (
                         <option key={category} value={category}>{category}</option>
                       ))}
                     </select>
+                    {fieldErrors.category && <p className="mt-1 text-xs text-rose-600">{fieldErrors.category}</p>}
                   </div>
                   <div className="form-group">
                     <label>Item Name</label>
@@ -660,6 +683,7 @@ export default function InventoryPage() {
                       onChange={(event) => {
                         const itemName = event.target.value;
                         const autoFillMin = getAutoFillMinThreshold(itemForm.category, itemName);
+                        setFieldErrors((prev) => ({ ...prev, name: "" }));
                         setItemForm((prev) => ({ 
                           ...prev, 
                           name: itemName,
@@ -667,21 +691,28 @@ export default function InventoryPage() {
                         }));
                       }}
                       disabled={!itemForm.category}
+                      className={fieldErrors.name ? "border border-rose-300 bg-rose-50/60" : ""}
                     >
                       <option value="">Select item</option>
                       {itemForm.category && ITEM_MAPPING[itemForm.category]?.map((itemName) => (
                         <option key={itemName} value={itemName}>{itemName}</option>
                       ))}
                     </select>
+                    {fieldErrors.name && <p className="mt-1 text-xs text-rose-600">{fieldErrors.name}</p>}
                   </div>
                   <div className="form-group">
                     <label>Measure</label>
                     <input
                       type="text"
                       value={itemForm.packageSize || ""}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, packageSize: event.target.value }))}
+                      onChange={(event) => {
+                        setFieldErrors((prev) => ({ ...prev, packageSize: "" }));
+                        setItemForm((prev) => ({ ...prev, packageSize: event.target.value }));
+                      }}
                       placeholder="e.g. 5 kg bottle, 1 L, 10 tablets"
+                      className={fieldErrors.packageSize ? "border border-rose-300 bg-rose-50/60" : ""}
                     />
+                    {fieldErrors.packageSize && <p className="mt-1 text-xs text-rose-600">{fieldErrors.packageSize}</p>}
                   </div>
                   <div className="form-group">
                     <label>Amount</label>
@@ -690,8 +721,13 @@ export default function InventoryPage() {
                       min="0"
                       step="1"
                       value={itemForm.stock}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, stock: event.target.value }))}
+                      onChange={(event) => {
+                        setFieldErrors((prev) => ({ ...prev, stock: "" }));
+                        setItemForm((prev) => ({ ...prev, stock: event.target.value }));
+                      }}
+                      className={fieldErrors.stock ? "border border-rose-300 bg-rose-50/60" : ""}
                     />
+                    {fieldErrors.stock && <p className="mt-1 text-xs text-rose-600">{fieldErrors.stock}</p>}
                   </div>
                   <div className="form-group">
                     <label>Minimum Threshold</label>
@@ -700,19 +736,29 @@ export default function InventoryPage() {
                       min="0"
                       step="1"
                       value={itemForm.min}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, min: event.target.value }))}
+                      onChange={(event) => {
+                        setFieldErrors((prev) => ({ ...prev, min: "" }));
+                        setItemForm((prev) => ({ ...prev, min: event.target.value }));
+                      }}
+                      className={fieldErrors.min ? "border border-rose-300 bg-rose-50/60" : ""}
                     />
+                    {fieldErrors.min && <p className="mt-1 text-xs text-rose-600">{fieldErrors.min}</p>}
                   </div>
                   <div className="form-group">
                     <label>Warehouse</label>
                     <select
                       value={itemForm.warehouse}
-                      onChange={(event) => setItemForm((prev) => ({ ...prev, warehouse: event.target.value }))}
+                      onChange={(event) => {
+                        setFieldErrors((prev) => ({ ...prev, warehouse: "" }));
+                        setItemForm((prev) => ({ ...prev, warehouse: event.target.value }));
+                      }}
+                      className={fieldErrors.warehouse ? "border border-rose-300 bg-rose-50/60" : ""}
                     >
                       {WAREHOUSE_OPTIONS.map((warehouse) => (
                         <option key={warehouse} value={warehouse}>{warehouse}</option>
                       ))}
                     </select>
+                    {fieldErrors.warehouse && <p className="mt-1 text-xs text-rose-600">{fieldErrors.warehouse}</p>}
                   </div>
                 </>
               )}

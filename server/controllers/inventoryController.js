@@ -147,10 +147,6 @@ async function createInventoryItem(req, res) {
       return res.status(400).json({ message: "packageSize is required." });
     }
 
-    if (!String(unit || "").trim()) {
-      return res.status(400).json({ message: "unit is required." });
-    }
-
     const normalizedCategory = normalizeCategory(category);
     if (!normalizedCategory) {
       return res.status(400).json({ message: "Invalid category value." });
@@ -176,7 +172,7 @@ async function createInventoryItem(req, res) {
       min: minValue,
       warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
       packageSize: String(packageSize || "").trim(),
-      unit: String(unit || "units").trim() || "units",
+      unit: String(unit || "").trim() || "units",
     });
 
     await createActivityLog({
