@@ -395,6 +395,53 @@ async function updateResourceRequestStatus(req, res) {
   }
 }
 
+// Delete resource request (linked NGO owner only)
+async function deleteResourceRequest(req, res) {
+  try {
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid resource request ID." });
+    }
+
+    const resourceRequest = await ResourceRequest.findById(id).populate('ngoPartner', 'userId email organizationName contactPerson');
+
+    if (!resourceRequest) {
+      return res.status(404).json({ message: "Resource request not found." });
+    }
+
+    if (req.user?.role !== "ngo_partner") {
+      return res.status(403).json({ message: "Only NGO partners can remove their own resource requests." });
+    }
+
+    const partner = await resolvePartnerForUser(req);
+    const requestPartnerId = String(resourceRequest.ngoPartner?._id || resourceRequest.ngoPartner || "");
+
+    if (!partner || requestPartnerId !== String(partner._id)) {
+      return res.status(403).json({ message: "You can only remove your own resource requests." });
+    }
+
+    await ResourceRequest.findByIdAndDelete(id);
+
+    return res.json({
+      message: "Resource request removed successfully.",
+      deletedId: id,
+    });
+  } catch (error) {
+    console.error("Delete resource request error:", error);
+    return res.status(500).json({
+      message: "Failed to delete resource request.",
+      error: error.message,
+    });
+  }
+}
+
 // Get stock availability for items
 async function checkStockAvailability(req, res) {
   try {
@@ -450,5 +497,6 @@ module.exports = {
   listResourceRequests,
   getResourceRequestById,
   updateResourceRequestStatus,
+  deleteResourceRequest,
   checkStockAvailability
 };

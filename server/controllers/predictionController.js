@@ -93,6 +93,27 @@ const predictResources = async (req, res) => {
   }
 };
 
+const deletePredictionLog = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid prediction log ID." });
+    }
+
+    const deleted = await PredictionLog.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "Prediction log not found." });
+    }
+
+    return res.status(200).json({ success: true, message: "Prediction log deleted successfully." });
+  } catch (error) {
+    console.error("Prediction log delete error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to delete prediction log." });
+  }
+};
+
 const getPredictionLogs = async (req, res) => {
   try {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25)));
@@ -132,4 +153,4 @@ const getPredictionLogs = async (req, res) => {
   }
 };
 
-module.exports = { predictResources, getPredictionLogs };
+module.exports = { predictResources, getPredictionLogs, deletePredictionLog };

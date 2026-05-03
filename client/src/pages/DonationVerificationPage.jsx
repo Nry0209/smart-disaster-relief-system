@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "../components/PageHeader";
-import { fetchDonations, verifyDonationById } from "../services/workflowService";
+import { deleteDonationById, fetchDonations, verifyDonationById } from "../services/workflowService";
 import "./Pages.css";
 
 export default function DonationVerificationPage() {
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -59,6 +60,26 @@ export default function DonationVerificationPage() {
       setError(actionError.message || "Failed to process donation.");
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function handleRemoveDonation(donation) {
+    setNotice("");
+    setError("");
+
+    if (!window.confirm("Remove this donation? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setDeletingId(donation._id);
+      await deleteDonationById(donation._id);
+      setNotice("Donation removed successfully.");
+      await loadData();
+    } catch (removeError) {
+      setError(removeError.message || "Failed to remove donation.");
+    } finally {
+      setDeletingId("");
     }
   }
 
@@ -128,26 +149,37 @@ export default function DonationVerificationPage() {
                       <td>{donation.status}</td>
                       <td>{new Date(donation.createdAt).toLocaleString()}</td>
                       <td>
-                        {donation.status === "pending_verification" ? (
-                          <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          {donation.status === "pending_verification" ? (
+                            <>
+                              <button
+                                className="btn-primary"
+                                disabled={actionLoading || deletingId === donation._id}
+                                onClick={() => handleVerify(donation, "verified")}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                disabled={actionLoading || deletingId === donation._id}
+                                onClick={() => handleVerify(donation, "rejected")}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-500">Processed</span>
+                          )}
+                          {donation.status === "pending_verification" && (
                             <button
-                              className="btn-primary"
-                              disabled={actionLoading}
-                              onClick={() => handleVerify(donation, "verified")}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                              disabled={actionLoading || deletingId === donation._id}
+                              onClick={() => handleRemoveDonation(donation)}
                             >
-                              Approve
+                              Remove
                             </button>
-                            <button
-                              className="btn-secondary"
-                              disabled={actionLoading}
-                              onClick={() => handleVerify(donation, "rejected")}
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500">Processed</span>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

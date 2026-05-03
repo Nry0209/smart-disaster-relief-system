@@ -4,7 +4,7 @@ import { AlertCircle, Clock3, ExternalLink, Inbox, Package, RefreshCcw, ShieldCh
 import PageHeader from "../components/PageHeader";
 import ResourceRequestInlineForm from "../components/ResourceRequestInlineForm";
 import { useAuth } from "../context/AuthContext";
-import { fetchResourceRequestById, fetchResourceRequests } from "../services/workflowService";
+import { deleteResourceRequestById, fetchResourceRequestById, fetchResourceRequests } from "../services/workflowService";
 import "./Pages.css";
 
 const STATUS_FILTERS = ["all", "approved", "fulfilled", "rejected"];
@@ -63,6 +63,7 @@ export default function NGOInboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deletingRequestId, setDeletingRequestId] = useState("");
 
   const focusedRequestId = String(pathRequestId || searchParams.get("requestId") || "").trim();
 
@@ -100,6 +101,28 @@ export default function NGOInboxPage() {
       setError(loadError.message || "Failed to load your request inbox.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRemoveRequest(requestId) {
+    if (!requestId) {
+      return;
+    }
+
+    const confirmed = window.confirm("Remove this request from your inbox? This cannot be undone.");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingRequestId(requestId);
+      setError("");
+      await deleteResourceRequestById(requestId);
+      await loadRequests();
+    } catch (removeError) {
+      setError(removeError.message || "Failed to remove resource request.");
+    } finally {
+      setDeletingRequestId("");
     }
   }
 
@@ -319,6 +342,14 @@ export default function NGOInboxPage() {
                         onClick={() => navigate(`/ngo-donation?requestId=${requestId}`)}
                       >
                         Open Donation Form <ExternalLink size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                        onClick={() => handleRemoveRequest(requestId)}
+                        disabled={deletingRequestId === requestId}
+                      >
+                        Remove Request
                       </button>
                       <p className="text-xs text-slate-500 text-right">
                         Respond directly from the linked donation page.

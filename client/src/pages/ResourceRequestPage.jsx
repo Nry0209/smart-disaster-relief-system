@@ -405,7 +405,13 @@ export default function ResourceRequestPage() {
                   <option value="">Select your organization</option>
                   {partners.map((partner) => (
                     <option key={partner._id} value={partner._id}>
-                      {partner.organizationName || partner.contactPerson}
+                      {[
+                        partner.organizationName || partner.contactPerson || "Partner",
+                        partner.email,
+                        partner.phone,
+                      ]
+                        .filter(Boolean)
+                        .join(" • ")}
                     </option>
                   ))}
                 </select>

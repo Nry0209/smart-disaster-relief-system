@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import './Pages.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^0\d{9}$/;
 const MIN_NAME_LENGTH = 2;
@@ -28,65 +30,69 @@ const PartnerDirectory = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingPartner, setEditingPartner] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [savingPartnerId, setSavingPartnerId] = useState('');
 
   // Check if user is inventory officer (read-only access)
   const isInventoryOfficer = user?.role === 'inventory_officer';
   const canEdit = user?.role === 'admin';
 
-  // Mock data - in real app, this would come from API
   useEffect(() => {
-    const mockPartners = [
-      {
-        id: 1,
-        name: "Red Cross Sri Lanka",
-        contactPerson: "Dr. Ananda Perera",
-        email: "ananda.perera@redcross.lk",
-        phone: "+94 11 269 3456",
-        address: "No. 123, Colombo 07, Sri Lanka",
-        specialization: "Emergency Relief",
-        status: "active",
-        createdAt: "2024-01-10T10:30:00Z",
-        lastContact: "2024-03-25T14:20:00Z"
-      },
-      {
-        id: 2,
-        name: "UNICEF Sri Lanka",
-        contactPerson: "Ms. Nimali Fernando",
-        email: "nfernando@unicef.org",
-        phone: "+94 11 258 9123",
-        address: "No. 45, Bauddhaloka Mawatha, Colombo 07",
-        specialization: "Child Welfare & Education",
-        status: "active",
-        createdAt: "2024-01-15T09:15:00Z",
-        lastContact: "2024-03-24T11:45:00Z"
-      },
-      {
-        id: 3,
-        name: "Save the Children",
-        contactPerson: "Mr. Rajitha Kumarasiri",
-        email: "rajitha.k@savethechildren.lk",
-        phone: "+94 11 285 6732",
-        address: "No. 78, Horton Place, Colombo 07",
-        specialization: "Children's Rights",
-        status: "inactive",
-        createdAt: "2024-02-01T13:45:00Z",
-        lastContact: "2024-03-15T16:30:00Z"
-      },
-      {
-        id: 4,
-        name: "Habitat for Humanity",
-        contactPerson: "Ms. Priyanthi Silva",
-        email: "priyanthi.s@habitat.lk",
-        phone: "+94 11 274 8901",
-        address: "No. 234, Rajagiriya, Sri Lanka",
-        specialization: "Shelter & Housing",
-        status: "active",
-        createdAt: "2024-02-10T11:20:00Z",
-        lastContact: "2024-03-26T10:15:00Z"
+    let active = true;
+
+    const mapPartner = (partner) => ({
+      id: String(partner?._id || partner?.id || ''),
+      name: partner?.organizationName || partner?.name || '',
+      contactPerson: partner?.contactPerson || '',
+      email: partner?.email || '',
+      phone: partner?.phone || '',
+      address: partner?.address || '',
+      specialization: Array.isArray(partner?.preferredCategories) && partner.preferredCategories.length
+        ? partner.preferredCategories[0]
+        : partner?.specialization || 'Emergency Relief',
+      status: partner?.status || 'active',
+      createdAt: partner?.createdAt || new Date().toISOString(),
+      lastContact: partner?.updatedAt || partner?.createdAt || null,
+      profilePicture: partner?.profilePicture || null,
+    });
+
+    const loadPartners = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError('');
+
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/api/partners`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to load partners.');
+        }
+
+        if (!active) return;
+
+        const records = Array.isArray(data?.data?.partners) ? data.data.partners : [];
+        setPartners(records.map(mapPartner));
+      } catch (error) {
+        if (!active) return;
+        setPartners([]);
+        setLoadError(error.message || 'Failed to load partners.');
+      } finally {
+        if (active) setIsLoading(false);
       }
-    ];
-    setPartners(mockPartners);
-  }, []);
+    };
+
+    loadPartners();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.role]);
 
   const statusOptions = [
     { value: 'all', label: 'All Partners' },
@@ -110,46 +116,173 @@ const PartnerDirectory = () => {
     return partner.status === filterStatus;
   });
 
-  const handleCreatePartner = (partnerData) => {
+  const handleCreatePartner = async (partnerData) => {
     if (!canEdit) return;
-    
-    const newPartner = {
-      id: partners.length + 1,
-      ...partnerData,
-      status: partnerData.status || 'active',
-      createdAt: new Date().toISOString(),
-      lastContact: null,
-      profilePicture: partnerData.profilePicture || null
-    };
-    setPartners([...partners, newPartner]);
-    setShowCreateForm(false);
-  };
 
-  const handleUpdatePartner = (partnerId, updates) => {
-    if (!canEdit) return;
-    
-    setPartners(partners.map(partner => 
-      partner.id === partnerId ? { ...partner, ...updates } : partner
-    ));
-    setEditingPartner(null);
-  };
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found. Please login again.');
+      }
 
-  const handleDeletePartner = (partnerId) => {
-    if (!canEdit) return;
-    
-    if (window.confirm('Are you sure you want to delete this NGO partner?')) {
-      setPartners(partners.filter(partner => partner.id !== partnerId));
+      const payload = new FormData();
+      payload.append('organizationName', String(partnerData.name || '').trim());
+      payload.append('contactPerson', String(partnerData.contactPerson || '').trim());
+      payload.append('email', String(partnerData.email || '').trim());
+      payload.append('phone', String(partnerData.phone || '').trim());
+      payload.append('address', String(partnerData.address || '').trim());
+      payload.append('registrationNumber', String(partnerData.registrationNumber || '').trim());
+      payload.append('preferredCategories', JSON.stringify([String(partnerData.specialization || '').trim()].filter(Boolean)));
+      payload.append('status', partnerData.status || 'active');
+
+      setSavingPartnerId('__create__');
+      const response = await fetch(`${API_BASE_URL}/api/partners`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to create partner.');
+      }
+
+      const createdPartner = result?.data?.partner;
+      setPartners((prev) => [
+        {
+          id: String(createdPartner?._id || createdPartner?.id || Date.now()),
+          name: createdPartner?.organizationName || partnerData.name,
+          contactPerson: createdPartner?.contactPerson || partnerData.contactPerson,
+          email: createdPartner?.email || partnerData.email,
+          phone: createdPartner?.phone || partnerData.phone,
+          address: createdPartner?.address || partnerData.address,
+          specialization: Array.isArray(createdPartner?.preferredCategories) && createdPartner.preferredCategories.length
+            ? createdPartner.preferredCategories[0]
+            : partnerData.specialization,
+          status: createdPartner?.status || partnerData.status || 'active',
+          createdAt: createdPartner?.createdAt || new Date().toISOString(),
+          lastContact: createdPartner?.updatedAt || null,
+          profilePicture: null,
+        },
+        ...prev,
+      ]);
+      setShowCreateForm(false);
+    } catch (error) {
+      window.alert(error.message || 'Failed to create partner.');
+    } finally {
+      setSavingPartnerId('');
     }
   };
 
-  const handleToggleStatus = (partnerId) => {
+  const handleUpdatePartner = async (partnerId, updates) => {
     if (!canEdit) return;
-    
-    setPartners(partners.map(partner => 
-      partner.id === partnerId 
-        ? { ...partner, status: partner.status === 'active' ? 'inactive' : 'active' }
-        : partner
-    ));
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found. Please login again.');
+      }
+
+      const payload = new FormData();
+      payload.append('organizationName', String(updates.name || '').trim());
+      payload.append('contactPerson', String(updates.contactPerson || '').trim());
+      payload.append('email', String(updates.email || '').trim());
+      payload.append('phone', String(updates.phone || '').trim());
+      payload.append('address', String(updates.address || '').trim());
+      payload.append('registrationNumber', String(updates.registrationNumber || '').trim());
+      payload.append('preferredCategories', JSON.stringify([String(updates.specialization || '').trim()].filter(Boolean)));
+      payload.append('status', updates.status || 'active');
+
+      setSavingPartnerId(String(partnerId));
+      const response = await fetch(`${API_BASE_URL}/api/partners/${partnerId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update partner.');
+      }
+
+      const updatedPartner = result?.data?.partner;
+      setPartners((prev) =>
+        prev.map((partner) =>
+          partner.id === String(partnerId)
+            ? {
+                id: String(updatedPartner?._id || partner.id),
+                name: updatedPartner?.organizationName || updates.name,
+                contactPerson: updatedPartner?.contactPerson || updates.contactPerson,
+                email: updatedPartner?.email || updates.email,
+                phone: updatedPartner?.phone || updates.phone,
+                address: updatedPartner?.address || updates.address,
+                specialization: Array.isArray(updatedPartner?.preferredCategories) && updatedPartner.preferredCategories.length
+                  ? updatedPartner.preferredCategories[0]
+                  : updates.specialization,
+                status: updatedPartner?.status || updates.status || 'active',
+                createdAt: updatedPartner?.createdAt || partner.createdAt,
+                lastContact: updatedPartner?.updatedAt || partner.lastContact,
+                profilePicture: partner.profilePicture || null,
+              }
+            : partner
+        )
+      );
+      setEditingPartner(null);
+    } catch (error) {
+      window.alert(error.message || 'Failed to update partner.');
+    } finally {
+      setSavingPartnerId('');
+    }
+  };
+
+  const handleDeletePartner = async (partnerId) => {
+    if (!canEdit) return;
+
+    if (!window.confirm('Are you sure you want to delete this NGO partner?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found. Please login again.');
+      }
+
+      setSavingPartnerId(String(partnerId));
+      const response = await fetch(`${API_BASE_URL}/api/partners/${partnerId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete partner.');
+      }
+
+      setPartners((prev) => prev.filter((partner) => partner.id !== String(partnerId)));
+    } catch (error) {
+      window.alert(error.message || 'Failed to delete partner.');
+    } finally {
+      setSavingPartnerId('');
+    }
+  };
+
+  const handleToggleStatus = async (partnerId) => {
+    if (!canEdit) return;
+
+    const selectedPartner = partners.find((partner) => partner.id === String(partnerId));
+    if (!selectedPartner) return;
+
+    await handleUpdatePartner(partnerId, {
+      ...selectedPartner,
+      status: selectedPartner.status === 'active' ? 'inactive' : 'active',
+    });
   };
 
   const PartnerForm = ({ partner, onSubmit, onCancel }) => {
@@ -513,6 +646,7 @@ const PartnerDirectory = () => {
                     <button 
                       className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:-translate-y-0.5"
                       onClick={() => setEditingPartner(partner)}
+                      disabled={savingPartnerId === partner.id}
                     >
                       Edit
                     </button>
@@ -523,12 +657,14 @@ const PartnerDirectory = () => {
                           : 'border border-emerald-200 bg-emerald-50 text-emerald-700'
                       }`}
                       onClick={() => handleToggleStatus(partner.id)}
+                      disabled={savingPartnerId === partner.id}
                     >
                       {partner.status === 'active' ? 'Deactivate' : 'Activate'}
                     </button>
                     <button 
                       className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:-translate-y-0.5"
                       onClick={() => handleDeletePartner(partner.id)}
+                      disabled={savingPartnerId === partner.id}
                     >
                       Delete
                     </button>
@@ -538,6 +674,8 @@ const PartnerDirectory = () => {
             ))}
           </div>
         )}
+        {isLoading && <p className="mt-4 text-sm text-slate-500">Loading partners from database...</p>}
+        {loadError && <p className="mt-4 text-sm text-rose-600">{loadError}</p>}
       </section>
 
       {/* Forms - only for admin */}

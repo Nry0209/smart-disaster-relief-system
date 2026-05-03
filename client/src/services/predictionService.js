@@ -33,3 +33,11 @@ export const getPredictionLogs = async (params = {}) => {
 
   return response.data;
 };
+
+export const deletePredictionLogById = async (id) => {
+  const response = await axios.delete(`${API_BASE_URL}/api/predictions/logs/${id}`, {
+    headers: getAuthHeaders(),
+  });
+
+  return response.data;
+};

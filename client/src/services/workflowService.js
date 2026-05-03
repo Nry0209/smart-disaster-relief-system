@@ -97,6 +97,15 @@ export async function fetchResourceRequestById(id) {
   return data.resourceRequest;
 }
 
+export async function deleteResourceRequestById(id) {
+  const response = await fetch(`${API_BASE_URL}/api/resource-requests/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  return parseResponse(response, "Failed to delete resource request.");
+}
+
 // Public donation endpoint removed — use authenticated NGO donation instead.
 
 export async function createNGODonation(payload) {
@@ -128,6 +137,15 @@ export async function verifyDonationById(id, payload) {
   });
 
   return parseResponse(response, "Failed to verify donation.");
+}
+
+export async function deleteDonationById(id) {
+  const response = await fetch(`${API_BASE_URL}/api/donations/${id}`, {
+    method: "DELETE",
+    headers: buildHeaders({ includeJson: false, includeAuth: true }),
+  });
+
+  return parseResponse(response, "Failed to delete donation.");
 }
 
 export async function fetchAllocations(params = {}) {
