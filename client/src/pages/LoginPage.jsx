@@ -678,7 +678,6 @@ function LoginPage() {
                   <option value="inventory_officer">Inventory Officer</option>
                   <option value="allocation_officer">Allocation Officer</option>
                   <option value="tracking_officer">Tracking Officer</option>
-                  <option value="charity_staff">Charity Staff</option>
                   <option value="ngo_partner">NGO Partner</option>
                 </select>
               </div>

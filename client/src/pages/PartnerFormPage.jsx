@@ -257,7 +257,13 @@ export default function PartnerFormPage({ mode = "create" }) {
         isEdit ? "Failed to update partner." : "Failed to create partner."
       );
 
-      navigate("/users", { replace: true });
+      navigate("/users", {
+        replace: true,
+        state: { 
+          message: isEdit ? "NGO updated successfully" : "NGO created, OTP sent",
+          type: "success"
+        }
+      });
     } catch (saveError) {
       setError(saveError.message || "Failed to save partner.");
     } finally {

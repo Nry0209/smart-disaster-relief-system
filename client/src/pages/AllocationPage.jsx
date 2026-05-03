@@ -177,6 +177,8 @@ export default function AllocationPage() {
 
   const [predictedResources, setPredictedResources] = useState(null);
 
+  const [predictedAllocatedDays, setPredictedAllocatedDays] = useState(null);
+
   const [predictionLoading, setPredictionLoading] = useState(false);
 
   const [predictionError, setPredictionError] = useState("");
@@ -454,6 +456,8 @@ export default function AllocationPage() {
 
       setPredictedResources(null);
 
+      setPredictedAllocatedDays(null);
+
       return;
 
     }
@@ -482,9 +486,13 @@ export default function AllocationPage() {
 
       setPredictedResources(prediction || null);
 
+      setPredictedAllocatedDays(Number(prediction?.allocatedDays || 1));
+
     } catch (error) {
 
       setPredictedResources(null);
+
+      setPredictedAllocatedDays(null);
 
       setPredictionError(error.message || "Failed to load prediction.");
 
@@ -1977,6 +1985,18 @@ export default function AllocationPage() {
 
                     </div>
 
+
+
+                    <div className="prediction-card">
+
+                      <span className="prediction-label">Resources Allocated Days</span>
+
+                      <strong>{predictedAllocatedDays || 1} days</strong>
+
+                      <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
+
+                    </div>
+
                   </div>
 
                 ) : (
@@ -2098,6 +2118,11 @@ export default function AllocationPage() {
                     <div className="prediction-card">
                       <span className="prediction-label">Medicine Needed</span>
                       <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Resources Allocated Days</span>
+                      <strong>{predictedAllocatedDays || 1} days</strong>
+                      <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
                     </div>
                   </div>
                   <div className="prediction-actions">

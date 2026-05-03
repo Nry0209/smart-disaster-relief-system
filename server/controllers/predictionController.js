@@ -66,6 +66,7 @@ const predictResources = async (req, res) => {
     // Include category mapping in response for frontend consistency
     const categorizedResult = {
       ...result,
+      allocatedDays: Number(result.allocatedDays || 1),
       predictedResources: [
         {
           itemName: "Food",

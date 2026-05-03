@@ -239,20 +239,14 @@ export default function AllocationFormPage() {
             });
             setPredictedResources(prediction || null);
             setPredictionError("");
-            // compute predicted allocated days using a simple heuristic
+            // get predicted allocated days from backend prediction
             if (prediction) {
               try {
-              const pop = Number(selectedReport.affectedPopulation || 0) || 0;
-              const sev = String(selectedReport.severity || selectedReport.priority || "medium").toLowerCase();
-              const severityMultiplier = { critical: 2.0, high: 1.5, medium: 1.0, low: 0.75 };
-              const multiplier = severityMultiplier[sev] || 1.0;
-              // heuristic: base coverage 1 day per 1000 people, scaled by severity
-              const basePerThousand = 1;
-              const estimated = Math.max(1, Math.ceil((pop / 1000) * basePerThousand * multiplier));
-              setPredictedAllocatedDays(estimated);
+              const predicted = Number(prediction.allocatedDays || 1);
+              setPredictedAllocatedDays(predicted);
               // auto-fill allocatedDays only when no existing allocation value is present
               if (!selectedReport?.allocatedResources?.allocatedDays && !allocatedDays) {
-                setAllocatedDays(String(estimated));
+                setAllocatedDays(String(predicted));
               }
               } catch (e) {
               // ignore prediction-derived days failures
@@ -556,6 +550,11 @@ export default function AllocationFormPage() {
                       <span className="prediction-label">Medicine Needed</span>
                       <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
                       <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                    </div>
+                    <div className="prediction-card">
+                      <span className="prediction-label">Resources Allocated Days</span>
+                      <strong>{predictedAllocatedDays || 1} days</strong>
+                      <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
                     </div>
                   </div>
                   <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">

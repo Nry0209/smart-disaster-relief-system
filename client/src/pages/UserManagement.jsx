@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, MapPin, Phone, Mail, Building, Users, Search, Filter, X, Upload, MoreVertical, UserCog, Activity } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
@@ -32,6 +32,7 @@ function validatePhoneNumber(value) {
 const UserManagement = () => {
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { user } = useAuth();
 
@@ -247,6 +248,14 @@ const UserManagement = () => {
     const timeout = setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
     return () => clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (location.state?.message) {
+      setToast({ message: location.state.message, type: location.state.type || 'success' });
+      // Clear state after showing toast so it doesn't show again on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -562,6 +571,8 @@ const UserManagement = () => {
       if (response.ok) {
         const result = await response.json();
         console.log('Partner created successfully:', result);
+        
+        showToast('NGO created, OTP sent', 'success');
         
         // Refresh partners list
         const fetchPartners = async () => {
@@ -1235,7 +1246,6 @@ eligibility for partnership in relief operations.
                     <option value="inventory_officer">Inventory Officer</option>
                     <option value="allocation_officer">Allocation Officer</option>
                     <option value="tracking_officer">Tracking Officer</option>
-                    <option value="charity_staff">Charity Staff</option>
                     <option value="ngo_partner">NGO Partner</option>
                   </select>
                   {fieldErrors.role && <p className="mt-1 text-xs text-rose-600">{fieldErrors.role}</p>}

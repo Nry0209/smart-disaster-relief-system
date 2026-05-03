@@ -35,10 +35,15 @@ function estimateLocally({ disasterType, severity, affectedPopulation }) {
   const waterNeeded = Math.max(0, Math.round(population * 2.4 * combined));
   const medicineNeeded = Math.max(0, Math.round(population * 0.25 * combined));
 
+  // Calculate predicted allocated days: base coverage 1 day per 1000 people, scaled by severity
+  const basePerThousand = 1;
+  const allocatedDays = Math.max(1, Math.ceil((population / 1000) * basePerThousand * (severityMultiplier / 0.75)));
+
   return {
     foodNeeded,
     waterNeeded,
     medicineNeeded,
+    allocatedDays,
     source: "rule-based-fallback",
   };
 }
