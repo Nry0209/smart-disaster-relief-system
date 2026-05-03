@@ -4,7 +4,6 @@ const Donation = require("../models/Donation");
 const InventoryItem = require("../models/InventoryItem");
 const Partner = require("../models/Partner");
 const DisasterReport = require("../models/DisasterReport");
-const { sendResourceRequestEmail } = require("../services/emailService");
 
 const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -18,6 +17,7 @@ async function resolvePartnerForUser(req) {
     return null;
   }
 
+  // First try to find by userId (most reliable)
   if (userId && mongoose.Types.ObjectId.isValid(userId)) {
     const partnerByUserId = await Partner.findOne({ userId });
     if (partnerByUserId) {
@@ -25,21 +25,17 @@ async function resolvePartnerForUser(req) {
     }
   }
 
+  // Then try by exact email match
   if (normalizedEmail) {
-    const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const partnerByEmail = await Partner.findOne({
-      email: { $regex: `^${escapedEmail}$`, $options: "i" },
-    });
+    const partnerByEmail = await Partner.findOne({ email: normalizedEmail });
     if (partnerByEmail) {
       return partnerByEmail;
     }
   }
 
+  // Finally try by contact person name
   if (req.user?.fullName) {
-    const escapedName = String(req.user.fullName).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const partnerByContact = await Partner.findOne({
-      contactPerson: { $regex: `^${escapedName}$`, $options: "i" },
-    });
+    const partnerByContact = await Partner.findOne({ contactPerson: req.user.fullName });
     if (partnerByContact) {
       return partnerByContact;
     }
@@ -189,31 +185,14 @@ async function createResourceRequest(req, res) {
     const resourceRequest = new ResourceRequest(resourceRequestData);
     await resourceRequest.save();
 
-    // Send email notification using partner data
-    try {
-      await sendResourceRequestEmail({
-        to: partner.email,
-        requesterName: partner.organizationName || partner.contactPerson,
-        requestType,
-        requestDetails: requestType === "monetary" 
-          ? `Amount: LKR ${amount}` 
-          : `Items: ${items.map(item => `${item.itemName} (${item.quantity})`).join(", ")}`,
-        deliveryWarehouse,
-        expectedDeliveryDate: deliveryDate.toDateString(),
-        problemNote,
-      });
-      resourceRequest.emailSentAt = new Date();
-      await resourceRequest.save();
-    } catch (emailError) {
-      console.error("Failed to send email notification:", emailError);
-      // Continue with the request even if email fails
-    }
+    // Resource request is now available in NGO inbox via path-based workflow
+    // No email notification needed - NGOs can access their requests through the NGO inbox page
 
     res.status(201).json({
       message: "Resource request submitted successfully",
       resourceRequest,
       data: resourceRequest,
-      emailSent: !!resourceRequest.emailSentAt
+      emailSent: false
     });
 
   } catch (error) {

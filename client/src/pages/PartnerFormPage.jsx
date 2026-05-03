@@ -47,6 +47,14 @@ function getAuthHeaders(includeContentType = false) {
   return headers;
 }
 
+function getDocumentLabel(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    return value.split('/').pop();
+  }
+  return value.name || '';
+}
+
 function mapPartnerToForm(partner) {
   return {
     organizationName: partner?.organizationName || "",
@@ -61,6 +69,76 @@ function mapPartnerToForm(partner) {
     registrationCertificate: partner?.registrationCertificate || "",
     verificationDocument: partner?.verificationDocument || "",
   };
+}
+
+function validatePartnerField(field, value) {
+  const textValue = String(value || "").trim();
+
+  switch (field) {
+    case "organizationName":
+      if (!textValue) return "Organization name is required.";
+      if (textValue.length < 2) return "Organization name must be at least 2 characters.";
+      if (textValue.length > 100) return "Organization name cannot exceed 100 characters.";
+      return "";
+    case "contactPerson":
+      if (!textValue) return "Contact person is required.";
+      if (textValue.length < 2) return "Contact person must be at least 2 characters.";
+      if (textValue.length > 100) return "Contact person cannot exceed 100 characters.";
+      return "";
+    case "email":
+      if (!textValue || !EMAIL_PATTERN.test(textValue.toLowerCase())) return "Enter a valid email address.";
+      return "";
+    case "phone":
+      if (!textValue) return "Phone number is required.";
+      if (!PHONE_PATTERN.test(textValue.replace(/\s+/g, ""))) {
+        return "Phone number must start with 0 and contain exactly 10 digits.";
+      }
+      return "";
+    case "address":
+      if (!textValue) return "Address is required.";
+      if (textValue.length < 10) return "Address must be at least 10 characters.";
+      if (textValue.length > 200) return "Address cannot exceed 200 characters.";
+      return "";
+    case "registrationNumber":
+      return textValue ? "" : "Registration number is required.";
+    case "preferredCategoriesText":
+      return textValue ? "" : "Preferred categories are required.";
+    case "organizationProfileDocument":
+      return textValue ? "" : "Organization profile document is required.";
+    case "registrationCertificate":
+      return textValue ? "" : "Registration certificate is required.";
+    case "verificationDocument":
+      return textValue ? "" : "Verification document is required.";
+    case "status":
+      return textValue ? "" : "Status is required.";
+    default:
+      return "";
+  }
+}
+
+function validatePartnerForm(form) {
+  const nextErrors = {};
+
+  [
+    "organizationName",
+    "contactPerson",
+    "email",
+    "phone",
+    "address",
+    "registrationNumber",
+    "preferredCategoriesText",
+    "organizationProfileDocument",
+    "registrationCertificate",
+    "verificationDocument",
+    "status",
+  ].forEach((field) => {
+    const fieldError = validatePartnerField(field, form[field]);
+    if (fieldError) {
+      nextErrors[field] = fieldError;
+    }
+  });
+
+  return nextErrors;
 }
 
 export default function PartnerFormPage({ mode = "create" }) {
@@ -117,7 +195,6 @@ export default function PartnerFormPage({ mode = "create" }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
-    setFieldErrors({});
 
     const organizationName = String(form.organizationName || "").trim();
     const contactPerson = String(form.contactPerson || "").trim();
@@ -129,53 +206,16 @@ export default function PartnerFormPage({ mode = "create" }) {
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const nextFieldErrors = {};
-
-    if (!organizationName) {
-      nextFieldErrors.organizationName = "Organization name is required.";
-    }
-
-    if (!contactPerson) {
-      nextFieldErrors.contactPerson = "Contact person is required.";
-    }
-
-    if (!email || !EMAIL_PATTERN.test(email)) {
-      nextFieldErrors.email = "Enter a valid email address.";
-    }
-
-    if (!phone) {
-      nextFieldErrors.phone = "Phone number is required.";
-    } else if (!PHONE_PATTERN.test(phone)) {
-      nextFieldErrors.phone = "Phone number must start with 0 and contain exactly 10 digits.";
-    }
-
-    if (!address) {
-      nextFieldErrors.address = "Address is required.";
-    }
-
-    if (!registrationNumber) {
-      nextFieldErrors.registrationNumber = "Registration number is required.";
-    }
-
-    if (!String(form.preferredCategoriesText || "").trim()) {
-      nextFieldErrors.preferredCategoriesText = "Preferred categories are required.";
-    }
-
-    if (!String(form.organizationProfileDocument || "").trim()) {
-      nextFieldErrors.organizationProfileDocument = "Organization profile document is required.";
-    }
-
-    if (!String(form.registrationCertificate || "").trim()) {
-      nextFieldErrors.registrationCertificate = "Registration certificate is required.";
-    }
-
-    if (!String(form.verificationDocument || "").trim()) {
-      nextFieldErrors.verificationDocument = "Verification document is required.";
-    }
-
-    if (!form.status) {
-      nextFieldErrors.status = "Status is required.";
-    }
+    const nextFieldErrors = validatePartnerForm({
+      ...form,
+      organizationName,
+      contactPerson,
+      email,
+      phone,
+      address,
+      registrationNumber,
+      preferredCategoriesText: String(form.preferredCategoriesText || "").trim(),
+    });
 
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
@@ -183,19 +223,27 @@ export default function PartnerFormPage({ mode = "create" }) {
       return;
     }
 
-    const payload = {
-      organizationName,
-      contactPerson,
-      email,
-      phone,
-      address,
-      registrationNumber,
-      preferredCategories,
-      status: form.status || "active",
-      organizationProfileDocument: String(form.organizationProfileDocument || "").trim(),
-      registrationCertificate: String(form.registrationCertificate || "").trim(),
-      verificationDocument: String(form.verificationDocument || "").trim(),
-    };
+    const payload = new FormData();
+    payload.append("organizationName", organizationName);
+    payload.append("contactPerson", contactPerson);
+    payload.append("email", email);
+    payload.append("phone", phone);
+    payload.append("address", address);
+    payload.append("registrationNumber", registrationNumber);
+    payload.append("preferredCategories", JSON.stringify(preferredCategories));
+    payload.append("status", form.status || "active");
+
+    if (form.organizationProfileDocument) {
+      payload.append("organizationProfileDocument", form.organizationProfileDocument);
+    }
+
+    if (form.registrationCertificate) {
+      payload.append("registrationCertificate", form.registrationCertificate);
+    }
+
+    if (form.verificationDocument) {
+      payload.append("verificationDocument", form.verificationDocument);
+    }
 
     setSaving(true);
     try {
@@ -203,8 +251,8 @@ export default function PartnerFormPage({ mode = "create" }) {
         isEdit ? `${API_BASE_URL}/api/partners/${partnerId}` : `${API_BASE_URL}/api/partners`,
         {
           method: isEdit ? "PUT" : "POST",
-          headers: getAuthHeaders(true),
-          body: JSON.stringify(payload),
+          headers: getAuthHeaders(false),
+          body: payload,
         },
         isEdit ? "Failed to update partner." : "Failed to create partner."
       );
@@ -239,8 +287,12 @@ export default function PartnerFormPage({ mode = "create" }) {
                   type="text"
                   value={form.organizationName}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, organizationName: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, organizationName: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, organizationName: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, organizationName: validatePartnerField("organizationName", nextValue) }));
+                  }}
+                  onBlur={(event) => {
+                    setFieldErrors((prev) => ({ ...prev, organizationName: validatePartnerField("organizationName", event.target.value) }));
                   }}
                   className={getInputClass("organizationName")}
                   placeholder="Enter organization name"
@@ -253,13 +305,17 @@ export default function PartnerFormPage({ mode = "create" }) {
                   type="text"
                   value={form.contactPerson}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, contactPerson: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, contactPerson: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, contactPerson: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, contactPerson: validatePartnerField("contactPerson", nextValue) }));
+                  }}
+                  onBlur={(event) => {
+                    setFieldErrors((prev) => ({ ...prev, contactPerson: validatePartnerField("contactPerson", event.target.value) }));
                   }}
                   className={getInputClass("contactPerson")}
                   placeholder="Enter contact person"
                 />
-                {fieldErrors.contactPerson && <p className="mt-1 text-xs text-rose-600">{fieldErrors.contactPerson}</p>}
+                {fieldErrors.contactPerson && <p className="mt-1 text-xs text-red-600">{fieldErrors.contactPerson}</p>}
               </div>
             </div>
 
@@ -270,13 +326,17 @@ export default function PartnerFormPage({ mode = "create" }) {
                   type="email"
                   value={form.email}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, email: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, email: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, email: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, email: validatePartnerField("email", nextValue) }));
+                  }}
+                  onBlur={(event) => {
+                    setFieldErrors((prev) => ({ ...prev, email: validatePartnerField("email", event.target.value) }));
                   }}
                   className={getInputClass("email")}
                   placeholder="Enter email address"
                 />
-                {fieldErrors.email && <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>}
+                {fieldErrors.email && <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>}
               </div>
               <div className="form-group">
                 <label>Phone</label>
@@ -284,14 +344,18 @@ export default function PartnerFormPage({ mode = "create" }) {
                   type="tel"
                   value={form.phone}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, phone: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, phone: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, phone: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, phone: validatePartnerField("phone", nextValue) }));
+                  }}
+                  onBlur={(event) => {
+                    setFieldErrors((prev) => ({ ...prev, phone: validatePartnerField("phone", event.target.value) }));
                   }}
                   className={getInputClass("phone")}
                   maxLength={10}
                   placeholder="Enter phone number"
                 />
-                {fieldErrors.phone && <p className="mt-1 text-xs text-rose-600">{fieldErrors.phone}</p>}
+                {fieldErrors.phone && <p className="mt-1 text-xs text-red-600">{fieldErrors.phone}</p>}
               </div>
             </div>
 
@@ -301,13 +365,17 @@ export default function PartnerFormPage({ mode = "create" }) {
                 type="text"
                 value={form.address}
                 onChange={(event) => {
-                  setForm((prev) => ({ ...prev, address: event.target.value }));
-                  setFieldErrors((prev) => ({ ...prev, address: "" }));
+                  const nextValue = event.target.value;
+                  setForm((prev) => ({ ...prev, address: nextValue }));
+                  setFieldErrors((prev) => ({ ...prev, address: validatePartnerField("address", nextValue) }));
+                }}
+                onBlur={(event) => {
+                  setFieldErrors((prev) => ({ ...prev, address: validatePartnerField("address", event.target.value) }));
                 }}
                 className={getInputClass("address")}
                 placeholder="Enter complete address"
               />
-              {fieldErrors.address && <p className="mt-1 text-xs text-rose-600">{fieldErrors.address}</p>}
+              {fieldErrors.address && <p className="mt-1 text-xs text-red-600">{fieldErrors.address}</p>}
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -317,13 +385,17 @@ export default function PartnerFormPage({ mode = "create" }) {
                   type="text"
                   value={form.registrationNumber}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, registrationNumber: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, registrationNumber: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, registrationNumber: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, registrationNumber: validatePartnerField("registrationNumber", nextValue) }));
+                  }}
+                  onBlur={(event) => {
+                    setFieldErrors((prev) => ({ ...prev, registrationNumber: validatePartnerField("registrationNumber", event.target.value) }));
                   }}
                   className={getInputClass("registrationNumber")}
                   placeholder="Registration number"
                 />
-                {fieldErrors.registrationNumber && <p className="mt-1 text-xs text-rose-600">{fieldErrors.registrationNumber}</p>}
+                {fieldErrors.registrationNumber && <p className="mt-1 text-xs text-red-600">{fieldErrors.registrationNumber}</p>}
               </div>
               <div className="form-group">
                 <label>Status</label>
@@ -331,14 +403,15 @@ export default function PartnerFormPage({ mode = "create" }) {
                   className={getInputClass("status")}
                   value={form.status}
                   onChange={(event) => {
-                    setForm((prev) => ({ ...prev, status: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, status: "" }));
+                    const nextValue = event.target.value;
+                    setForm((prev) => ({ ...prev, status: nextValue }));
+                    setFieldErrors((prev) => ({ ...prev, status: validatePartnerField("status", nextValue) }));
                   }}
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
-                {fieldErrors.status && <p className="mt-1 text-xs text-rose-600">{fieldErrors.status}</p>}
+                {fieldErrors.status && <p className="mt-1 text-xs text-red-600">{fieldErrors.status}</p>}
               </div>
             </div>
 
@@ -348,57 +421,76 @@ export default function PartnerFormPage({ mode = "create" }) {
                 type="text"
                 value={form.preferredCategoriesText}
                 onChange={(event) => {
-                  setForm((prev) => ({ ...prev, preferredCategoriesText: event.target.value }));
-                  setFieldErrors((prev) => ({ ...prev, preferredCategoriesText: "" }));
+                  const nextValue = event.target.value;
+                  setForm((prev) => ({ ...prev, preferredCategoriesText: nextValue }));
+                  setFieldErrors((prev) => ({ ...prev, preferredCategoriesText: validatePartnerField("preferredCategoriesText", nextValue) }));
+                }}
+                onBlur={(event) => {
+                  setFieldErrors((prev) => ({ ...prev, preferredCategoriesText: validatePartnerField("preferredCategoriesText", event.target.value) }));
                 }}
                 className={getInputClass("preferredCategoriesText")}
                 placeholder="Comma-separated categories"
               />
-              {fieldErrors.preferredCategoriesText && <p className="mt-1 text-xs text-rose-600">{fieldErrors.preferredCategoriesText}</p>}
+              {fieldErrors.preferredCategoriesText && <p className="mt-1 text-xs text-red-600">{fieldErrors.preferredCategoriesText}</p>}
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="form-group">
-                <label>Organization Profile Document</label>
-                <input
-                  type="text"
-                  value={form.organizationProfileDocument}
-                  onChange={(event) => {
-                    setForm((prev) => ({ ...prev, organizationProfileDocument: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, organizationProfileDocument: "" }));
-                  }}
-                  className={getInputClass("organizationProfileDocument")}
-                  placeholder="Document path or URL"
-                />
-                {fieldErrors.organizationProfileDocument && <p className="mt-1 text-xs text-rose-600">{fieldErrors.organizationProfileDocument}</p>}
+                <label>Organization Profile Document (PDF)</label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] || null;
+                      setForm((prev) => ({ ...prev, organizationProfileDocument: nextFile }));
+                      setFieldErrors((prev) => ({ ...prev, organizationProfileDocument: validatePartnerField("organizationProfileDocument", nextFile) }));
+                    }}
+                    className={getInputClass("organizationProfileDocument")}
+                  />
+                  {form.organizationProfileDocument && (
+                    <p className="text-xs text-slate-500">Selected: {getDocumentLabel(form.organizationProfileDocument)}</p>
+                  )}
+                </div>
+                {fieldErrors.organizationProfileDocument && <p className="mt-1 text-xs text-red-600">{fieldErrors.organizationProfileDocument}</p>}
               </div>
               <div className="form-group">
-                <label>Registration Certificate</label>
-                <input
-                  type="text"
-                  value={form.registrationCertificate}
-                  onChange={(event) => {
-                    setForm((prev) => ({ ...prev, registrationCertificate: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, registrationCertificate: "" }));
-                  }}
-                  className={getInputClass("registrationCertificate")}
-                  placeholder="Document path or URL"
-                />
-                {fieldErrors.registrationCertificate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.registrationCertificate}</p>}
+                <label>Registration Certificate (PDF)</label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] || null;
+                      setForm((prev) => ({ ...prev, registrationCertificate: nextFile }));
+                      setFieldErrors((prev) => ({ ...prev, registrationCertificate: validatePartnerField("registrationCertificate", nextFile) }));
+                    }}
+                    className={getInputClass("registrationCertificate")}
+                  />
+                  {form.registrationCertificate && (
+                    <p className="text-xs text-slate-500">Selected: {getDocumentLabel(form.registrationCertificate)}</p>
+                  )}
+                </div>
+                {fieldErrors.registrationCertificate && <p className="mt-1 text-xs text-red-600">{fieldErrors.registrationCertificate}</p>}
               </div>
               <div className="form-group">
-                <label>Verification Document</label>
-                <input
-                  type="text"
-                  value={form.verificationDocument}
-                  onChange={(event) => {
-                    setForm((prev) => ({ ...prev, verificationDocument: event.target.value }));
-                    setFieldErrors((prev) => ({ ...prev, verificationDocument: "" }));
-                  }}
-                  className={getInputClass("verificationDocument")}
-                  placeholder="Document path or URL"
-                />
-                {fieldErrors.verificationDocument && <p className="mt-1 text-xs text-rose-600">{fieldErrors.verificationDocument}</p>}
+                <label>Verification Document (PDF)</label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(event) => {
+                      const nextFile = event.target.files?.[0] || null;
+                      setForm((prev) => ({ ...prev, verificationDocument: nextFile }));
+                      setFieldErrors((prev) => ({ ...prev, verificationDocument: validatePartnerField("verificationDocument", nextFile) }));
+                    }}
+                    className={getInputClass("verificationDocument")}
+                  />
+                  {form.verificationDocument && (
+                    <p className="text-xs text-slate-500">Selected: {getDocumentLabel(form.verificationDocument)}</p>
+                  )}
+                </div>
+                {fieldErrors.verificationDocument && <p className="mt-1 text-xs text-red-600">{fieldErrors.verificationDocument}</p>}
               </div>
             </div>
 

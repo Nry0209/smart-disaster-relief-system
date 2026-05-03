@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, Clock3, ExternalLink, Inbox, Package, RefreshCcw, ShieldCheck } from "lucide-react";
 import PageHeader from "../components/PageHeader";
+import ResourceRequestInlineForm from "../components/ResourceRequestInlineForm";
 import { useAuth } from "../context/AuthContext";
-import { fetchResourceRequests } from "../services/workflowService";
+import { fetchResourceRequestById, fetchResourceRequests } from "../services/workflowService";
 import "./Pages.css";
 
 const STATUS_FILTERS = ["all", "approved", "fulfilled", "rejected"];
@@ -74,8 +75,26 @@ export default function NGOInboxPage() {
       setLoading(true);
       setError("");
 
-      const items = await fetchResourceRequests();
-      setRequests(Array.isArray(items) ? items : []);
+      const [items, focusedRequest] = await Promise.all([
+        fetchResourceRequests(),
+        focusedRequestId ? fetchResourceRequestById(focusedRequestId).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const normalizedItems = Array.isArray(items) ? items : [];
+      const requestedItem = focusedRequest?.resourceRequest || focusedRequest || null;
+
+      if (requestedItem) {
+        const requestedId = getRequestId(requestedItem);
+        const existingIndex = normalizedItems.findIndex((request) => getRequestId(request) === requestedId);
+
+        if (existingIndex >= 0) {
+          normalizedItems[existingIndex] = requestedItem;
+        } else {
+          normalizedItems.unshift(requestedItem);
+        }
+      }
+
+      setRequests(normalizedItems);
     } catch (loadError) {
       setRequests([]);
       setError(loadError.message || "Failed to load your request inbox.");
@@ -141,6 +160,10 @@ export default function NGOInboxPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">Fulfilled</p>
             <p className="mt-2 text-3xl font-semibold text-blue-700">{stats.fulfilled}</p>
           </div>
+        </div>
+
+        <div className="mt-6">
+          <ResourceRequestInlineForm onSubmitted={loadRequests} />
         </div>
 
         <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

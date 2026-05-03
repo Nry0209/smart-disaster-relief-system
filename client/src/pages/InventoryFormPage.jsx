@@ -7,6 +7,75 @@ import "./Pages.css";
 
 const WAREHOUSE_OPTIONS = ["Colombo Central Warehouse", "Kandy Regional Warehouse"];
 
+const FIXED_MINIMUM_BY_CATEGORY = {
+  [ITEM_CATEGORIES.DRINKING_WATER]: 1000,
+  [ITEM_CATEGORIES.DRY_FOOD]: 500,
+  [ITEM_CATEGORIES.READY_TO_EAT]: 200,
+  [ITEM_CATEGORIES.BABY_FOOD]: 100,
+  [ITEM_CATEGORIES.NUTRITIONAL_SUPPLEMENTS]: 100,
+  [ITEM_CATEGORIES.BASIC_MEDICINE]: 100,
+  [ITEM_CATEGORIES.FIRST_AID_SUPPLIES]: 50,
+  [ITEM_CATEGORIES.EMERGENCY_MEDICAL_KITS]: 25,
+  [ITEM_CATEGORIES.SHELTER_MATERIALS]: 100,
+  [ITEM_CATEGORIES.CLOTHING]: 100,
+  [ITEM_CATEGORIES.HYGIENE_KITS]: 100,
+  Other: 50,
+};
+
+const MEASURE_OPTIONS_BY_CATEGORY = {
+  [ITEM_CATEGORIES.DRINKING_WATER]: [
+    { label: "500 ml", packageSize: "500 ml", unit: "bottle" },
+    { label: "1 L", packageSize: "1 L", unit: "bottle" },
+  ],
+  [ITEM_CATEGORIES.DRY_FOOD]: [
+    { label: "1 kg packet", packageSize: "1 kg", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.READY_TO_EAT]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.BABY_FOOD]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.NUTRITIONAL_SUPPLEMENTS]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.BASIC_MEDICINE]: [
+    { label: "1 box", packageSize: "1 box", unit: "box" },
+  ],
+  [ITEM_CATEGORIES.FIRST_AID_SUPPLIES]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  [ITEM_CATEGORIES.EMERGENCY_MEDICAL_KITS]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  [ITEM_CATEGORIES.SHELTER_MATERIALS]: [
+    { label: "1 piece", packageSize: "1 piece", unit: "piece" },
+  ],
+  [ITEM_CATEGORIES.HYGIENE_KITS]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  Other: [
+    { label: "1 unit", packageSize: "1 unit", unit: "unit" },
+  ],
+};
+
+function getFixedMinimum(category) {
+  return FIXED_MINIMUM_BY_CATEGORY[category] ?? FIXED_MINIMUM_BY_CATEGORY.Other;
+}
+
+function getMeasureOptions(category) {
+  if (category === ITEM_CATEGORIES.CLOTHING) {
+    return [];
+  }
+
+  return MEASURE_OPTIONS_BY_CATEGORY[category] || MEASURE_OPTIONS_BY_CATEGORY.Other;
+}
+
+function getMeasureUnit(category, packageSize) {
+  const option = getMeasureOptions(category).find((entry) => entry.packageSize === packageSize);
+  return option?.unit || "units";
+}
+
 const DEFAULT_FORM = {
   category: ITEM_CATEGORIES.DRINKING_WATER,
   itemName: "",
@@ -69,13 +138,13 @@ export default function InventoryFormPage({ mode = "create" }) {
             itemName: target.name || "",
             packageSize: target.packageSize || target.unit || "",
             stock: String(target.stock ?? ""),
-            min: String(target.min ?? ""),
+            min: String(getFixedMinimum(target.category || ITEM_CATEGORIES.DRINKING_WATER)),
             warehouse: target.warehouse || WAREHOUSE_OPTIONS[1],
             quantity: "",
             note: "",
           });
         } else {
-          setForm(DEFAULT_FORM);
+          setForm({ ...DEFAULT_FORM, min: String(getFixedMinimum(DEFAULT_FORM.category)) });
         }
       } catch (loadError) {
         setError(loadError.message || "Failed to load inventory data.");
@@ -109,6 +178,8 @@ export default function InventoryFormPage({ mode = "create" }) {
     const normalizedPackageSize = String(form.packageSize || "").trim();
     const normalizedCategory = String(form.category || "").trim();
     const normalizedWarehouse = String(form.warehouse || "").trim();
+    const fixedMin = getFixedMinimum(normalizedCategory);
+    const unit = getMeasureUnit(normalizedCategory, normalizedPackageSize);
     const nextFieldErrors = {};
 
     if (isAdjust) {
@@ -188,10 +259,6 @@ export default function InventoryFormPage({ mode = "create" }) {
       nextFieldErrors.stock = "Amount must be at least 1.";
     }
 
-    if (!Number.isInteger(min) || min < 1) {
-      nextFieldErrors.min = "Minimum threshold must be at least 1.";
-    }
-
     if (!normalizedWarehouse) {
       nextFieldErrors.warehouse = "Warehouse is required.";
     }
@@ -208,9 +275,10 @@ export default function InventoryFormPage({ mode = "create" }) {
         await updateInventoryItem(itemId, {
           name: normalizedName,
           category: normalizedCategory,
-          packageSize: normalizedPackageSize,
+          packageSize: normalizedCategory === ITEM_CATEGORIES.CLOTHING ? "" : normalizedPackageSize,
+          unit: normalizedCategory === ITEM_CATEGORIES.CLOTHING ? "" : unit,
           stock,
-          min,
+          min: fixedMin,
           warehouse: normalizedWarehouse,
           note: "Updated from inventory form page.",
           performedBy: "Inventory Officer",
@@ -219,8 +287,7 @@ export default function InventoryFormPage({ mode = "create" }) {
         const duplicate = items.find(
           (entry) =>
             String(entry.name || "").trim().toLowerCase() === normalizedName.toLowerCase() &&
-            entry.category === normalizedCategory &&
-            String(entry.packageSize || "").trim().toLowerCase() === normalizedPackageSize.toLowerCase()
+            entry.category === normalizedCategory
         );
 
         if (duplicate) {
@@ -233,9 +300,10 @@ export default function InventoryFormPage({ mode = "create" }) {
           await createInventoryItem({
             name: normalizedName,
             category: normalizedCategory,
-            packageSize: normalizedPackageSize,
+            packageSize: normalizedCategory === ITEM_CATEGORIES.CLOTHING ? "" : normalizedPackageSize,
+            unit: normalizedCategory === ITEM_CATEGORIES.CLOTHING ? "" : unit,
             stock,
-            min,
+            min: fixedMin,
             warehouse: normalizedWarehouse,
             performedBy: "Inventory Officer",
           });
@@ -301,13 +369,21 @@ export default function InventoryFormPage({ mode = "create" }) {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="form-group">
                     <label>Measure</label>
-                    <input
-                      className={inlineInputClass(fieldErrors.packageSize)}
-                      type="text"
-                      value={form.packageSize}
-                      onChange={(event) => setForm((prev) => ({ ...prev, packageSize: event.target.value }))}
-                      placeholder="e.g. 5 kg bottle, 1 L, 10 tablets"
-                    />
+                    {form.category === ITEM_CATEGORIES.CLOTHING ? (
+                      <p className="text-sm text-slate-500">No measure required for dress items.</p>
+                    ) : (
+                      <select
+                        className={inlineInputClass(fieldErrors.packageSize)}
+                        value={form.packageSize}
+                        onChange={(event) => setForm((prev) => ({ ...prev, packageSize: event.target.value }))}
+                        disabled={!form.category}
+                      >
+                        <option value="">Select measure</option>
+                        {getMeasureOptions(form.category).map((option) => (
+                          <option key={option.packageSize} value={option.packageSize}>{option.label}</option>
+                        ))}
+                      </select>
+                    )}
                     {fieldErrors.packageSize && <p className="mt-1 text-xs text-rose-600">{fieldErrors.packageSize}</p>}
                   </div>
                 </div>
@@ -333,10 +409,11 @@ export default function InventoryFormPage({ mode = "create" }) {
                       type="number"
                       min="1"
                       step="1"
-                      value={form.min}
-                      onChange={(event) => setForm((prev) => ({ ...prev, min: event.target.value }))}
+                      value={String(getFixedMinimum(form.category))}
+                      readOnly
+                      disabled
                     />
-                    {fieldErrors.min && <p className="mt-1 text-xs text-rose-600">{fieldErrors.min}</p>}
+                    <p className="mt-1 text-xs text-slate-500">Fixed by inventory category.</p>
                   </div>
 
                   <div className="form-group">

@@ -45,6 +45,75 @@ const MIN_WAREHOUSE_LENGTH = 2;
 const MAX_WAREHOUSE_LENGTH = 60;
 const MAX_ACTION_NOTE_LENGTH = 300;
 
+const FIXED_MINIMUM_BY_CATEGORY = {
+  [ITEM_CATEGORIES.DRINKING_WATER]: 1000,
+  [ITEM_CATEGORIES.DRY_FOOD]: 500,
+  [ITEM_CATEGORIES.READY_TO_EAT]: 200,
+  [ITEM_CATEGORIES.BABY_FOOD]: 100,
+  [ITEM_CATEGORIES.NUTRITIONAL_SUPPLEMENTS]: 100,
+  [ITEM_CATEGORIES.BASIC_MEDICINE]: 100,
+  [ITEM_CATEGORIES.FIRST_AID_SUPPLIES]: 50,
+  [ITEM_CATEGORIES.EMERGENCY_MEDICAL_KITS]: 25,
+  [ITEM_CATEGORIES.SHELTER_MATERIALS]: 100,
+  [ITEM_CATEGORIES.CLOTHING]: 100,
+  [ITEM_CATEGORIES.HYGIENE_KITS]: 100,
+  Other: 50,
+};
+
+const MEASURE_OPTIONS_BY_CATEGORY = {
+  [ITEM_CATEGORIES.DRINKING_WATER]: [
+    { label: "500 ml", packageSize: "500 ml", unit: "bottle" },
+    { label: "1 L", packageSize: "1 L", unit: "bottle" },
+  ],
+  [ITEM_CATEGORIES.DRY_FOOD]: [
+    { label: "1 kg packet", packageSize: "1 kg", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.READY_TO_EAT]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.BABY_FOOD]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.NUTRITIONAL_SUPPLEMENTS]: [
+    { label: "1 pack", packageSize: "1 pack", unit: "pack" },
+  ],
+  [ITEM_CATEGORIES.BASIC_MEDICINE]: [
+    { label: "1 box", packageSize: "1 box", unit: "box" },
+  ],
+  [ITEM_CATEGORIES.FIRST_AID_SUPPLIES]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  [ITEM_CATEGORIES.EMERGENCY_MEDICAL_KITS]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  [ITEM_CATEGORIES.SHELTER_MATERIALS]: [
+    { label: "1 piece", packageSize: "1 piece", unit: "piece" },
+  ],
+  [ITEM_CATEGORIES.HYGIENE_KITS]: [
+    { label: "1 kit", packageSize: "1 kit", unit: "kit" },
+  ],
+  Other: [
+    { label: "1 unit", packageSize: "1 unit", unit: "unit" },
+  ],
+};
+
+function getFixedMinimum(category) {
+  return FIXED_MINIMUM_BY_CATEGORY[category] ?? FIXED_MINIMUM_BY_CATEGORY.Other;
+}
+
+function getMeasureOptions(category) {
+  if (category === ITEM_CATEGORIES.CLOTHING) {
+    return [];
+  }
+
+  return MEASURE_OPTIONS_BY_CATEGORY[category] || MEASURE_OPTIONS_BY_CATEGORY.Other;
+}
+
+function getMeasureUnit(category, packageSize) {
+  const option = getMeasureOptions(category).find((entry) => entry.packageSize === packageSize);
+  return option?.unit || "units";
+}
+
 function getStatus(stock, min) {
   if (min <= 0) {
     return { label: "Good", color: "#16a34a", bg: "#dcfce7" };
@@ -197,8 +266,13 @@ export default function InventoryPage() {
   }, [items, activeCat, search]);
 
   const selectedActionItem = useMemo(
-    () => items.find((item) => item.id === actionForm.itemId) || null,
-    [items, actionForm.itemId]
+    () =>
+      items.find(
+        (item) =>
+          String(item.name || "").trim().toLowerCase() === String(actionForm.itemId || "").trim().toLowerCase() &&
+          String(item.category || "").trim() === String(actionForm.category || "").trim()
+      ) || null,
+    [items, actionForm.itemId, actionForm.category]
   );
 
   const totalItems = items.length;
@@ -222,14 +296,6 @@ export default function InventoryPage() {
     navigate(`/inventory/${item.id}/edit`);
   }
 
-  // Auto-fill minimum threshold based on existing data
-  const getAutoFillMinThreshold = (category, itemName) => {
-    const existingItem = items.find(
-      (item) => item.category === category && item.name === itemName
-    );
-    return existingItem ? String(existingItem.min) : "";
-  };
-
   async function handleSaveItem() {
     if (!canManageInventory) {
       setError("You can only view inventory items.");
@@ -241,7 +307,8 @@ export default function InventoryPage() {
     const normalizedName = itemForm.name.trim();
     const normalizedPackageSize = String(itemForm.packageSize || "").trim();
     const stock = Number(itemForm.stock);
-    const min = Number(itemForm.min);
+    const min = Number(getFixedMinimum(itemForm.category));
+    const unit = getMeasureUnit(itemForm.category, normalizedPackageSize);
     const normalizedWarehouse = itemForm.warehouse.trim();
     const nextFieldErrors = {};
 
@@ -261,29 +328,19 @@ export default function InventoryPage() {
       nextFieldErrors.name = `Item name cannot exceed ${MAX_ITEM_NAME_LENGTH} characters.`;
     }
 
-    if (!normalizedPackageSize) {
+    if (itemForm.category !== ITEM_CATEGORIES.CLOTHING && !normalizedPackageSize) {
       nextFieldErrors.packageSize = "Measure is required.";
     }
 
-    // Find existing item with same name, package size, unit, and category
+    // Find existing item with same name and category
     const existingItem = items.find(
       (item) =>
         item.name.trim().toLowerCase() === normalizedName.toLowerCase() &&
-        item.category === itemForm.category &&
-        String(item.packageSize || "").trim().toLowerCase() === normalizedPackageSize.toLowerCase()
+        item.category === itemForm.category
     );
-
-    if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(min) || min < 0) {
-      nextFieldErrors.stock = "Stock must be a whole number (0 or greater).";
-      nextFieldErrors.min = "Minimum must be a whole number (0 or greater).";
-    }
 
     if (!Number.isInteger(stock) || stock < 0) {
       nextFieldErrors.stock = "Stock must be a whole number (0 or greater).";
-    }
-
-    if (!Number.isInteger(min) || min < 0) {
-      nextFieldErrors.min = "Minimum must be a whole number (0 or greater).";
     }
 
     if (normalizedWarehouse.length < MIN_WAREHOUSE_LENGTH) {
@@ -316,7 +373,8 @@ export default function InventoryPage() {
         const payload = {
           name: normalizedName,
           category: itemForm.category,
-          packageSize: normalizedPackageSize,
+          packageSize: itemForm.category === ITEM_CATEGORIES.CLOTHING ? "" : normalizedPackageSize,
+          unit: itemForm.category === ITEM_CATEGORIES.CLOTHING ? "" : unit,
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -332,7 +390,8 @@ export default function InventoryPage() {
         await createInventoryItem({
           name: normalizedName,
           category: itemForm.category,
-          packageSize: normalizedPackageSize,
+          packageSize: itemForm.category === ITEM_CATEGORIES.CLOTHING ? "" : normalizedPackageSize,
+          unit: itemForm.category === ITEM_CATEGORIES.CLOTHING ? "" : unit,
           stock,
           min,
           warehouse: normalizedWarehouse,
@@ -385,7 +444,7 @@ export default function InventoryPage() {
     }
 
     const quantity = Number(actionForm.quantity);
-    const selectedItem = items.find((item) => item.name === actionForm.itemId && item.category === actionForm.category);
+    const selectedItem = selectedActionItem;
     const normalizedNote = actionForm.note.trim();
 
     if (!actionForm.itemId || !actionForm.category) {
@@ -664,7 +723,9 @@ export default function InventoryPage() {
                         setItemForm((prev) => ({
                           ...prev,
                           category: newCategory,
-                          name: ""
+                          name: "",
+                          packageSize: "",
+                          min: String(getFixedMinimum(newCategory)),
                         }));
                       }}
                       className={fieldErrors.category ? "border border-rose-300 bg-rose-50/60" : ""}
@@ -702,16 +763,26 @@ export default function InventoryPage() {
                   </div>
                   <div className="form-group">
                     <label>Measure</label>
-                    <input
-                      type="text"
-                      value={itemForm.packageSize || ""}
-                      onChange={(event) => {
-                        setFieldErrors((prev) => ({ ...prev, packageSize: "" }));
-                        setItemForm((prev) => ({ ...prev, packageSize: event.target.value }));
-                      }}
-                      placeholder="e.g. 5 kg bottle, 1 L, 10 tablets"
-                      className={fieldErrors.packageSize ? "border border-rose-300 bg-rose-50/60" : ""}
-                    />
+                    {itemForm.category === ITEM_CATEGORIES.CLOTHING ? (
+                      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                        No measure required for dress items.
+                      </div>
+                    ) : (
+                      <select
+                        value={itemForm.packageSize || ""}
+                        onChange={(event) => {
+                          setFieldErrors((prev) => ({ ...prev, packageSize: "" }));
+                          setItemForm((prev) => ({ ...prev, packageSize: event.target.value }));
+                        }}
+                        className={fieldErrors.packageSize ? "border border-rose-300 bg-rose-50/60" : ""}
+                        disabled={!itemForm.category}
+                      >
+                        <option value="">Select measure</option>
+                        {getMeasureOptions(itemForm.category).map((option) => (
+                          <option key={option.packageSize} value={option.packageSize}>{option.label}</option>
+                        ))}
+                      </select>
+                    )}
                     {fieldErrors.packageSize && <p className="mt-1 text-xs text-rose-600">{fieldErrors.packageSize}</p>}
                   </div>
                   <div className="form-group">
@@ -733,16 +804,12 @@ export default function InventoryPage() {
                     <label>Minimum Threshold</label>
                     <input
                       type="number"
-                      min="0"
                       step="1"
-                      value={itemForm.min}
-                      onChange={(event) => {
-                        setFieldErrors((prev) => ({ ...prev, min: "" }));
-                        setItemForm((prev) => ({ ...prev, min: event.target.value }));
-                      }}
-                      className={fieldErrors.min ? "border border-rose-300 bg-rose-50/60" : ""}
+                      value={String(getFixedMinimum(itemForm.category))}
+                      readOnly
+                      className="border border-slate-200 bg-slate-50/70"
                     />
-                    {fieldErrors.min && <p className="mt-1 text-xs text-rose-600">{fieldErrors.min}</p>}
+                    <p className="mt-1 text-xs text-slate-500">Fixed by inventory category.</p>
                   </div>
                   <div className="form-group">
                     <label>Warehouse</label>

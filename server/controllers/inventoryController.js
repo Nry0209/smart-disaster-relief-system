@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const InventoryItem = require("../models/InventoryItem");
 const inventoryActivityService = require("../services/inventoryActivityService");
-const { ITEM_CATEGORY_ENUM } = require("../utils/constants");
+const { ITEM_CATEGORIES, ITEM_CATEGORY_ENUM } = require("../utils/constants");
 
 const DEFAULT_INVENTORY_ITEMS = [
   {
@@ -51,6 +51,14 @@ const DEFAULT_INVENTORY_ITEMS = [
   },
 ];
 
+const DEFAULT_MEASURE_BY_CATEGORY = {
+  Water: { packageSize: "1 bottle", unit: "bottle" },
+  Food: { packageSize: "1 pack", unit: "pack" },
+  Shelter: { packageSize: "1 piece", unit: "piece" },
+  Medical: { packageSize: "1 kit", unit: "kit" },
+  Other: { packageSize: "1 unit", unit: "unit" },
+};
+
 const ALLOWED_ACTION_TYPES = ["adjust", "consume", "restock"];
 const UPDATABLE_FIELDS = ["name", "category", "stock", "min", "warehouse", "packageSize", "unit"];
 
@@ -97,6 +105,7 @@ function getStockStatus(stock, min) {
 
 function formatInventoryItem(item) {
   const isSelectable = item.status !== "expired" && item.status !== "damaged";
+  const defaultMeasure = DEFAULT_MEASURE_BY_CATEGORY[item.category] || DEFAULT_MEASURE_BY_CATEGORY.Other;
 
   return {
     id: item._id.toString(),
@@ -105,14 +114,18 @@ function formatInventoryItem(item) {
     stock: item.stock,
     min: item.min,
     warehouse: item.warehouse,
-    packageSize: item.packageSize || "",
-    unit: item.unit || "units",
+    packageSize: item.packageSize || defaultMeasure.packageSize,
+    unit: item.unit || defaultMeasure.unit,
     status: item.status,
     isSelectable,
     stockStatus: getStockStatus(item.stock, item.min),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };
+}
+
+function isMeasureRequired(category) {
+  return category !== ITEM_CATEGORIES.CLOTHING;
 }
 
 function formatInventoryActivity(activity) {
@@ -143,13 +156,13 @@ async function createInventoryItem(req, res) {
       return res.status(400).json({ message: "name, category, stock, and min are required." });
     }
 
-    if (!String(packageSize || "").trim()) {
-      return res.status(400).json({ message: "packageSize is required." });
-    }
-
     const normalizedCategory = normalizeCategory(category);
     if (!normalizedCategory) {
       return res.status(400).json({ message: "Invalid category value." });
+    }
+
+    if (isMeasureRequired(normalizedCategory) && !String(packageSize || "").trim()) {
+      return res.status(400).json({ message: "packageSize is required." });
     }
 
     const stockValue = toNonNegativeNumber(stock);
@@ -165,28 +178,48 @@ async function createInventoryItem(req, res) {
       });
     }
 
-    const item = await InventoryItem.create({
+    // Check if item with same name and category already exists
+    const existingItem = await InventoryItem.findOne({
       name: String(name).trim(),
-      category: normalizedCategory,
-      stock: stockValue,
-      min: minValue,
-      warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
-      packageSize: String(packageSize || "").trim(),
-      unit: String(unit || "").trim() || "units",
+      category: normalizedCategory
     });
+
+    let item;
+    let previousStock = 0;
+    let action = "create";
+
+    if (existingItem) {
+      // Update existing item stock
+      previousStock = existingItem.stock;
+      existingItem.stock += stockValue;
+      existingItem.lastUpdatedBy = performedBy;
+      item = await existingItem.save();
+      action = "restock";
+    } else {
+      // Create new item
+      item = await InventoryItem.create({
+        name: String(name).trim(),
+        category: normalizedCategory,
+        stock: stockValue,
+        min: minValue,
+        warehouse: String(warehouse || "Warehouse 1").trim() || "Warehouse 1",
+        packageSize: isMeasureRequired(normalizedCategory) ? String(packageSize || "").trim() : "",
+        unit: isMeasureRequired(normalizedCategory) ? String(unit || "").trim() || "units" : "",
+      });
+    }
 
     await createActivityLog({
       itemId: item._id,
       itemName: item.name,
-      action: "create",
+      action: action,
       quantity: stockValue,
-      previousStock: 0,
-      newStock: stockValue,
-      note: `Created inventory item in ${item.warehouse}.`,
+      previousStock: previousStock,
+      newStock: item.stock,
+      note: `${action === "create" ? "Created" : "Updated"} inventory item in ${item.warehouse}.`,
       performedBy: String(performedBy || "Inventory Officer"),
     });
 
-    return res.status(201).json(formatInventoryItem(item));
+    return res.status(action === "create" ? 201 : 200).json(formatInventoryItem(item));
   } catch (error) {
     return res.status(500).json({ message: "Failed to create inventory item.", error: error.message });
   }
@@ -407,20 +440,22 @@ async function updateInventoryItem(req, res) {
       updates.warehouse = normalizedWarehouse;
     }
 
+    const targetCategory = Object.prototype.hasOwnProperty.call(updates, "category") ? normalizeCategory(updates.category) : item.category;
+
     if (Object.prototype.hasOwnProperty.call(updates, "packageSize")) {
       const normalizedPackageSize = String(updates.packageSize || "").trim();
-      if (!normalizedPackageSize) {
+      if (isMeasureRequired(targetCategory) && !normalizedPackageSize) {
         return res.status(400).json({ message: "packageSize cannot be empty." });
       }
-      updates.packageSize = normalizedPackageSize;
+      updates.packageSize = isMeasureRequired(targetCategory) ? normalizedPackageSize : "";
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "unit")) {
       const normalizedUnit = String(updates.unit || "").trim();
-      if (!normalizedUnit) {
+      if (isMeasureRequired(targetCategory) && !normalizedUnit) {
         return res.status(400).json({ message: "unit cannot be empty." });
       }
-      updates.unit = normalizedUnit;
+      updates.unit = isMeasureRequired(targetCategory) ? normalizedUnit : "";
     }
 
     
@@ -445,6 +480,64 @@ async function updateInventoryItem(req, res) {
     return res.json(formatInventoryItem(item));
   } catch (error) {
     return res.status(500).json({ message: "Failed to update inventory item.", error: error.message });
+  }
+}
+
+async function reduceInventoryStock(req, res) {
+  try {
+    const { name, category, quantity, note, performedBy } = req.body;
+
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        message: "Database is not connected. Please verify MongoDB credentials and try again.",
+      });
+    }
+
+    const normalizedName = String(name || "").trim();
+    const normalizedCategory = normalizeCategory(category);
+    const quantityValue = toNonNegativeNumber(quantity);
+
+    if (!normalizedName || !normalizedCategory) {
+      return res.status(400).json({ message: "Name and category are required." });
+    }
+
+    if (quantityValue === null || quantityValue === 0) {
+      return res.status(400).json({ message: "Quantity must be a positive number." });
+    }
+
+    // Find item by name and category
+    const item = await InventoryItem.findOne({
+      name: normalizedName,
+      category: normalizedCategory
+    });
+
+    if (!item) {
+      return res.status(404).json({ message: "Inventory item not found." });
+    }
+
+    if (item.stock < quantityValue) {
+      return res.status(400).json({ message: "Insufficient stock. Available: " + item.stock });
+    }
+
+    const previousStock = item.stock;
+    item.stock -= quantityValue;
+    item.lastUpdatedBy = performedBy;
+    await item.save();
+
+    await createActivityLog({
+      itemId: item._id,
+      itemName: item.name,
+      action: "consumption",
+      quantity: -quantityValue,
+      previousStock,
+      newStock: item.stock,
+      note: String(note || `Reduced stock by ${quantityValue}`).trim(),
+      performedBy: String(performedBy || "Inventory Officer"),
+    });
+
+    return res.json(formatInventoryItem(item));
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to reduce inventory stock.", error: error.message });
   }
 }
 
@@ -577,4 +670,5 @@ module.exports = {
   updateInventoryItem,
   deleteInventoryItem,
   adjustInventoryStock,
+  reduceInventoryStock,
 };

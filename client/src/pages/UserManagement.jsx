@@ -122,7 +122,7 @@ const UserManagement = () => {
     address: partner.address || '',
     contactPerson: partner.contactPerson || '',
     type: partner.type || '',
-    services: Array.isArray(partner.services) ? partner.services : [],
+    services: Array.isArray(partner.preferredCategories) ? partner.preferredCategories : (Array.isArray(partner.services) ? partner.services : []),
     status: partner.status || 'inactive',
     createdAt: partner.createdAt,
     lastContact: partner.lastContact,
@@ -529,25 +529,34 @@ const UserManagement = () => {
         return;
       }
 
-      // Transform frontend data to backend format
-      const backendPartnerData = {
-        organizationName: partnerData.name,
-        email: partnerData.email,
-        phone: partnerData.phone || '',
-        address: partnerData.address || '',
-        contactPerson: partnerData.contactPerson || '',
-        type: partnerData.type || 'NGO',
-        services: partnerData.services || [],
-        status: partnerData.status || 'active'
-      };
+      const backendPartnerData = new FormData();
+      backendPartnerData.append('organizationName', partnerData.name || '');
+      backendPartnerData.append('email', partnerData.email || '');
+      backendPartnerData.append('phone', partnerData.phone || '');
+      backendPartnerData.append('address', partnerData.address || '');
+      backendPartnerData.append('contactPerson', partnerData.contactPerson || '');
+      backendPartnerData.append('registrationNumber', partnerData.registrationNumber || '');
+      backendPartnerData.append('preferredCategories', JSON.stringify(partnerData.services || []));
+      backendPartnerData.append('status', partnerData.status || 'active');
+
+      if (partnerData.organizationProfileDocument) {
+        backendPartnerData.append('organizationProfileDocument', partnerData.organizationProfileDocument);
+      }
+
+      if (partnerData.registrationCertificate) {
+        backendPartnerData.append('registrationCertificate', partnerData.registrationCertificate);
+      }
+
+      if (partnerData.verificationDocument) {
+        backendPartnerData.append('verificationDocument', partnerData.verificationDocument);
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/partners`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(backendPartnerData)
+        body: backendPartnerData
       });
 
       if (response.ok) {
@@ -811,9 +820,9 @@ Partnership Date: ${partner.partnershipDate}
 
 Document Type: Organization Profile
 
-File Path: ${partner.organizationProfile || 'Not uploaded'}
+File Path: ${partner.organizationProfileDocument || partner.organizationProfile || 'Not uploaded'}
 
-Uploaded: ${partner.organizationProfile ? 'Yes' : 'No'}
+Uploaded: ${partner.organizationProfileDocument || partner.organizationProfile ? 'Yes' : 'No'}
 
 
 
@@ -1304,11 +1313,11 @@ eligibility for partnership in relief operations.
 
       partnershipDate: partner?.partnershipDate || new Date().toISOString().split('T')[0],
 
-      organizationProfile: partner?.organizationProfile || null,
+      organizationProfileDocument: partner?.organizationProfileDocument || '',
 
-      registrationCertificate: partner?.registrationCertificate || null,
+      registrationCertificate: partner?.registrationCertificate || '',
 
-      verificationDocument: partner?.verificationDocument || null
+      verificationDocument: partner?.verificationDocument || ''
 
     });
 
@@ -1370,63 +1379,17 @@ eligibility for partnership in relief operations.
 
       const file = e.target.files[0];
 
-      if (file && file.type === 'application/pdf') {
-
-        // Generate unique filename
-
-        const timestamp = new Date().getTime();
-
-        const fileName = `${documentType}_${timestamp}.pdf`;
-
-        
-
-        // Determine folder path based on document type
-
-        let folderPath;
-
-        switch (documentType) {
-
-          case 'organizationProfile':
-
-            folderPath = '/assets/documents/partners/organization-profiles/';
-
-            break;
-
-          case 'registrationCertificate':
-
-            folderPath = '/assets/documents/partners/registration-certificates/';
-
-            break;
-
-          case 'verificationDocument':
-
-            folderPath = '/assets/documents/partners/verification-documents/';
-
-            break;
-
-          default:
-
-            folderPath = '/assets/documents/partners/';
-
-        }
-
-        
-
-        // Store file path instead of base64
-
-        const filePath = folderPath + fileName;
-
-        setFormData({...formData, [documentType]: filePath});
-
-        
-
-        // In a real application, you would upload the file to server here
-
-        // For now, we'll just store the path
-
-        console.log('Document would be saved to:', filePath);
-
+      if (!file) {
+        return;
       }
+
+      if (file.type !== 'application/pdf') {
+        setFieldErrors((prev) => ({ ...prev, [documentType]: 'Only PDF files are allowed.' }));
+        return;
+      }
+
+      setFormData((prev) => ({ ...prev, [documentType]: file }));
+      setFieldErrors((prev) => ({ ...prev, [documentType]: '' }));
 
     };
 
@@ -1436,6 +1399,10 @@ eligibility for partnership in relief operations.
 
       if (!filePath) return '';
 
+      if (typeof filePath !== 'string') {
+        return filePath.name || '';
+      }
+
       return filePath.split('/').pop();
 
     };
@@ -1444,7 +1411,7 @@ eligibility for partnership in relief operations.
 
     const removeDocument = (documentType) => {
 
-      setFormData({...formData, [documentType]: null});
+      setFormData({...formData, [documentType]: ''});
 
     };
 
@@ -1493,6 +1460,18 @@ eligibility for partnership in relief operations.
         nextFieldErrors.partnershipDate = 'Partnership date is required.';
       } else if (Number.isNaN(new Date(partnershipDate).getTime())) {
         nextFieldErrors.partnershipDate = 'Enter a valid partnership date.';
+      }
+
+      if (!formData.organizationProfileDocument) {
+        nextFieldErrors.organizationProfileDocument = 'Organization profile document is required.';
+      }
+
+      if (!formData.registrationCertificate) {
+        nextFieldErrors.registrationCertificate = 'Registration certificate is required.';
+      }
+
+      if (!formData.verificationDocument) {
+        nextFieldErrors.verificationDocument = 'Verification document is required.';
       }
 
       if (Object.keys(nextFieldErrors).length > 0) {
@@ -1723,14 +1702,14 @@ eligibility for partnership in relief operations.
                 <h3 className="text-lg font-semibold text-slate-900">Required Documents</h3>
                 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Organization Profile (PDF)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Organization Profile Document (PDF)</label>
                   <div className="border-2 border-dashed border-slate-300 rounded-xl p-4">
-                    {formData.organizationProfile ? (
+                    {formData.organizationProfileDocument ? (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">{getDocumentName(formData.organizationProfile)}</span>
+                        <span className="text-sm text-slate-600">{getDocumentName(formData.organizationProfileDocument)}</span>
                         <button
                           type="button"
-                          onClick={() => removeDocument('organizationProfile')}
+                          onClick={() => removeDocument('organizationProfileDocument')}
                           className="text-sm text-red-600 hover:text-red-700"
                         >
                           Remove
@@ -1741,7 +1720,7 @@ eligibility for partnership in relief operations.
                         <input
                           type="file"
                           accept="application/pdf"
-                          onChange={handleDocumentUpload('organizationProfile')}
+                          onChange={handleDocumentUpload('organizationProfileDocument')}
                           className="hidden"
                           id="org-profile"
                         />

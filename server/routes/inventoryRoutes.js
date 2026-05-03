@@ -8,6 +8,7 @@ const {
   updateInventoryItem,
   deleteInventoryItem,
   adjustInventoryStock,
+  reduceInventoryStock,
 } = require("../controllers/inventoryController");
 
 const router = express.Router();
@@ -19,5 +20,6 @@ router.get("/:id", authenticateToken, getInventoryItemById);
 router.put("/:id", authenticateToken, inventoryOfficerOnly, updateInventoryItem);
 router.delete("/:id", authenticateToken, inventoryOfficerOnly, deleteInventoryItem);
 router.post("/:id/adjust", authenticateToken, inventoryOfficerOnly, adjustInventoryStock);
+router.post("/reduce", authenticateToken, inventoryOfficerOnly, reduceInventoryStock);
 
 module.exports = router;

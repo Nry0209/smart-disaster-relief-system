@@ -133,6 +133,7 @@ function App() {
           <DonationVerificationPage />
         </DashboardLayout>
       } />
+      <Route path="/donation-verification" element={<Navigate to="/donations/verify" replace />} />
       <Route path="/distribution-tracking" element={
         <RoleRoute allowedRoles={["admin", "tracking_officer"]} fallback="/dashboard">
           <DashboardLayout>

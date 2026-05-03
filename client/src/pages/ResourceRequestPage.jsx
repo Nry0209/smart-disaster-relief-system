@@ -409,7 +409,7 @@ export default function ResourceRequestPage() {
                     </option>
                   ))}
                 </select>
-                {fieldErrors.ngoPartner && <p className="mt-1 text-xs text-rose-600">{fieldErrors.ngoPartner}</p>}
+                {fieldErrors.ngoPartner && <p className="mt-1 text-xs text-red-600">{fieldErrors.ngoPartner}</p>}
               </label>
 
               {/* Request Type */}
@@ -436,7 +436,7 @@ export default function ResourceRequestPage() {
                     onChange={(e) => updateField("expectedDeliveryDate", e.target.value)}
                     required
                   />
-                  {fieldErrors.expectedDeliveryDate && <p className="mt-1 text-xs text-rose-600">{fieldErrors.expectedDeliveryDate}</p>}
+                  {fieldErrors.expectedDeliveryDate && <p className="mt-1 text-xs text-red-600">{fieldErrors.expectedDeliveryDate}</p>}
                 </label>
               </div>
 
@@ -456,7 +456,7 @@ export default function ResourceRequestPage() {
                     </option>
                   ))}
                 </select>
-                {fieldErrors.deliveryWarehouse && <p className="mt-1 text-xs text-rose-600">{fieldErrors.deliveryWarehouse}</p>}
+                {fieldErrors.deliveryWarehouse && <p className="mt-1 text-xs text-red-600">{fieldErrors.deliveryWarehouse}</p>}
               </label>
 
               {/* Problem Note */}
@@ -471,7 +471,7 @@ export default function ResourceRequestPage() {
                   required
                   maxLength={MAX_NOTE_LENGTH}
                 />
-                {fieldErrors.problemNote && <p className="mt-1 text-xs text-rose-600">{fieldErrors.problemNote}</p>}
+                {fieldErrors.problemNote && <p className="mt-1 text-xs text-red-600">{fieldErrors.problemNote}</p>}
               </label>
 
               {/* Monetary Request */}
@@ -487,7 +487,7 @@ export default function ResourceRequestPage() {
                     min="1"
                     required
                   />
-                  {fieldErrors.amount && <p className="mt-1 text-xs text-rose-600">{fieldErrors.amount}</p>}
+                  {fieldErrors.amount && <p className="mt-1 text-xs text-red-600">{fieldErrors.amount}</p>}
                   <p className="mt-1 text-xs text-slate-500">Minimum request amount: LKR {MIN_REQUEST_AMOUNT.toLocaleString()}</p>
                 </label>
               )}
@@ -570,7 +570,7 @@ export default function ResourceRequestPage() {
                           <Trash2 size={16} />
                         </button>
                         {fieldErrors.items[index] && (
-                          <p className="md:col-span-4 text-xs text-rose-600">{fieldErrors.items[index]}</p>
+                          <p className="md:col-span-4 text-xs text-red-600">{fieldErrors.items[index]}</p>
                         )}
                       </div>
                     ))}

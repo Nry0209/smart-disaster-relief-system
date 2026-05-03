@@ -1,5 +1,15 @@
 const mongoose = require("mongoose");
+const path = require("path");
+const crypto = require("crypto");
 const Partner = require("../models/Partner");
+const User = require("../models/User");
+const { sendStaffOnboardingEmail } = require("../services/emailService");
+
+const DOCUMENT_FIELDS = [
+  "organizationProfileDocument",
+  "registrationCertificate",
+  "verificationDocument",
+];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^0\d{9}$/;
@@ -37,6 +47,47 @@ function validatePartnerPayload(payload) {
   }
 
   return errors;
+}
+
+function parsePreferredCategories(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean).map((item) => String(item).trim()).filter(Boolean);
+      }
+    } catch (error) {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function toPublicUploadPath(filePath) {
+  if (!filePath) {
+    return "";
+  }
+
+  const relativePath = path.relative(path.join(__dirname, ".."), filePath).split(path.sep).join("/");
+  return `/${relativePath}`;
+}
+
+function resolveDocumentValue(req, fieldName, existingValue = "") {
+  const uploadedFile = req.files?.[fieldName]?.[0];
+  if (uploadedFile) {
+    return toPublicUploadPath(uploadedFile.path);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body, fieldName)) {
+    return String(req.body[fieldName] || "").trim();
+  }
+
+  return existingValue;
 }
 
 function isDbConnected() {
@@ -122,10 +173,12 @@ async function createPartner(req, res) {
       registrationNumber,
       preferredCategories,
       status,
-      organizationProfileDocument,
-      registrationCertificate,
-      verificationDocument,
     } = req.body;
+
+    const resolvedDocuments = DOCUMENT_FIELDS.reduce((accumulator, fieldName) => {
+      accumulator[fieldName] = resolveDocumentValue(req, fieldName);
+      return accumulator;
+    }, {});
 
     const validationErrors = validatePartnerPayload(req.body);
     if (validationErrors.length > 0) {
@@ -133,6 +186,21 @@ async function createPartner(req, res) {
         success: false,
         message: "Validation failed.",
         errors: validationErrors,
+      });
+    }
+
+    const missingDocumentErrors = DOCUMENT_FIELDS
+      .filter((fieldName) => !resolvedDocuments[fieldName])
+      .map((fieldName) => ({
+        field: fieldName,
+        message: `${fieldName} is required and must be uploaded as a PDF.`,
+      }));
+
+    if (missingDocumentErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed.",
+        errors: missingDocumentErrors,
       });
     }
 
@@ -144,6 +212,46 @@ async function createPartner(req, res) {
       });
     }
 
+    let partnerUser = await User.findOne({ email: String(email).toLowerCase().trim() });
+    let onboardingDetails = null;
+
+    if (partnerUser) {
+      if (partnerUser.role !== "ngo_partner") {
+        return res.status(400).json({
+          success: false,
+          message: "A user with this email already exists with a non-NGO role.",
+        });
+      }
+    } else {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+      const setupToken = crypto.randomBytes(32).toString("hex");
+      const resetPasswordToken = crypto.createHash("sha256").update(setupToken).digest("hex");
+      const resetPasswordExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const tempPassword = crypto.randomBytes(16).toString("hex");
+
+      partnerUser = await User.create({
+        fullName: String(contactPerson || organizationName || "NGO Partner").trim(),
+        email: String(email).toLowerCase().trim(),
+        password: tempPassword,
+        role: "ngo_partner",
+        status: "active",
+        phone: String(phone || "").trim(),
+        department: "NGO Partner",
+        createdBy: req.user?.id || null,
+        isFirstLogin: true,
+        otp,
+        otpExpires,
+        resetPasswordToken,
+        resetPasswordExpires,
+      });
+
+      onboardingDetails = {
+        otp,
+        setupToken,
+      };
+    }
+
     const partner = await Partner.create({
       organizationName: String(organizationName).trim(),
       contactPerson: String(contactPerson || "").trim(),
@@ -151,19 +259,53 @@ async function createPartner(req, res) {
       phone: String(phone || "").trim(),
       address: String(address || "").trim(),
       registrationNumber: String(registrationNumber || "").trim(),
-      preferredCategories: Array.isArray(preferredCategories) ? preferredCategories : [],
+      preferredCategories: parsePreferredCategories(preferredCategories),
       status: status || "active",
-      organizationProfileDocument: String(organizationProfileDocument || "").trim(),
-      registrationCertificate: String(registrationCertificate || "").trim(),
-      verificationDocument: String(verificationDocument || "").trim(),
+      organizationProfileDocument: resolvedDocuments.organizationProfileDocument,
+      registrationCertificate: resolvedDocuments.registrationCertificate,
+      verificationDocument: resolvedDocuments.verificationDocument,
+      userId: partnerUser?._id,
       createdBy: req.user?.id || null,
     });
 
+    let emailSent = false;
+    if (onboardingDetails) {
+      emailSent = await sendStaffOnboardingEmail(
+        String(email).toLowerCase().trim(),
+        onboardingDetails.otp,
+        String(contactPerson || organizationName || "NGO Partner").trim(),
+        onboardingDetails.setupToken
+      );
+    }
+
+    const setupLink = onboardingDetails
+      ? `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password/${onboardingDetails.setupToken}`
+      : undefined;
+
     return res.status(201).json({
       success: true,
-      message: "Partner created successfully.",
+      message: onboardingDetails
+        ? "Partner created successfully. OTP and password setup link have been sent to the partner email."
+        : "Partner created successfully.",
       data: {
         partner: formatPartner(partner),
+        user: partnerUser
+          ? {
+              id: partnerUser._id,
+              email: partnerUser.email,
+              role: partnerUser.role,
+              isFirstLogin: partnerUser.isFirstLogin,
+            }
+          : null,
+        emailSent,
+        otp:
+          onboardingDetails && (process.env.NODE_ENV === "development" || !emailSent)
+            ? onboardingDetails.otp
+            : undefined,
+        setupLink:
+          onboardingDetails && (process.env.NODE_ENV === "development" || !emailSent)
+            ? setupLink
+            : undefined,
       },
     });
   } catch (error) {
@@ -249,6 +391,13 @@ async function updatePartner(req, res) {
       return res.status(404).json({ success: false, message: "Partner not found." });
     }
 
+    DOCUMENT_FIELDS.forEach((fieldName) => {
+      const resolvedValue = resolveDocumentValue(req, fieldName, existingPartner[fieldName] || "");
+      if (resolvedValue !== existingPartner[fieldName]) {
+        updates[fieldName] = resolvedValue;
+      }
+    });
+
     const validationErrors = validatePartnerPayload({
       organizationName: Object.prototype.hasOwnProperty.call(updates, "organizationName")
         ? updates.organizationName
@@ -283,9 +432,7 @@ async function updatePartner(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(updates, "preferredCategories")) {
-      updates.preferredCategories = Array.isArray(updates.preferredCategories)
-        ? updates.preferredCategories
-        : [];
+      updates.preferredCategories = parsePreferredCategories(updates.preferredCategories);
     }
 
     const partner = await Partner.findByIdAndUpdate(id, updates, {

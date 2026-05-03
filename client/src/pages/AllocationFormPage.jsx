@@ -165,6 +165,7 @@ export default function AllocationFormPage() {
   const [report, setReport] = useState(null);
   const [inventory, setInventory] = useState([]);
   const [predictedResources, setPredictedResources] = useState(null);
+  const [predictedAllocatedDays, setPredictedAllocatedDays] = useState(null);
   const [existingAllocation, setExistingAllocation] = useState(null);
   const [allocationQuantities, setAllocationQuantities] = useState({});
   const [allocationMessage, setAllocationMessage] = useState("");
@@ -237,6 +238,24 @@ export default function AllocationFormPage() {
               location: selectedReport.location,
             });
             setPredictedResources(prediction || null);
+            // compute predicted allocated days using a simple heuristic
+            try {
+              const pop = Number(selectedReport.affectedPopulation || 0) || 0;
+              const sev = String(selectedReport.severity || selectedReport.priority || "medium").toLowerCase();
+              const severityMultiplier = { critical: 2.0, high: 1.5, medium: 1.0, low: 0.75 };
+              const multiplier = severityMultiplier[sev] || 1.0;
+              // heuristic: base coverage 1 day per 1000 people, scaled by severity
+              const basePerThousand = 1;
+              const estimated = Math.max(1, Math.ceil((pop / 1000) * basePerThousand * multiplier));
+              setPredictedAllocatedDays(estimated);
+              // auto-fill allocatedDays only when no existing allocation value is present
+              if (!selectedReport?.allocatedResources?.allocatedDays && !allocatedDays) {
+                setAllocatedDays(String(estimated));
+              }
+            } catch (e) {
+              // ignore prediction-derived days failures
+              setPredictedAllocatedDays(null);
+            }
           } catch (predictionFetchError) {
             setPredictionError(predictionFetchError.message || "Failed to load prediction.");
           } finally {
@@ -478,17 +497,31 @@ export default function AllocationFormPage() {
 
                 <div className="meta-row">
                   <label className="block text-sm font-medium text-slate-700">Allocated Days (prediction window)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={allocatedDays}
-                    onChange={(e) => handleAllocatedDaysChange(e.target.value)}
-                    className="mt-1 block w-full border-slate-200 rounded px-2 py-1"
-                    placeholder="Number of days resources should cover"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      value={allocatedDays}
+                      onChange={(e) => handleAllocatedDaysChange(e.target.value)}
+                      className="mt-1 block w-full border-slate-200 rounded px-2 py-1"
+                      placeholder="Number of days resources should cover"
+                    />
+                    {predictedAllocatedDays ? (
+                      <button
+                        type="button"
+                        className="ml-2 rounded bg-sky-600 px-3 py-1 text-xs text-white"
+                        onClick={() => setAllocatedDays(String(predictedAllocatedDays))}
+                      >
+                        Use {predictedAllocatedDays}d
+                      </button>
+                    ) : null}
+                  </div>
                   {allocatedDaysError ? (
                     <p className="mt-1 text-xs text-red-600">{allocatedDaysError}</p>
                   ) : null}
+                  {predictedAllocatedDays && (
+                    <p className="mt-1 text-xs text-slate-500">System suggestion: {predictedAllocatedDays} day{predictedAllocatedDays === 1 ? '' : 's'}</p>
+                  )}
                 </div>
               </div>
             </div>

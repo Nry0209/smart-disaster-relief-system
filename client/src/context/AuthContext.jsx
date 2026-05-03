@@ -65,7 +65,7 @@ export function AuthProvider({ children }) {
         } else if (data.data.user.role === 'inventory_officer' || data.data.user.role === 'charity_staff' || data.data.user.role === 'ngo_partner') {
           navigate("/inventory");
         } else if (data.data.user.role === 'admin') {
-          navigate("/dashboard");
+          navigate("/users");
         } else {
           navigate("/dashboard");
         }

@@ -33,7 +33,8 @@ const DISASTER_TYPES = [
   "Landslide", 
   "Cyclone",
   "Drought",
-  "Tsunami"
+  "Tsunami",
+  "Other",
 ];
 
 function normalizeImmediateNeeds(needs = []) {
@@ -84,6 +85,7 @@ function CreateDisasterReportPage() {
   const reportedByName = user?.fullName || user?.email || "DMC Officer";
   const [formData, setFormData] = useState({
     disasterType: "",
+    disasterTypeOther: "",
     location: "",
     severity: "high",
     affectedPopulation: "",
@@ -102,6 +104,7 @@ function CreateDisasterReportPage() {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [touched, setTouched] = useState({
     disasterType: false,
+    disasterTypeOther: false,
     location: false,
     eventDate: false,
     affectedPopulation: false,
@@ -328,7 +331,8 @@ function CreateDisasterReportPage() {
   }, [completion, formData.immediateNeeds.length]);
 
   const fieldErrors = useMemo(() => {
-    const disasterType = formData.disasterType.trim();
+    const disasterTypeRaw = formData.disasterType === "Other" ? String(formData.disasterTypeOther || "") : String(formData.disasterType || "");
+    const disasterType = disasterTypeRaw.trim();
     const location = formData.location.trim();
     const affectedPopulation = Number(formData.affectedPopulation);
     const normalizedNeeds = normalizeImmediateNeeds(formData.immediateNeeds);
@@ -374,7 +378,8 @@ function CreateDisasterReportPage() {
   }, [formData]);
 
   const validateBeforeSubmit = (actionType) => {
-    const disasterType = formData.disasterType.trim();
+    const disasterTypeRaw = formData.disasterType === "Other" ? String(formData.disasterTypeOther || "") : String(formData.disasterType || "");
+    const disasterType = disasterTypeRaw.trim();
     const location = formData.location.trim();
     const description = formData.description.trim();
     const affectedPopulation = Number(formData.affectedPopulation);
@@ -526,9 +531,11 @@ function CreateDisasterReportPage() {
     setIsSubmitting(true);
 
     try {
+      const finalDisasterType = formData.disasterType === "Other" ? String(formData.disasterTypeOther || "").trim() : String(formData.disasterType || "").trim();
+
       await createDisasterReport({
         ...formData,
-        disasterType: formData.disasterType.trim(),
+        disasterType: finalDisasterType,
         location: formData.location.trim(),
         affectedPopulation: Number(formData.affectedPopulation),
         description: formData.description.trim(),
@@ -546,6 +553,7 @@ function CreateDisasterReportPage() {
       setFormSuccess(successMessage);
       setFormData({
         disasterType: "",
+        disasterTypeOther: "",
         location: "",
         severity: "high",
         affectedPopulation: "",
@@ -621,11 +629,27 @@ function CreateDisasterReportPage() {
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
-                  {touched.disasterType && fieldErrors.disasterType && (
-                    <p className="text-[11px] font-medium text-rose-600">
-                      Disaster type is required.
-                    </p>
-                  )}
+                    {formData.disasterType === "Other" && (
+                      <>
+                        <input
+                          className={getFieldClass(fieldErrors.disasterType)}
+                          type="text"
+                          placeholder="Specify disaster type"
+                          value={formData.disasterTypeOther}
+                          onChange={(e) => handleInputChange("disasterTypeOther", e.target.value)}
+                          onBlur={() => handleFieldBlur("disasterTypeOther")}
+                          maxLength={MAX_DISASTER_TYPE_LENGTH}
+                        />
+                        {touched.disasterTypeOther && fieldErrors.disasterType && (
+                          <p className="text-[11px] font-medium text-rose-600">Please specify disaster type.</p>
+                        )}
+                      </>
+                    )}
+                    {touched.disasterType && fieldErrors.disasterType && (
+                      <p className="text-[11px] font-medium text-rose-600">
+                        Disaster type is required.
+                      </p>
+                    )}
                   <p className="text-[11px] font-medium text-slate-500">
                     Select the type of disaster event
                   </p>

@@ -173,7 +173,9 @@ export default function NGODonationPage() {
       } catch (requestError) {
         if (active) {
           setLinkedRequest(null);
-          setError(requestError.message || "Failed to load linked resource request.");
+          // Don't show "Linked NGO partner profile not found" error
+          // Allow user to proceed with donation form anyway
+          console.log("Resource request loading error:", requestError.message);
         }
       } finally {
         if (active) setRequestLoading(false);
@@ -345,7 +347,7 @@ export default function NGODonationPage() {
       });
 
       setTimeout(() => {
-        navigate("/inventory");
+        navigate("/donations/verify");
       }, 3000);
     } catch (err) {
       setError(err.message || "An error occurred. Please try again.");
