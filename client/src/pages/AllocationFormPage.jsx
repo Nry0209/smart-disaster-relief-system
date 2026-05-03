@@ -238,8 +238,10 @@ export default function AllocationFormPage() {
               location: selectedReport.location,
             });
             setPredictedResources(prediction || null);
+            setPredictionError("");
             // compute predicted allocated days using a simple heuristic
-            try {
+            if (prediction) {
+              try {
               const pop = Number(selectedReport.affectedPopulation || 0) || 0;
               const sev = String(selectedReport.severity || selectedReport.priority || "medium").toLowerCase();
               const severityMultiplier = { critical: 2.0, high: 1.5, medium: 1.0, low: 0.75 };
@@ -252,12 +254,17 @@ export default function AllocationFormPage() {
               if (!selectedReport?.allocatedResources?.allocatedDays && !allocatedDays) {
                 setAllocatedDays(String(estimated));
               }
-            } catch (e) {
+              } catch (e) {
               // ignore prediction-derived days failures
+              setPredictedAllocatedDays(null);
+              }
+            } else {
               setPredictedAllocatedDays(null);
             }
           } catch (predictionFetchError) {
-            setPredictionError(predictionFetchError.message || "Failed to load prediction.");
+            setPredictedResources(null);
+            setPredictedAllocatedDays(null);
+            setPredictionError("");
           } finally {
             setPredictionLoading(false);
           }
@@ -531,7 +538,7 @@ export default function AllocationFormPage() {
               {predictionLoading ? (
                 <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
               ) : predictionError ? (
-                <p className="allocation-error-inline">{predictionError}</p>
+                <p className="allocation-info-inline">No prediction available.</p>
               ) : predictedResources ? (
                 <>
                   <div className="prediction-grid">

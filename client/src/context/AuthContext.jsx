@@ -81,6 +81,22 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const completeLogin = ({ user: loggedInUser, token }) => {
+    setUser(loggedInUser);
+    localStorage.setItem("user", JSON.stringify(loggedInUser));
+    localStorage.setItem("token", token);
+
+    if (loggedInUser.role === 'dmc_officer') {
+      navigate("/dmc-dashboard");
+    } else if (loggedInUser.role === 'inventory_officer' || loggedInUser.role === 'charity_staff' || loggedInUser.role === 'ngo_partner') {
+      navigate("/inventory");
+    } else if (loggedInUser.role === 'admin') {
+      navigate("/users");
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem("user");
@@ -91,6 +107,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     login,
+    completeLogin,
     logout,
     isAuthenticated: !!user,
     loading

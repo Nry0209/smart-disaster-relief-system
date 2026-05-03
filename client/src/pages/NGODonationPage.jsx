@@ -4,14 +4,9 @@ import { AlertTriangle, Package, CheckCircle, Heart, Loader, Warehouse } from "l
 import PageHeader from "../components/PageHeader";
 import { useAuth } from "../context/AuthContext";
 import { fetchInventoryItems } from "../services/inventoryService";
-import { createNGODonation, fetchResourceRequestById } from "../services/workflowService";
-import { ITEM_CATEGORY_LIST } from "../utils/constants";
+import { createNGODonation, fetchPartners, fetchResourceRequestById } from "../services/workflowService";
 import "./Pages.css";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^0\d{9}$/;
-const MIN_TEXT_LENGTH = 2;
-const MAX_TEXT_LENGTH = 80;
 const MIN_MONETARY_AMOUNT = 1000;
 const MIN_ITEM_QUANTITY = 1;
 
@@ -28,20 +23,6 @@ function getTodayDateLocal() {
   const now = new Date();
   const offsetMs = now.getTimezoneOffset() * 60000;
   return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
-}
-
-function validatePhone(value) {
-  const normalized = String(value || "").trim().replace(/\s+/g, "");
-  if (!normalized) {
-    return "";
-  }
-
-  const digitsOnly = normalized.replace(/\D/g, "");
-  if (digitsOnly.length !== 10 || !PHONE_PATTERN.test(digitsOnly)) {
-    return "Phone number must start with 0 and contain exactly 10 digits.";
-  }
-
-  return "";
 }
 
 function formatInventoryLabel(item) {
@@ -61,6 +42,7 @@ export default function NGODonationPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(null);
   const [inventoryItems, setInventoryItems] = useState([]);
+  const [currentNgo, setCurrentNgo] = useState(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [linkedRequest, setLinkedRequest] = useState(null);
   const [requestLoading, setRequestLoading] = useState(false);
@@ -77,13 +59,62 @@ export default function NGODonationPage() {
   });
 
   const [errors, setErrors] = useState({
-    organizationName: "",
-    email: "",
-    phone: "",
     amount: "",
     items: {},
     expectedDeliveryDate: "",
   });
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadCurrentNgo() {
+      try {
+        const partners = await fetchPartners({ status: "active" });
+        if (!active) return;
+
+        const partner = Array.isArray(partners) && partners.length ? partners[0] : null;
+        const ngoDetails = {
+          organizationName: partner?.organizationName || user?.organizationName || user?.fullName || "",
+          email: partner?.email || user?.email || "",
+          phone: partner?.phone || user?.phone || "",
+          contactPerson: partner?.contactPerson || user?.fullName || "",
+        };
+
+        setCurrentNgo(ngoDetails);
+        setForm((prev) => ({
+          ...prev,
+          organizationName: ngoDetails.organizationName,
+          email: ngoDetails.email,
+          phone: ngoDetails.phone,
+        }));
+      } catch {
+        if (!active) return;
+
+        const fallbackNgo = {
+          organizationName: user?.organizationName || user?.fullName || "",
+          email: user?.email || "",
+          phone: user?.phone || "",
+          contactPerson: user?.fullName || "",
+        };
+
+        setCurrentNgo(fallbackNgo);
+        setForm((prev) => ({
+          ...prev,
+          organizationName: fallbackNgo.organizationName,
+          email: fallbackNgo.email,
+          phone: fallbackNgo.phone,
+        }));
+      }
+    }
+
+    if (isAuthenticated && user?.role === "ngo_partner") {
+      loadCurrentNgo();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user]);
 
   // Load inventory items on mount
   useEffect(() => {
@@ -241,32 +272,10 @@ export default function NGODonationPage() {
 
   function validateForm() {
     const newErrors = {
-      organizationName: "",
-      email: "",
-      phone: "",
       amount: "",
       items: {},
       expectedDeliveryDate: "",
     };
-
-    if (!form.organizationName.trim()) {
-      newErrors.organizationName = "Organization name is required.";
-    } else if (form.organizationName.length < MIN_TEXT_LENGTH || form.organizationName.length > MAX_TEXT_LENGTH) {
-      newErrors.organizationName = `Organization name must be between ${MIN_TEXT_LENGTH} and ${MAX_TEXT_LENGTH} characters.`;
-    }
-
-    if (!form.email.trim()) {
-      newErrors.email = "Email is required.";
-    } else if (!EMAIL_PATTERN.test(form.email)) {
-      newErrors.email = "Enter a valid email address.";
-    }
-
-    if (!form.phone.trim()) {
-      newErrors.phone = "Phone number is required.";
-    } else {
-      const phoneError = validatePhone(form.phone);
-      if (phoneError) newErrors.phone = phoneError;
-    }
 
     if (form.donationType === "monetary") {
       const amount = Number(form.amount);
@@ -312,9 +321,6 @@ export default function NGODonationPage() {
     try {
       const payload = {
         donationType: form.donationType,
-        organizationName: form.organizationName,
-        email: form.email,
-        phone: form.phone,
         ...(requestId && { sourceResourceRequestId: requestId }),
         ...(form.donationType === "monetary" && { amount: Number(form.amount) }),
         ...(form.donationType === "inventory" && {
@@ -337,9 +343,9 @@ export default function NGODonationPage() {
 
       setForm({
         donationType: "inventory",
-        organizationName: "",
-        email: "",
-        phone: "",
+        organizationName: currentNgo?.organizationName || "",
+        email: currentNgo?.email || "",
+        phone: currentNgo?.phone || "",
         amount: "",
         items: [{ ...DEFAULT_DONATION_ITEM }],
         expectedDeliveryDate: "",
@@ -347,7 +353,7 @@ export default function NGODonationPage() {
       });
 
       setTimeout(() => {
-        navigate("/donations/verify");
+        navigate("/ngo-inbox");
       }, 3000);
     } catch (err) {
       setError(err.message || "An error occurred. Please try again.");
@@ -455,7 +461,7 @@ export default function NGODonationPage() {
                 <h2 className="text-2xl font-bold text-slate-900 mb-2">Donation Submitted</h2>
                 <p className="text-slate-600 mb-2">{success.message}</p>
                 {success.id && <p className="text-sm text-slate-500">Reference ID: {success.id}</p>}
-                <p className="text-sm text-slate-500 mt-4">Redirecting to inventory...</p>
+                <p className="text-sm text-slate-500 mt-4">Redirecting to NGO inbox...</p>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -488,59 +494,26 @@ export default function NGODonationPage() {
                   </div>
                 </div>
 
-                {/* Organization Details */}
+                {/* Current NGO Details */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-800">Current NGO Details</p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Organization</p>
+                      <p className="mt-1 font-medium text-slate-900">{currentNgo?.organizationName || form.organizationName || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Email</p>
+                      <p className="mt-1 font-medium text-slate-900">{currentNgo?.email || form.email || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Contact</p>
+                      <p className="mt-1 font-medium text-slate-900">{currentNgo?.phone || form.phone || currentNgo?.contactPerson || "-"}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Organization Name *</label>
-                    <input
-                      type="text"
-                      value={form.organizationName}
-                      onChange={(e) => updateField("organizationName", e.target.value)}
-                      className={`w-full px-4 py-2 rounded-lg border transition ${
-                        errors.organizationName
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-slate-300 focus:border-blue-500"
-                      } focus:outline-none`}
-                      placeholder="NGO Name"
-                    />
-                    {errors.organizationName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.organizationName}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Email *</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => updateField("email", e.target.value)}
-                      className={`w-full px-4 py-2 rounded-lg border transition ${
-                        errors.email
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-slate-300 focus:border-blue-500"
-                      } focus:outline-none`}
-                      placeholder="contact@ngo.org"
-                    />
-                    {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Phone Number *</label>
-                    <input
-                      type="tel"
-                      value={form.phone}
-                      onChange={(e) => updateField("phone", e.target.value)}
-                      maxLength={10}
-                      className={`w-full px-4 py-2 rounded-lg border transition ${
-                        errors.phone
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-slate-300 focus:border-blue-500"
-                      } focus:outline-none`}
-                      placeholder="+94 (XX) XXXX XXXX"
-                    />
-                    {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
-                  </div>
-
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Expected Delivery Date</label>
                     <input

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Bell, ChevronDown, Menu, Search } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -45,7 +45,7 @@ function Navbar({ onToggleSidebar }) {
   const roleLabel = formatRole(user?.role);
   const roleTone = user?.role === "admin" ? "is-admin" : "is-staff";
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setIsLoadingNotifications(true);
       setNotificationsError("");
@@ -75,7 +75,7 @@ function Navbar({ onToggleSidebar }) {
     } finally {
       setIsLoadingNotifications(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchNotifications();

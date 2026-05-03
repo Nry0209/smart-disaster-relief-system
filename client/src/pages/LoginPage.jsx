@@ -1,6 +1,7 @@
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import illustration from "../assets/images/loginImage.png";
 import logo from "../assets/images/logo2.png";
 import "./Pages.css";
@@ -31,6 +32,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("admin");
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loginStep, setLoginStep] = useState("credentials"); // credentials, otp, or normal
   const [formError, setFormError] = useState("");
@@ -54,7 +56,7 @@ function LoginPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
 
-  const { login } = useAuth();
+  const { completeLogin } = useAuth();
   const navigate = useNavigate();
 
   const getInputClass = (field) =>
@@ -113,11 +115,9 @@ function LoginPage() {
 
       if (data.success) {
         setFormError("");
-        // Normal login successful
-        await login({
-          email: trimmedEmail,
-          password,
-          role
+        completeLogin({
+          user: data.data.user,
+          token: data.data.token,
         });
       } else {
         // Check if it's a first-login OTP user
@@ -643,19 +643,30 @@ function LoginPage() {
 
               <div className="login-form-group">
                 <label>Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, password: "" }));
-                  }}
-                  placeholder="Enter password"
-                  required
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                  className={getInputClass("password")}
-                />
+                <div className="password-input-wrap">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, password: "" }));
+                    }}
+                    placeholder="Enter password"
+                    required
+                    disabled={isLoading}
+                    autoComplete="current-password"
+                    className={getInputClass("password")}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    disabled={isLoading}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {fieldErrors.password && <p className="mt-1 text-xs text-rose-600">{fieldErrors.password}</p>}
               </div>
 

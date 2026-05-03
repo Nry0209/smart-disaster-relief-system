@@ -114,6 +114,56 @@ function formatPartner(partner) {
   };
 }
 
+async function resolveOwnPartnerForUser(user) {
+  const userId = String(user?.id || "").trim();
+  const normalizedEmail = String(user?.email || "").trim().toLowerCase();
+  const dbUser =
+    userId && mongoose.Types.ObjectId.isValid(userId)
+      ? await User.findById(userId).select("fullName email").lean()
+      : null;
+  const fullName = String(user?.fullName || user?.name || dbUser?.fullName || "").trim();
+  const lookupEmail = String(normalizedEmail || dbUser?.email || "").trim().toLowerCase();
+
+  async function linkPartner(partner) {
+    if (partner && userId && mongoose.Types.ObjectId.isValid(userId) && !partner.userId) {
+      partner.userId = userId;
+      await partner.save();
+    }
+
+    return partner;
+  }
+
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    const partnerByUserId = await Partner.findOne({ userId });
+    if (partnerByUserId) {
+      return partnerByUserId;
+    }
+  }
+
+  if (lookupEmail) {
+    const partnerByEmail = await Partner.findOne({ email: lookupEmail });
+    if (partnerByEmail) {
+      return linkPartner(partnerByEmail);
+    }
+  }
+
+  if (fullName) {
+    const escapedName = fullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const partnerByName = await Partner.findOne({
+      $or: [
+        { contactPerson: { $regex: `^${escapedName}$`, $options: "i" } },
+        { organizationName: { $regex: `^${escapedName}$`, $options: "i" } },
+      ],
+    });
+
+    if (partnerByName) {
+      return linkPartner(partnerByName);
+    }
+  }
+
+  return null;
+}
+
 async function listPartners(req, res) {
   try {
     if (!isDbConnected()) {
@@ -125,6 +175,17 @@ async function listPartners(req, res) {
 
     const { status, search } = req.query;
     const filter = {};
+
+    if (req.user?.role === "ngo_partner") {
+      const partner = await resolveOwnPartnerForUser(req.user);
+
+      return res.json({
+        success: true,
+        data: {
+          partners: partner ? [formatPartner(partner)] : [],
+        },
+      });
+    }
 
     if (status) {
       filter.status = status;
@@ -221,6 +282,25 @@ async function createPartner(req, res) {
           success: false,
           message: "A user with this email already exists with a non-NGO role.",
         });
+      }
+
+      if (partnerUser.isFirstLogin) {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+        const setupToken = crypto.randomBytes(32).toString("hex");
+        const resetPasswordToken = crypto.createHash("sha256").update(setupToken).digest("hex");
+        const resetPasswordExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        partnerUser.otp = otp;
+        partnerUser.otpExpires = otpExpires;
+        partnerUser.resetPasswordToken = resetPasswordToken;
+        partnerUser.resetPasswordExpires = resetPasswordExpires;
+        await partnerUser.save();
+
+        onboardingDetails = {
+          otp,
+          setupToken,
+        };
       }
     } else {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();

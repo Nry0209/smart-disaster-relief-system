@@ -4,6 +4,7 @@ const Donation = require("../models/Donation");
 const InventoryItem = require("../models/InventoryItem");
 const Partner = require("../models/Partner");
 const DisasterReport = require("../models/DisasterReport");
+const User = require("../models/User");
 
 const isDbConnected = () => {
   return mongoose.connection.readyState === 1;
@@ -12,9 +13,24 @@ const isDbConnected = () => {
 async function resolvePartnerForUser(req) {
   const userId = String(req.user?.id || "").trim();
   const normalizedEmail = String(req.user?.email || "").trim().toLowerCase();
+  const dbUser =
+    userId && mongoose.Types.ObjectId.isValid(userId)
+      ? await User.findById(userId).select("fullName email").lean()
+      : null;
+  const fullName = String(req.user?.fullName || req.user?.name || dbUser?.fullName || "").trim();
+  const lookupEmail = String(normalizedEmail || dbUser?.email || "").trim().toLowerCase();
 
-  if (!userId && !normalizedEmail) {
+  if (!userId && !lookupEmail) {
     return null;
+  }
+
+  async function linkPartner(partner) {
+    if (partner && userId && mongoose.Types.ObjectId.isValid(userId) && !partner.userId) {
+      partner.userId = userId;
+      await partner.save();
+    }
+
+    return partner;
   }
 
   // First try to find by userId (most reliable)
@@ -26,18 +42,33 @@ async function resolvePartnerForUser(req) {
   }
 
   // Then try by exact email match
-  if (normalizedEmail) {
-    const partnerByEmail = await Partner.findOne({ email: normalizedEmail });
+  if (lookupEmail) {
+    const partnerByEmail = await Partner.findOne({ email: lookupEmail });
     if (partnerByEmail) {
-      return partnerByEmail;
+      return linkPartner(partnerByEmail);
     }
   }
 
-  // Finally try by contact person name
+  // Finally try by user name against contact person or organization name.
+  // This repairs older seed/test records that were created before Partner.userId existed.
+  if (fullName) {
+    const escapedName = fullName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const partnerByName = await Partner.findOne({
+      $or: [
+        { contactPerson: { $regex: `^${escapedName}$`, $options: "i" } },
+        { organizationName: { $regex: `^${escapedName}$`, $options: "i" } },
+      ],
+    });
+
+    if (partnerByName) {
+      return linkPartner(partnerByName);
+    }
+  }
+
   if (req.user?.fullName) {
     const partnerByContact = await Partner.findOne({ contactPerson: req.user.fullName });
     if (partnerByContact) {
-      return partnerByContact;
+      return linkPartner(partnerByContact);
     }
   }
 
@@ -174,7 +205,7 @@ async function createResourceRequest(req, res) {
       resourceRequestData.amount = Number(amount);
     } else {
       resourceRequestData.items = items.map(item => ({
-        inventoryItemId: item.inventoryItemId || null,
+        resourceId: item.inventoryItemId || item.resourceId || null,
         itemName: item.itemName,
         category: item.category,
         quantity: Number(item.quantity),
@@ -220,7 +251,16 @@ async function listResourceRequests(req, res) {
       const partner = await resolvePartnerForUser(req);
 
       if (!partner) {
-        return res.status(404).json({ message: "Linked NGO partner profile not found." });
+        return res.json({
+          resourceRequests: [],
+          pagination: {
+            current: parseInt(page),
+            pageSize: parseInt(limit),
+            total: 0,
+            pages: 0,
+          },
+          message: "No linked NGO partner profile found for this user.",
+        });
       }
 
       filter.ngoPartner = partner._id;
@@ -234,7 +274,7 @@ async function listResourceRequests(req, res) {
     const resourceRequests = await ResourceRequest.find(filter)
       .populate('ngoPartner', 'organizationName contactPerson email phone userId')
       .populate('disasterId', 'disasterType location severityLevel')
-      .populate('requestedBy', 'fullName email')
+      .populate('reviewedBy', 'fullName email')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -280,7 +320,7 @@ async function getResourceRequestById(req, res) {
     const resourceRequest = await ResourceRequest.findById(id)
       .populate('ngoPartner', 'organizationName contactPerson email phone userId')
       .populate('disasterId', 'disasterType location severityLevel affectedPopulation')
-      .populate('requestedBy', 'fullName email');
+      .populate('reviewedBy', 'fullName email');
 
     if (!resourceRequest) {
       return res.status(404).json({ message: "Resource request not found." });

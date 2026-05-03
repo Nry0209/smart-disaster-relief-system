@@ -8,17 +8,21 @@ function getAuthHeaders() {
 }
 
 export const getResourcePrediction = async ({ disasterType, severity, affectedPopulation, disasterId, location }) => {
-  const response = await axios.post(`${API_BASE_URL}/api/predictions`, {
-    disasterType,
-    severity,
-    affectedPopulation,
-    disasterId,
-    location,
-  }, {
-    headers: getAuthHeaders(),
-  });
+  try {
+    const response = await axios.post(`${API_BASE_URL}/api/predictions`, {
+      disasterType,
+      severity,
+      affectedPopulation,
+      disasterId,
+      location,
+    }, {
+      headers: getAuthHeaders(),
+    });
 
-  return response.data;
+    return response.data;
+  } catch {
+    return null;
+  }
 };
 
 export const getPredictionLogs = async (params = {}) => {

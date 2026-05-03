@@ -80,6 +80,7 @@ export async function fetchResourceRequests(params = {}) {
   const query = buildQuery(params);
   const response = await fetch(`${API_BASE_URL}/api/resource-requests${query}`, {
     headers: buildHeaders({ includeJson: false, includeAuth: true }),
+    cache: "no-store",
   });
 
   const data = await parseResponse(response, "Failed to fetch resource requests.");
@@ -89,6 +90,7 @@ export async function fetchResourceRequests(params = {}) {
 export async function fetchResourceRequestById(id) {
   const response = await fetch(`${API_BASE_URL}/api/resource-requests/${id}`, {
     headers: buildHeaders({ includeJson: false, includeAuth: true }),
+    cache: "no-store",
   });
 
   const data = await parseResponse(response, "Failed to fetch resource request.");

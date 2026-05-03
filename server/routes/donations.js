@@ -15,7 +15,7 @@ const {
   inventoryOfficerOnly,
   adminOnly
 } = require('../config/auth');
-const { validateDonation } = require('../middleware/validation');
+const { validateDonation, validateNGODonation } = require('../middleware/validation');
 
 // Get all donations (Inventory Officer and Admin only)
 router.get('/', authenticateToken, inventoryOfficerOnly, listDonations);
@@ -26,7 +26,7 @@ router.get('/statistics', authenticateToken, inventoryOfficerOnly, getDonationSt
 // Create donation (NGO authenticated only)
 router.post('/', authenticateToken, validateDonation, createDonation);
 // Create NGO donation (Authenticated NGO partners only)
-router.post('/ngo', authenticateToken, validateDonation, createNGODonation);
+router.post('/ngo', authenticateToken, validateNGODonation, createNGODonation);
 
 
 // Get donation by ID (Inventory Officer and Admin only)

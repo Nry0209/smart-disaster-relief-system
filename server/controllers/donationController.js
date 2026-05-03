@@ -76,9 +76,11 @@ async function createNGODonation(req, res) {
       });
     }
 
-    if (!organizationName || !String(organizationName).trim()) {
-      return res.status(400).json({ message: "Organization name is required." });
-    }
+    const resolvedOrganizationName = String(
+      partner.organizationName || organizationName || req.user?.organizationName || req.user?.fullName || "Unknown NGO"
+    ).trim();
+    const resolvedEmail = String(partner.email || email || req.user?.email || "").trim();
+    const resolvedPhone = String(partner.phone || phone || req.user?.phone || "").trim();
 
     const normalizedDonationType = donationType === "monetary" ? "monetary" : "inventory";
 
@@ -141,10 +143,10 @@ async function createNGODonation(req, res) {
       userId: userId,           // Keep userId for audit trail
       donorType: "organization",
       donationType: normalizedDonationType,
-      donorName: String(organizationName).trim(),
-      organizationName: String(organizationName).trim(),
-      email: String(email || "").trim(),
-      phone: String(phone || "").trim(),
+      donorName: resolvedOrganizationName,
+      organizationName: resolvedOrganizationName,
+      email: resolvedEmail,
+      phone: resolvedPhone,
       items: normalizedDonationType === "inventory" ? normalizedInventoryItems : [],
       itemType: normalizedDonationType === "inventory" ? normalizedInventoryItems[0]?.itemName || "" : "",
       category: normalizedDonationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "",

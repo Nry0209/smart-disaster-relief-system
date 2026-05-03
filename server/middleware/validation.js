@@ -346,6 +346,50 @@ const validateDonation = [
   handleValidationErrors
 ];
 
+const validateNGODonation = [
+  body('donationType')
+    .isIn(['monetary', 'inventory'])
+    .withMessage('Donation type must be monetary or inventory'),
+
+  body('items')
+    .if(body('donationType').equals('inventory'))
+    .isArray({ min: 1 })
+    .withMessage('For inventory donations, at least one item is required'),
+
+  body('items.*.inventoryItemId')
+    .if(body('donationType').equals('inventory'))
+    .isMongoId()
+    .withMessage('Each selected donation item must include a valid inventoryItemId'),
+
+  body('items.*.quantity')
+    .if(body('donationType').equals('inventory'))
+    .isInt({ min: 1 })
+    .withMessage('Each selected donation item must include a quantity greater than zero'),
+
+  body('amount')
+    .if(body('donationType').equals('monetary'))
+    .isFloat({ min: 0.01 })
+    .withMessage('Amount must be a positive number'),
+
+  body('sourceResourceRequestId')
+    .optional()
+    .isMongoId()
+    .withMessage('sourceResourceRequestId must be a valid MongoDB ID'),
+
+  body('expectedDeliveryDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Expected delivery date must be a valid date'),
+
+  body('notes')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Notes must be 500 characters or fewer'),
+
+  handleValidationErrors
+];
+
 // MongoDB ID validation
 const validateMongoId = (paramName = 'id') => [
   param(paramName)
@@ -388,6 +432,7 @@ module.exports = {
   validateAllocationPlan,
   validateDispatchRecord,
   validateDonation,
+  validateNGODonation,
   validateMongoId,
   validatePagination,
   handleValidationErrors

@@ -10,7 +10,7 @@ const {
   updatePartner,
   deletePartner,
 } = require('../controllers/partnerController');
-const { authenticateToken, adminOnly, internalStaffOnly } = require('../config/auth');
+const { authenticateToken, adminOnly, internalStaffOnly, authorizeRoles } = require('../config/auth');
 
 const partnerUploadRoot = path.join(__dirname, '..', 'uploads', 'partners');
 const partnerDocumentFolders = {
@@ -73,7 +73,12 @@ const uploadPartnerDocuments = (req, res, next) => {
   });
 };
 
-router.get('/', authenticateToken, internalStaffOnly, listPartners);
+router.get(
+  '/',
+  authenticateToken,
+  authorizeRoles('admin', 'dmc_officer', 'inventory_officer', 'allocation_officer', 'tracking_officer', 'charity_staff', 'ngo_partner'),
+  listPartners
+);
 router.post('/', authenticateToken, adminOnly, uploadPartnerDocuments, createPartner);
 router.get('/:id', authenticateToken, internalStaffOnly, getPartnerById);
 router.put('/:id', authenticateToken, adminOnly, uploadPartnerDocuments, updatePartner);
