@@ -416,10 +416,6 @@ async function deleteResourceRequest(req, res) {
       return res.status(404).json({ message: "Resource request not found." });
     }
 
-    if (req.user?.role !== "ngo_partner") {
-      return res.status(403).json({ message: "Only NGO partners can remove their own resource requests." });
-    }
-
     const partner = await resolvePartnerForUser(req);
     const requestPartnerId = String(resourceRequest.ngoPartner?._id || resourceRequest.ngoPartner || "");
 

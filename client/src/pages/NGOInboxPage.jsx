@@ -232,7 +232,7 @@ export default function NGOInboxPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-4 xl:grid-cols-2">
               {filteredRequests.map((request, index) => {
                 const requestId = getRequestId(request);
                 const isFocusedRequest = Boolean(focusedRequestId) && requestId === focusedRequestId;
