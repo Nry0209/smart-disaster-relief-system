@@ -97,6 +97,3 @@ Run API tests from `server/`:
 
 ## License
 MIT
-
----
-If you want, I can: add a sample `.env.example`, create `ml/requirements.txt`, or wire up a simple Docker Compose development stack. Which would you like next?
