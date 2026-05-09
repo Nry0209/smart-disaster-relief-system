@@ -95,6 +95,12 @@ const donationSchema = new mongoose.Schema(
       min: 0,
       default: 0,
     },
+    selectedBank: {
+      type: String,
+      enum: ["boc", "peoples", null],
+      default: null,
+      trim: true,
+    },
     expectedDeliveryDate: {
       type: Date,
       default: null,

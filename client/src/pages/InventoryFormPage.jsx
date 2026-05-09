@@ -256,7 +256,7 @@ export default function InventoryFormPage({ mode = "create" }) {
     }
 
     if (!Number.isInteger(stock) || stock < 1) {
-      nextFieldErrors.stock = "Amount must be at least 1.";
+      nextFieldErrors.stock = "Count must be at least 1.";
     }
 
     if (!normalizedWarehouse) {
@@ -390,7 +390,7 @@ export default function InventoryFormPage({ mode = "create" }) {
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="form-group">
-                    <label>Amount</label>
+                    <label>Count of Item</label>
                     <input
                       className={inlineInputClass(fieldErrors.stock)}
                       type="number"
@@ -468,7 +468,7 @@ export default function InventoryFormPage({ mode = "create" }) {
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="form-group">
-                    <label>Amount</label>
+                    <label>Count of Item</label>
                     <input
                       className={inlineInputClass(fieldErrors.quantity)}
                       type="number"

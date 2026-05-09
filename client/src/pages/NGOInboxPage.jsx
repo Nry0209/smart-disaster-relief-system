@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, Clock3, ExternalLink, Inbox, Package, RefreshCcw, ShieldCheck } from "lucide-react";
 import PageHeader from "../components/PageHeader";
-import ResourceRequestInlineForm from "../components/ResourceRequestInlineForm";
 import { useAuth } from "../context/AuthContext";
 import { deleteResourceRequestById, fetchResourceRequestById, fetchResourceRequests } from "../services/workflowService";
 import "./Pages.css";
@@ -185,9 +184,6 @@ export default function NGOInboxPage() {
           </div>
         </div>
 
-        <div className="mt-6">
-          <ResourceRequestInlineForm onSubmitted={loadRequests} />
-        </div>
 
         <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

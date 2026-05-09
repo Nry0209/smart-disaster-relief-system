@@ -10,6 +10,19 @@ import "./Pages.css";
 const MIN_MONETARY_AMOUNT = 1000;
 const MIN_ITEM_QUANTITY = 1;
 
+const BANK_TRANSFER_OPTIONS = [
+  {
+    code: "boc",
+    name: "Bank of Ceylon (BOC)",
+    accountNumber: "000000000000",
+  },
+  {
+    code: "peoples",
+    name: "People's Bank",
+    accountNumber: "111111111111",
+  },
+];
+
 const DEFAULT_DONATION_ITEM = {
   inventoryItemId: "",
   category: "",
@@ -53,6 +66,7 @@ export default function NGODonationPage() {
     email: "",
     phone: "",
     amount: "",
+    selectedBank: "",
     items: [{ ...DEFAULT_DONATION_ITEM }],
     expectedDeliveryDate: "",
     notes: "",
@@ -60,6 +74,7 @@ export default function NGODonationPage() {
 
   const [errors, setErrors] = useState({
     amount: "",
+    selectedBank: "",
     items: {},
     expectedDeliveryDate: "",
   });
@@ -271,13 +286,12 @@ export default function NGODonationPage() {
   }
 
   function validateForm() {
-    const newErrors = {
-      amount: "",
-      items: {},
-      expectedDeliveryDate: "",
-    };
+    const newErrors = { amount: "", selectedBank: "", items: {}, expectedDeliveryDate: "" };
 
     if (form.donationType === "monetary") {
+      if (!form.selectedBank) {
+        newErrors.selectedBank = "Please select a bank for the transfer.";
+      }
       const amount = Number(form.amount);
       if (!form.amount) {
         newErrors.amount = "Amount is required.";
@@ -322,6 +336,7 @@ export default function NGODonationPage() {
       const payload = {
         donationType: form.donationType,
         ...(requestId && { sourceResourceRequestId: requestId }),
+        ...(form.donationType === "monetary" && { selectedBank: form.selectedBank }),
         ...(form.donationType === "monetary" && { amount: Number(form.amount) }),
         ...(form.donationType === "inventory" && {
           items: form.items.map((item) => ({
@@ -347,6 +362,7 @@ export default function NGODonationPage() {
         email: currentNgo?.email || "",
         phone: currentNgo?.phone || "",
         amount: "",
+        selectedBank: "",
         items: [{ ...DEFAULT_DONATION_ITEM }],
         expectedDeliveryDate: "",
         notes: "",
@@ -516,24 +532,11 @@ export default function NGODonationPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Expected Delivery Date</label>
-                    <input
-                      type="date"
-                      value={form.expectedDeliveryDate}
-                      onChange={(e) => updateField("expectedDeliveryDate", e.target.value)}
-                      min={getTodayDateLocal()}
-                      className={`w-full px-4 py-2 rounded-lg border transition ${
-                        errors.expectedDeliveryDate
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-slate-300 focus:border-blue-500"
-                      } focus:outline-none`}
-                    />
-                    {errors.expectedDeliveryDate && (
-                      <p className="mt-1 text-sm text-red-600">{errors.expectedDeliveryDate}</p>
-                    )}
+                    <input type="date" value={form.expectedDeliveryDate} onChange={(e) => updateField("expectedDeliveryDate", e.target.value)} min={getTodayDateLocal()} className={`w-full px-4 py-2 rounded-lg border transition ${errors.expectedDeliveryDate ? "border-red-500" : "border-slate-300 focus:border-blue-500"} focus:outline-none`} />
+                    {errors.expectedDeliveryDate && <p className="mt-1 text-sm text-red-600">{errors.expectedDeliveryDate}</p>}
                   </div>
                 </div>
 
-                {/* Donation Items (Inventory) */}
                 {form.donationType === "inventory" && (
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-3">Donation Items *</label>
@@ -543,138 +546,77 @@ export default function NGODonationPage() {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-2">Category</label>
-                              <select
-                                value={item.category}
-                                onChange={(e) => updateItemField(index, "category", e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none"
-                              >
+                              <select value={item.category} onChange={(e) => updateItemField(index, "category", e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none">
                                 <option value="">Select category</option>
-                                {categoryOptions.map((cat) => (
-                                  <option key={cat} value={cat}>
-                                    {cat}
-                                  </option>
-                                ))}
+                                {categoryOptions.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
                               </select>
                             </div>
-
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-2">Item</label>
-                              <select
-                                value={item.inventoryItemId}
-                                onChange={(e) => {
-                                  const selectedId = e.target.value;
-                                  const selectedItem = inventoryItems.find((i) => i.id === selectedId);
-                                  updateItemField(index, "inventoryItemId", selectedId);
-                                  if (selectedItem) {
-                                    updateItemField(index, "itemName", selectedItem.name);
-                                    updateItemField(index, "packageSize", selectedItem.packageSize || "");
-                                    updateItemField(index, "unit", selectedItem.unit || "units");
-                                  }
-                                }}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none"
-                              >
+                              <select value={item.inventoryItemId} onChange={(e) => { const sid = e.target.value; const si = inventoryItems.find((i) => i.id === sid); updateItemField(index, "inventoryItemId", sid); if (si) { updateItemField(index, "itemName", si.name); updateItemField(index, "packageSize", si.packageSize || ""); updateItemField(index, "unit", si.unit || "units"); }}} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none">
                                 <option value="">Select item</option>
-                                {inventoryItems
-                                  .filter((i) => i.isSelectable !== false)
-                                  .filter((i) => !item.category || i.category === item.category)
-                                  .map((invItem) => (
-                                    <option key={invItem.id} value={invItem.id}>
-                                      {formatInventoryLabel(invItem)}
-                                    </option>
-                                  ))}
+                                {inventoryItems.filter((i) => i.isSelectable !== false).filter((i) => !item.category || i.category === item.category).map((invItem) => (<option key={invItem.id} value={invItem.id}>{formatInventoryLabel(invItem)}</option>))}
                               </select>
                             </div>
-
                             <div>
                               <label className="block text-xs font-medium text-slate-700 mb-2">Quantity</label>
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => updateItemField(index, "quantity", e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none"
-                                placeholder="0"
-                              />
+                              <input type="number" min="1" value={item.quantity} onChange={(e) => updateItemField(index, "quantity", e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:border-blue-500 focus:outline-none" placeholder="0" />
                             </div>
                           </div>
-
-                          {errors.items[index] && (
-                            <p className="text-sm text-red-600">{errors.items[index]}</p>
-                          )}
-
-                          {form.items.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeItem(index)}
-                              className="text-sm text-red-600 hover:text-red-700 font-medium"
-                            >
-                              Remove Item
-                            </button>
-                          )}
+                          {errors.items[index] && <p className="text-sm text-red-600">{errors.items[index]}</p>}
+                          {form.items.length > 1 && (<button type="button" onClick={() => removeItem(index)} className="text-sm text-red-600 hover:text-red-700 font-medium">Remove Item</button>)}
                         </div>
                       ))}
-
-                      <button
-                        type="button"
-                        onClick={addItem}
-                        className="w-full px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition font-medium"
-                      >
-                        + Add Another Item
-                      </button>
+                      <button type="button" onClick={addItem} className="w-full px-4 py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-slate-400 hover:bg-slate-50 transition font-medium">+ Add Another Item</button>
                     </div>
                   </div>
                 )}
 
-                {/* Monetary Amount */}
                 {form.donationType === "monetary" && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Amount (LKR) *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={form.amount}
-                      onChange={(e) => updateField("amount", e.target.value)}
-                      className={`w-full px-4 py-2 rounded-lg border transition ${
-                        errors.amount
-                          ? "border-red-500 focus:border-red-500"
-                          : "border-slate-300 focus:border-blue-500"
-                      } focus:outline-none`}
-                      placeholder="0"
-                    />
-                    {errors.amount && <p className="mt-1 text-sm text-red-600">{errors.amount}</p>}
-                    <p className="mt-1 text-xs text-slate-500">Minimum donation: LKR {MIN_MONETARY_AMOUNT.toLocaleString()}</p>
+                    <label className="block text-sm font-medium text-slate-700 mb-3">Select Bank for Transfer *</label>
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 space-y-4">
+                      <p className="text-sm text-blue-800 font-semibold">Click a bank below to select it for your money transfer:</p>
+                      {BANK_TRANSFER_OPTIONS.map((bank) => (
+                        <div
+                          key={bank.code}
+                          onClick={() => updateField("selectedBank", bank.code)}
+                          className={`rounded-xl border-2 bg-white p-4 space-y-2 cursor-pointer transition ${form.selectedBank === bank.code ? "border-blue-600 ring-2 ring-blue-200 bg-blue-50" : "border-slate-200 hover:border-slate-300"}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <input type="radio" checked={form.selectedBank === bank.code} readOnly className="accent-blue-600" />
+                            <p className="text-sm font-bold text-slate-900">🏦 {bank.name}</p>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm ml-6">
+                            <div>
+                              <span className="text-xs uppercase tracking-wide text-slate-500">Account Number</span>
+                              <p className="font-mono font-semibold text-slate-800">{bank.accountNumber}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs uppercase tracking-wide text-slate-500">Beneficiary Name</span>
+                              <p className="font-semibold text-slate-800">{currentNgo?.organizationName || form.organizationName || "\u2014"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {errors.selectedBank && <p className="mt-1 text-sm text-red-600">{errors.selectedBank}</p>}
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Transfer Amount (LKR) *</label>
+                      <input type="number" min={MIN_MONETARY_AMOUNT} value={form.amount} onChange={(e) => updateField("amount", e.target.value)} className={`w-full px-4 py-2 rounded-lg border transition ${errors.amount ? "border-red-500" : "border-slate-300 focus:border-blue-500"} focus:outline-none`} placeholder="Enter amount (min 1,000)" />
+                      {errors.amount && <p className="mt-1 text-sm text-red-600">{errors.amount}</p>}
+                      <p className="mt-1 text-xs text-slate-500">Minimum donation: LKR {MIN_MONETARY_AMOUNT.toLocaleString()}</p>
+                    </div>
                   </div>
                 )}
 
-                {/* Notes */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Additional Notes</label>
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => updateField("notes", e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-blue-500 focus:outline-none transition resize-none"
-                    placeholder="Any special instructions or details..."
-                    rows="4"
-                  />
+                  <textarea value={form.notes} onChange={(e) => updateField("notes", e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:border-blue-500 focus:outline-none transition resize-none" placeholder="Any special instructions or details..." rows="4" />
                 </div>
 
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Heart className="w-4 h-4" />
-                      Submit Donation
-                    </>
-                  )}
+                <button type="submit" disabled={submitting} className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2">
+                  {submitting ? (<><Loader className="w-4 h-4 animate-spin" /> Submitting...</>) : (<><Heart className="w-4 h-4" /> Submit Donation</>)}
                 </button>
               </form>
             )}

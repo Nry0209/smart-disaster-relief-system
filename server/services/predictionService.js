@@ -50,6 +50,7 @@ function estimateLocally({ disasterType, severity, affectedPopulation }) {
 
 const getPrediction = async ({ disasterType, severity, affectedPopulation }) => {
   try {
+    // Attempt ML service call (longer timeout to accommodate model load)
     const response = await axios.post(
       PREDICTION_API_URL,
       {
@@ -57,7 +58,7 @@ const getPrediction = async ({ disasterType, severity, affectedPopulation }) => 
         severity,
         affectedPopulation,
       },
-      { timeout: 5000 }
+      { timeout: 10000 }
     );
 
     return {
@@ -65,9 +66,23 @@ const getPrediction = async ({ disasterType, severity, affectedPopulation }) => 
       source: "ml-service",
     };
   } catch (error) {
+    // Log detailed error for troubleshooting
+    try {
+      console.error('Prediction service call failed:', {
+        url: PREDICTION_API_URL,
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        responseData: error.response?.data,
+      });
+    } catch (logErr) {
+      console.error('Prediction service call failed (could not serialize error):', logErr);
+    }
+
     return {
       ...estimateLocally({ disasterType, severity, affectedPopulation }),
       warning: "ML prediction service unavailable; fallback estimate used.",
+      source: "rule-based-fallback",
     };
   }
 };

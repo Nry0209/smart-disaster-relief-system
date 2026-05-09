@@ -54,6 +54,11 @@ const predictionLogSchema = new mongoose.Schema(
       type: [predictedResourceSchema],
       default: [],
     },
+    allocatedDays: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

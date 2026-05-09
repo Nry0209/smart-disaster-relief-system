@@ -67,6 +67,63 @@ const staffLogin = async (req, res) => {
   }
 };
 
+// Unified Login (Identifies role automatically)
+const unifiedLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ success: false, message: 'Email and password are required' });
+    if (!isDatabaseConnected()) return res.status(503).json({ success: false, message: 'Database unavailable. Please try again shortly.' });
+
+    const normalizedEmail = email.toLowerCase();
+    
+    // 1. Find user by email
+    const user = await User.findOne({ email: normalizedEmail, status: 'active' });
+    
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // 2. Check if it's a first-time login for non-admin
+    if (user.role !== 'admin' && user.isFirstLogin) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'First-time login requires OTP/password setup. Please verify OTP first.' 
+      });
+    }
+
+    // 3. Verify password
+    const isMatch = user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // 4. Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // 5. Generate token
+    const token = generateToken(user);
+
+    res.json({ 
+      success: true, 
+      message: 'Login successful', 
+      data: { 
+        user: { 
+          id: user._id, 
+          fullName: user.fullName, 
+          email: user.email, 
+          role: user.role, 
+          status: user.status 
+        }, 
+        token 
+      } 
+    });
+  } catch (error) {
+    console.error('Unified login error:', error);
+    res.status(500).json({ success: false, message: 'Server error during login' });
+  }
+};
+
 // Create Staff / NGO partner (admin only)
 const createStaff = async (req, res) => {
   try {
@@ -350,6 +407,7 @@ const deleteUser = async (req, res) => {
 };
 
 module.exports = {
+  unifiedLogin,
   adminLogin,
   staffLogin,
   createStaff,

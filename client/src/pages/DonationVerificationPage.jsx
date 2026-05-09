@@ -115,6 +115,7 @@ export default function DonationVerificationPage() {
                   <th>Donor</th>
                   <th>Donor Type</th>
                   <th>Donation Type</th>
+                  <th>Bank</th>
                   <th>Details</th>
                   <th>Status</th>
                   <th>Submitted</th>
@@ -124,7 +125,7 @@ export default function DonationVerificationPage() {
               <tbody>
                 {!filtered.length ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-slate-500">No donations found.</td>
+                    <td colSpan={8} className="text-center text-slate-500">No donations found.</td>
                   </tr>
                 ) : (
                   filtered.map((donation) => (
@@ -137,6 +138,15 @@ export default function DonationVerificationPage() {
                       </td>
                       <td>{donation.donorType || "individual"}</td>
                       <td>{donation.donationType || "inventory"}</td>
+                      <td>
+                        {donation.donationType === "monetary"
+                          ? donation.selectedBank === "boc"
+                            ? "Bank of Ceylon"
+                            : donation.selectedBank === "peoples"
+                              ? "People's Bank"
+                              : "-"
+                          : "-"}
+                      </td>
                       <td>
                         {donation.donationType === "monetary"
                           ? `LKR ${Number(donation.amount || 0).toLocaleString()}`

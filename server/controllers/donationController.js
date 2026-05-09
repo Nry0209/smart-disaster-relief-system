@@ -26,6 +26,7 @@ function normalizeDonationPayload(payload = {}) {
     quantity: Number(payload.quantity),
     amount: Number(payload.amount),
     expectedDeliveryDate: payload.expectedDeliveryDate || null,
+    selectedBank: String(payload.selectedBank || "").trim(),
     partnerId: payload.partnerId || null,
     sourceResourceRequestId: payload.sourceResourceRequestId || null,
   };
@@ -65,6 +66,7 @@ async function createNGODonation(req, res) {
       phone,
       items,
       amount,
+      selectedBank,
       expectedDeliveryDate,
       sourceResourceRequestId,
       notes
@@ -116,6 +118,13 @@ async function createNGODonation(req, res) {
           message: "For monetary donations, a valid amount greater than 0 is required."
         });
       }
+
+      const normalizedSelectedBank = String(selectedBank || "").trim();
+      if (!["boc", "peoples"].includes(normalizedSelectedBank)) {
+        return res.status(400).json({
+          message: "For monetary donations, select either BOC or People's Bank."
+        });
+      }
     }
 
     let linkedResourceRequest = null;
@@ -152,6 +161,7 @@ async function createNGODonation(req, res) {
       category: normalizedDonationType === "inventory" ? normalizedInventoryItems[0]?.category || "" : "",
       quantity: normalizedDonationType === "inventory" ? totalInventoryQuantity : 0,
       amount: normalizedDonationType === "monetary" ? Number(amount) : 0,
+      selectedBank: normalizedDonationType === "monetary" ? String(selectedBank || "").trim() : null,
       expectedDeliveryDate: normalizedDonationType === "inventory" ? expectedDeliveryDate || null : null,
       sourceResourceRequestId: linkedResourceRequest ? linkedResourceRequest._id : null,
       status: "pending_verification",
@@ -412,6 +422,7 @@ async function listDonations(req, res) {
     const donations = await Donation.find(filter)
       .populate('partnerId', 'name email')
       .populate('verifiedBy', 'fullName email')
+      .select('+selectedBank')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);

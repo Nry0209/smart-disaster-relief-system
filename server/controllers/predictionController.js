@@ -3,6 +3,28 @@ const mongoose = require("mongoose");
 const PredictionLog = require("../models/PredictionLog");
 const { ITEM_CATEGORIES } = require("../utils/constants");
 
+function estimateAllocatedDays({ disasterType, severity, affectedPopulation }) {
+  const population = Math.max(0, Number(affectedPopulation) || 0);
+  const normalizedSeverity = String(severity || "medium").trim().toLowerCase();
+  const type = String(disasterType || "").toLowerCase();
+
+  const severityMultiplier = {
+    low: 0.45,
+    medium: 0.75,
+    high: 1.1,
+    critical: 1.45,
+  }[normalizedSeverity] || 0.75;
+
+  const disasterTypeMultiplier =
+    type.includes("flood") ? 1.1 :
+    type.includes("earthquake") ? 1.25 :
+    type.includes("cyclone") ? 1.2 :
+    type.includes("fire") ? 0.9 :
+    1;
+
+  return Math.max(1, Math.ceil((population / 1000) * (severityMultiplier / 0.75) * disasterTypeMultiplier));
+}
+
 const predictResources = async (req, res) => {
   try {
     const { disasterType, severity, affectedPopulation, disasterId, location } = req.body;
@@ -27,6 +49,8 @@ const predictResources = async (req, res) => {
       severity: normalizedSeverity,
       affectedPopulation: numericPopulation,
     });
+
+    // (debug log removed)
 
     if (disasterId && mongoose.Types.ObjectId.isValid(disasterId)) {
       const predictedResources = [
@@ -59,6 +83,9 @@ const predictResources = async (req, res) => {
           affectedPeople: numericPopulation,
         },
         predictedResources,
+        allocatedDays: Number.isFinite(Number(result.allocatedDays)) && Number(result.allocatedDays) >= 1
+          ? Number(result.allocatedDays)
+          : null,
         generatedBy: req.user?.id || null,
       });
     }
@@ -66,7 +93,9 @@ const predictResources = async (req, res) => {
     // Include category mapping in response for frontend consistency
     const categorizedResult = {
       ...result,
-      allocatedDays: Number(result.allocatedDays || 1),
+      allocatedDays: Number.isFinite(Number(result.allocatedDays)) && Number(result.allocatedDays) >= 1
+        ? Number(result.allocatedDays)
+        : estimateAllocatedDays({ disasterType, severity: normalizedSeverity, affectedPopulation: numericPopulation }),
       predictedResources: [
         {
           itemName: "Food",
@@ -131,6 +160,9 @@ const getPredictionLogs = async (req, res) => {
       severity: log.inputFactors?.severityLevel || "-",
       affectedPeople: Number(log.inputFactors?.affectedPeople || 0),
       predictedResources: Array.isArray(log.predictedResources) ? log.predictedResources : [],
+      allocatedDays: Number.isFinite(Number(log.allocatedDays)) && Number(log.allocatedDays) >= 1
+        ? Number(log.allocatedDays)
+        : null,
       generatedBy: log.generatedBy
         ? {
             id: log.generatedBy._id?.toString?.() || null,

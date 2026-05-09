@@ -371,6 +371,11 @@ const validateNGODonation = [
     .isFloat({ min: 0.01 })
     .withMessage('Amount must be a positive number'),
 
+  body('selectedBank')
+    .if(body('donationType').equals('monetary'))
+    .isIn(['boc', 'peoples'])
+    .withMessage("Selected bank must be either BOC or People's Bank"),
+
   body('sourceResourceRequestId')
     .optional()
     .isMongoId()

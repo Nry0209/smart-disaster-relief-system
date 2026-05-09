@@ -30,7 +30,6 @@ function getPasswordValidationMessage(value) {
 function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("admin");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -95,19 +94,15 @@ function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Choose endpoint based on role
-      const endpoint = role === 'admin' ? 'admin/login' : 'staff/login';
-      
-      // First, try normal password login
-      const response = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+      // Use unified login endpoint
+      const response = await fetch(`http://localhost:5000/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email: trimmedEmail,
-          password,
-          role
+          password
         }),
       });
 
@@ -670,17 +665,7 @@ function LoginPage() {
                 {fieldErrors.password && <p className="mt-1 text-xs text-rose-600">{fieldErrors.password}</p>}
               </div>
 
-              <div className="login-form-group">
-                <label>Login role</label>
-                <select value={role} onChange={(e) => setRole(e.target.value)} disabled={isLoading}>
-                  <option value="admin">System Administrator</option>
-                  <option value="dmc_officer">DMC Officer</option>
-                  <option value="inventory_officer">Inventory Officer</option>
-                  <option value="allocation_officer">Allocation Officer</option>
-                  <option value="tracking_officer">Tracking Officer</option>
-                  <option value="ngo_partner">NGO Partner</option>
-                </select>
-              </div>
+
 
               <div className="login-row">
                 <label className="remember-box">

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  unifiedLogin,
   adminLogin,
   staffLogin,
   createStaff,
@@ -21,6 +22,9 @@ const {
   adminOnly,
   internalStaffOnly
 } = require('../config/auth');
+
+// Unified Login Route (Automatic Role Detection)
+router.post('/login', unifiedLogin);
 
 // Admin Login Route
 router.post('/admin/login', adminLogin);

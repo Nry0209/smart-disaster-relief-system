@@ -486,7 +486,8 @@ export default function AllocationPage() {
 
       setPredictedResources(prediction || null);
 
-      setPredictedAllocatedDays(Number(prediction?.allocatedDays || 1));
+      const predictedDays = Number(prediction?.allocatedDays);
+      setPredictedAllocatedDays(Number.isFinite(predictedDays) && predictedDays >= 1 ? predictedDays : null);
 
     } catch (error) {
 
@@ -1941,7 +1942,9 @@ export default function AllocationPage() {
 
               <div className="allocation-prediction-section">
 
-                <h3>Prediction-Based Recommendation</h3>
+                <h3 className="flex items-center gap-2">Prediction-Based Recommendation</h3>
+
+                {/* Removed fallback alert; ML integration confirmed. */}
 
 
 
@@ -1988,10 +1991,11 @@ export default function AllocationPage() {
 
 
                     <div className="prediction-card">
+                      <div className="flex items-center justify-between">
+                        <span className="prediction-label">Resources Allocated Days</span>
+                      </div>
 
-                      <span className="prediction-label">Resources Allocated Days</span>
-
-                      <strong>{predictedAllocatedDays || 1} days</strong>
+                      <strong>{predictedAllocatedDays ?? "-"} day{predictedAllocatedDays === 1 ? '' : 's'}</strong>
 
                       <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
 
@@ -2121,7 +2125,7 @@ export default function AllocationPage() {
                     </div>
                     <div className="prediction-card">
                       <span className="prediction-label">Resources Allocated Days</span>
-                      <strong>{predictedAllocatedDays || 1} days</strong>
+                      <strong>{predictedAllocatedDays ?? "-"} days</strong>
                       <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
                     </div>
                   </div>

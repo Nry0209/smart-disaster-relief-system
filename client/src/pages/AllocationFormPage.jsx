@@ -242,11 +242,12 @@ export default function AllocationFormPage() {
             // get predicted allocated days from backend prediction
             if (prediction) {
               try {
-              const predicted = Number(prediction.allocatedDays || 1);
-              setPredictedAllocatedDays(predicted);
+              const predicted = Number(prediction.allocatedDays);
+              const normalizedPredicted = Number.isFinite(predicted) && predicted >= 1 ? predicted : null;
+              setPredictedAllocatedDays(normalizedPredicted);
               // auto-fill allocatedDays only when no existing allocation value is present
-              if (!selectedReport?.allocatedResources?.allocatedDays && !allocatedDays) {
-                setAllocatedDays(String(predicted));
+              if (!selectedReport?.allocatedResources?.allocatedDays && !allocatedDays && normalizedPredicted) {
+                setAllocatedDays(String(normalizedPredicted));
               }
               } catch (e) {
               // ignore prediction-derived days failures
@@ -528,7 +529,9 @@ export default function AllocationFormPage() {
             </div>
 
             <div className="allocation-prediction-section">
-              <h3>Prediction-Based Recommendation</h3>
+              <h3 className="flex items-center gap-2">Prediction-Based Recommendation
+                {/* Removed ML/Fallback badge as ML is stable */}
+              </h3>
               {predictionLoading ? (
                 <p className="allocation-info-inline">Loading predicted resource recommendation...</p>
               ) : predictionError ? (
@@ -539,26 +542,26 @@ export default function AllocationFormPage() {
                     <div className="prediction-card">
                       <span className="prediction-label">Food Needed</span>
                       <strong>{Number(predictedResources.foodNeeded || 0).toLocaleString()}</strong>
-                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays || predictedAllocatedDays)}</span>
                     </div>
                     <div className="prediction-card">
                       <span className="prediction-label">Water Needed</span>
                       <strong>{Number(predictedResources.waterNeeded || 0).toLocaleString()}</strong>
-                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays || predictedAllocatedDays)}</span>
                     </div>
                     <div className="prediction-card">
                       <span className="prediction-label">Medicine Needed</span>
                       <strong>{Number(predictedResources.medicineNeeded || 0).toLocaleString()}</strong>
-                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays)}</span>
+                      <span className="mt-1 block text-xs text-slate-500">Enough for {formatCoverageDays(allocatedDays || predictedAllocatedDays)}</span>
                     </div>
                     <div className="prediction-card">
                       <span className="prediction-label">Resources Allocated Days</span>
-                      <strong>{predictedAllocatedDays || 1} days</strong>
-                      <span className="mt-1 block text-xs text-slate-500">Predicted duration</span>
+                      <strong>{predictedAllocatedDays ?? "-"} day{predictedAllocatedDays === 1 ? '' : 's'}</strong>
+                      <span className="mt-1 block text-xs text-slate-500">ML suggested duration</span>
                     </div>
                   </div>
                   <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    These recommendations are sized for {formatCoverageDays(allocatedDays)}.
+                    These recommendations are sized for {formatCoverageDays(allocatedDays || predictedAllocatedDays)}.
                   </div>
                   <div className="prediction-actions">
                     <button type="button" className="prediction-apply-btn" onClick={applyPredictionAsSuggestion} disabled={saving}>
